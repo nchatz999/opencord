@@ -25,7 +25,7 @@ type ErrorResponse = {
 };
 
 const getBaseUrl = () => {
-  return import.meta.env.VITE_API_BASE_URL || 'https://localhost/api';
+  return import.meta.env.DOMAIN;
 
 };
 
