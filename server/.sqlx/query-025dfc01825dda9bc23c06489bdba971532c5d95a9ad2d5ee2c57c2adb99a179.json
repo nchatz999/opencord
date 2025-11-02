@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rights FROM channel_role_rights JOIN users ON users.role_id = channel_role_rights.role_id WHERE users.user_id = $1 AND channel_role_rights.channel_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rights",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "025dfc01825dda9bc23c06489bdba971532c5d95a9ad2d5ee2c57c2adb99a179"
+}

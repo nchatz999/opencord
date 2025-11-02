@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.group_id, g.group_name\n            FROM groups g\n            JOIN group_role_rights gr ON g.group_id = gr.group_id\n            WHERE gr.rights > 1 AND gr.role_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "group_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6210699ef14dbe431c5a5a54b7c02f738d888ffe6a55bf9ec840ccb5bbaab26d"
+}

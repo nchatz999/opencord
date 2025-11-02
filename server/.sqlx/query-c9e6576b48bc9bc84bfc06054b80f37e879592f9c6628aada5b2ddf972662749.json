@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT \n                channel_id, \n                channel_name, \n                group_id, \n                channel_type as \"channel_type: ChannelTypeSQL\"\n            FROM channels \n            WHERE channel_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_type: ChannelTypeSQL",
+        "type_info": {
+          "Custom": {
+            "name": "channel_type",
+            "kind": {
+              "Enum": [
+                "Text",
+                "VoIP"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "c9e6576b48bc9bc84bfc06054b80f37e879592f9c6628aada5b2ddf972662749"
+}

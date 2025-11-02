@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM group_role_rights WHERE group_id = $1 AND role_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c87574fcc4d98436f6dc21493ed7645a82a44e55b8e82fa169ea7134a34f0150"
+}

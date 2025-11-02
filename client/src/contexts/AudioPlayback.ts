@@ -1,0 +1,347 @@
+import { createSignal, createEffect } from 'solid-js';
+
+interface BufferItem {
+  seq: number;
+  timestamp: number;
+  pst: number;
+  chunk: EncodedAudioChunk;
+}
+
+
+const AUDIO_WORKLET_CODE = `
+class AudioBufferProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    
+    this.ringBuffer = new Float32Array(48000 * 2);
+    this.writeIndex = 0;
+    this.readIndex = 0;
+    this.available = 0;
+    this.port.onmessage = this.handleMessage.bind(this);
+  }
+
+  handleMessage(event) {
+    const { type, data } = event.data;
+    switch (type) {
+      case 'audioData':
+        if (data) {
+          
+          for (let i = 0; i < data.length; i++) {
+            this.ringBuffer[this.writeIndex] = data[i];
+            this.writeIndex = (this.writeIndex + 1) % this.ringBuffer.length;
+
+            
+            if (this.available < this.ringBuffer.length) {
+              this.available++;
+            } else {
+              
+              this.readIndex = (this.readIndex + 1) % this.ringBuffer.length;
+            }
+          }
+        }
+        break;
+
+      case 'clearBuffer':
+        this.writeIndex = 0;
+        this.readIndex = 0;
+        this.available = 0;
+        break;
+    }
+  }
+
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    const outputChannels = output.length;
+    const bufferLength = output[0].length;
+
+    
+    for (let channel = 0; channel < outputChannels; channel++) {
+      output[channel].fill(0);
+    }
+
+    
+    if (this.available === 0) return true;
+
+    const samplesToRead = Math.min(bufferLength, this.available);
+
+    
+    for (let i = 0; i < samplesToRead; i++) {
+      const sample = this.ringBuffer[this.readIndex];
+      this.readIndex = (this.readIndex + 1) % this.ringBuffer.length;
+
+      for (let channel = 0; channel < outputChannels; channel++) {
+        output[channel][i] = sample;
+      }
+    }
+
+    this.available -= samplesToRead;
+
+    return true;
+  }
+}
+
+registerProcessor('audio-buffer-processor', AudioBufferProcessor);
+`;
+
+
+let workletInitialized = false;
+let workletInitPromise: Promise<void> | null = null;
+
+
+const DEFAULT_DECODER_CONFIG: AudioDecoderConfig = {
+  codec: 'opus',
+  sampleRate: 48000,
+  numberOfChannels: 1,
+};
+
+
+async function ensureWorkletInitialized(context: AudioContext): Promise<void> {
+  if (workletInitialized) return;
+
+  if (workletInitPromise) {
+    return workletInitPromise;
+  }
+
+  workletInitPromise = (async () => {
+    const blob = new Blob([AUDIO_WORKLET_CODE], {
+      type: "application/javascript",
+    });
+    const workletUrl = URL.createObjectURL(blob);
+
+    try {
+      await context.audioWorklet.addModule(workletUrl);
+      workletInitialized = true;
+      console.log("Audio worklet initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize audio worklet:", error);
+      workletInitPromise = null;
+      throw error;
+    } finally {
+      URL.revokeObjectURL(workletUrl);
+    }
+  })();
+
+  return workletInitPromise;
+}
+
+export class AudioPlayback {
+  decoder: AudioDecoder;
+  delay: number;
+  buffer: BufferItem[];
+  context: AudioContext;
+  workletNode: AudioWorkletNode | null;
+  gainNode: GainNode;
+  missedChunks: number;
+  droppedChunks: number;
+  startTimestamp: number | null;
+  baseTimestamp: number | null;
+  lastSeq: number;
+  bufferInterval: number | null;
+
+  
+  volume: () => number;
+  setVolume: (value: number) => void;
+  isMuted: () => boolean;
+  setIsMuted: (value: boolean) => void;
+
+  constructor(
+    context: AudioContext,
+    delay: number = 0,
+    decoderConfig: AudioDecoderConfig = DEFAULT_DECODER_CONFIG,
+  ) {
+    this.delay = delay;
+    this.context = context;
+
+    this.gainNode = this.context.createGain();
+
+    
+    this.gainNode.connect(this.context.destination);
+
+    this.workletNode = null;
+    this.bufferInterval = null;
+
+    
+    const [volume, setVolume] = createSignal(1);
+    const [isMuted, setIsMuted] = createSignal(false);
+
+    this.volume = volume;
+    this.setVolume = (value: number) => {
+      const clampedVolume = Math.max(0, Math.min(2, value));
+      setVolume(clampedVolume);
+    };
+    this.isMuted = isMuted;
+    this.setIsMuted = setIsMuted;
+
+    
+    createEffect(() => {
+      if (this.isMuted()) {
+        this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
+      } else {
+        this.gainNode.gain.setValueAtTime(this.volume(), this.context.currentTime);
+      }
+    });
+
+    this.decoder = new AudioDecoder({
+      output: (audioData) => {
+        this.handleAudioData(audioData);
+      },
+      error: (e) => console.log(e),
+    });
+    this.decoder.configure(decoderConfig);
+
+    this.buffer = [];
+    this.droppedChunks = 0;
+    this.missedChunks = 0;
+    this.startTimestamp = null;
+    this.baseTimestamp = null;
+    this.lastSeq = -1;
+
+    
+    this.initialize();
+  }
+
+  async initialize() {
+    try {
+      
+      if (this.context.state === "suspended") {
+        await this.context.resume();
+      }
+
+      
+      await ensureWorkletInitialized(this.context);
+
+      
+      this.workletNode = new AudioWorkletNode(
+        this.context,
+        "audio-buffer-processor"
+      );
+
+      
+      this.workletNode.connect(this.gainNode);
+
+      
+      this.bufferInterval = setInterval(() => {
+        this.processBuffer();
+      }, 10);
+
+    } catch (error) {
+      console.error("Failed to initialize audio worklet:", error);
+      throw error;
+    }
+  }
+
+  handleAudioData(audioData: AudioData) {
+    if (!this.workletNode) {
+      audioData.close();
+      return;
+    }
+
+    
+    const audioSamples = new Float32Array(audioData.numberOfFrames);
+    audioData.copyTo(audioSamples, { planeIndex: 0 });
+
+    
+    this.workletNode.port.postMessage({
+      type: "audioData",
+      data: audioSamples,
+    });
+
+    audioData.close();
+  }
+
+  pushChunk(chunk: EncodedAudioChunk, seq: number) {
+    if (!this.startTimestamp || !this.baseTimestamp) {
+      this.startTimestamp = chunk.timestamp;
+      this.baseTimestamp = performance.now() + this.delay;
+    }
+
+    if (seq <= this.lastSeq) {
+      this.droppedChunks++;
+      return;
+    }
+
+    const presentationTime =
+      this.baseTimestamp + (chunk.timestamp - this.startTimestamp) / 1000;
+
+    this.buffer.push({
+      seq,
+      timestamp: chunk.timestamp,
+      pst: presentationTime,
+      chunk,
+    });
+  }
+
+  processBuffer() {
+    const now = performance.now();
+    this.buffer.sort((a, b) => a.timestamp - b.timestamp);
+
+    while (this.buffer.length > 0 && this.buffer[0].pst <= now) {
+      const item = this.buffer.shift();
+      if (item) {
+        let diff = item.seq - this.lastSeq;
+        if (diff > 1) {
+          this.missedChunks += diff - 1;
+        }
+        this.decoder.decode(item.chunk);
+        this.lastSeq = item.seq;
+      }
+    }
+  }
+
+  resetTimestamps() {
+    this.startTimestamp = null;
+    this.baseTimestamp = null;
+  }
+
+  clearBuffer() {
+    
+    this.buffer = [];
+
+    
+    if (this.workletNode) {
+      this.workletNode.port.postMessage({ type: "clearBuffer" });
+    }
+
+    
+    this.resetTimestamps();
+
+    console.log("Buffer cleared");
+  }
+
+  
+  mute() {
+    this.setIsMuted(true);
+  }
+
+  unmute() {
+    this.setIsMuted(false);
+  }
+
+  toggleMute() {
+    this.setIsMuted(!this.isMuted());
+  }
+
+  cleanup() {
+    
+    if (this.bufferInterval !== null) {
+      clearInterval(this.bufferInterval);
+      this.bufferInterval = null;
+    }
+
+    
+    this.clearBuffer();
+
+    
+    this.workletNode?.disconnect();
+    this.gainNode.disconnect();
+
+    
+  }
+}
+
+export function createSharedAudioContext(): AudioContext {
+  return new AudioContext({
+    sampleRate: 48000,
+    latencyHint: "playback",
+  });
+}

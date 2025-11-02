@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO messages (channel_id, user_id, message_text, reply_to_message_id) \n             VALUES ($1, $2, $3, $4) RETURNING message_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bc2a7ced9e46991454fccad6be7467e77645e4462e018cb321535b16d3edc298"
+}

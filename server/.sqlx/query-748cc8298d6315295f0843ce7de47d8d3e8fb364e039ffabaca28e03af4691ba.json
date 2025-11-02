@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO group_role_rights (group_id, role_id, rights) \n                 VALUES ($1, $2, $3)\n                 ON CONFLICT(group_id, role_id) \n                 DO UPDATE SET rights = excluded.rights",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "748cc8298d6315295f0843ce7de47d8d3e8fb364e039ffabaca28e03af4691ba"
+}

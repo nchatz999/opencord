@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT \n                c.channel_id, \n                c.channel_name, \n                c.group_id, \n                c.channel_type as \"channel_type: ChannelTypeSQL\"\n            FROM channels c\n            LEFT JOIN channel_role_rights cr ON c.channel_id = cr.channel_id AND cr.role_id = $1\n            LEFT JOIN group_role_rights gr ON c.group_id = gr.group_id AND gr.role_id = $2\n            WHERE (c.group_id IS NULL AND COALESCE(cr.rights, 0) >= $3)\n               OR (c.group_id IS NOT NULL AND COALESCE(gr.rights, 0) >= $4)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_type: ChannelTypeSQL",
+        "type_info": {
+          "Custom": {
+            "name": "channel_type",
+            "kind": {
+              "Enum": [
+                "Text",
+                "VoIP"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "432a180ebfbba2d7b8773de5fab1af68aaccd8930e1301be4be0ce1c68365347"
+}

@@ -1,0 +1,882 @@
+
+
+
+
+use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
+use utoipa::ToSchema;
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, ToSchema)]
+#[sqlx(type_name = "channel_type", rename_all = "PascalCase")]
+pub enum ChannelType {
+    Text,
+    #[sqlx(rename = "VoIP")]
+    VoIP,
+}
+
+impl From<String> for ChannelType {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "Text" => ChannelType::Text,
+            "VoIP" => ChannelType::VoIP,
+            _ => ChannelType::Text,
+        }
+    }
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Channel {
+    pub channel_id: i64,
+    pub channel_name: String,
+    pub group_id: i64,
+    pub channel_type: ChannelType,
+}
+
+
+#[derive(Debug, thiserror::Error)]
+pub enum ChannelError {
+    #[error("Channel not found: {channel_id}")]
+    ChannelNotFound { channel_id: i64 },
+
+    #[error("Group not found: {group_id}")]
+    GroupNotFound { group_id: i64 },
+
+    #[error("Channel name '{name}' is already taken")]
+    NameTaken { name: String },
+
+    #[error("Channel name '{name}' is invalid")]
+    InvalidName { name: String },
+
+    #[error("Permission denied")]
+    PermissionDenied,
+
+    #[error("Internal server error")]
+    ServerError,
+
+    #[error(transparent)]
+    DatabaseError(#[from] DatabaseError),
+}
+
+
+use crate::error::{ApiError, DatabaseError};
+
+
+pub trait ChannelTransaction: Send + Sync {
+    async fn create(
+        &mut self,
+        name: &str,
+        channel_type: &ChannelType,
+        group_id: i64,
+    ) -> Result<Channel, DatabaseError>;
+
+    async fn update_name(
+        &mut self,
+        channel_id: i64,
+        name: &str,
+    ) -> Result<Option<Channel>, DatabaseError>;
+
+    async fn update_group(
+        &mut self,
+        channel_id: i64,
+        group_id: i64,
+    ) -> Result<Option<Channel>, DatabaseError>;
+
+    async fn delete(&mut self, channel_id: i64) -> Result<Option<Channel>, DatabaseError>;
+
+    async fn find_user_group_rights(
+        &mut self,
+        group_id: i64,
+        user_id: i64,
+    ) -> Result<Option<i64>, DatabaseError>;
+
+    async fn find_user_channel_rights(
+        &mut self,
+        channel_id: i64,
+        user_id: i64,
+    ) -> Result<Option<i64>, DatabaseError>;
+
+    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
+}
+
+
+pub trait ChannelRepository: Send + Sync + Clone {
+    type Transaction: ChannelTransaction;
+
+    async fn begin(&self) -> Result<Self::Transaction, DatabaseError>;
+
+    async fn commit(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
+
+    async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
+
+    async fn find_by_id(&self, channel_id: i64) -> Result<Option<Channel>, DatabaseError>;
+
+    async fn list_by_user_role(&self, user_id: i64) -> Result<Vec<Channel>, DatabaseError>;
+
+    async fn find_user_channel_rights(
+        &self,
+        channel_id: i64,
+        user_id: i64,
+    ) -> Result<Option<i64>, DatabaseError>;
+}
+
+use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
+use crate::middleware::{authorize, AuthorizeService};
+
+use crate::model::Event;
+
+#[derive(Clone)]
+pub struct ChannelService<R: ChannelRepository, N: NotifierManager> {
+    repository: R,
+    notifier: N,
+}
+
+impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
+    pub fn new(repository: R, notifier: N) -> Self {
+        Self {
+            repository,
+            notifier,
+        }
+    }
+
+    async fn verify_user_permission(
+        &self,
+        channel_id: i64,
+        user_id: i64,
+        minimum_rights_level: i64,
+    ) -> Result<bool, ChannelError> {
+        let rights = self
+            .repository
+            .find_user_channel_rights(channel_id, user_id)
+            .await
+            .map_err(|_| ChannelError::ServerError)?
+            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+
+        Ok(rights >= minimum_rights_level)
+    }
+
+    pub async fn create_channel(
+        &self,
+        name: String,
+        channel_type: ChannelType,
+        group_id: i64,
+        user_id: i64,
+    ) -> Result<Channel, ChannelError> {
+        let mut tx = self.repository.begin().await?;
+
+        let role_id = tx
+            .find_user_role(user_id)
+            .await?
+            .ok_or(ChannelError::PermissionDenied)?;
+
+        
+        if role_id != 0 && role_id != 1 {
+            return Err(ChannelError::PermissionDenied);
+        }
+
+        
+        let trimmed_name = name.trim();
+        if trimmed_name.is_empty() {
+            return Err(ChannelError::InvalidName { name });
+        }
+        if trimmed_name.len() > 100 {
+            return Err(ChannelError::InvalidName { name });
+        }
+
+        
+        let channel = tx
+            .create(trimmed_name, &channel_type, group_id)
+            .await
+            .map_err(|e| match e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    return ChannelError::NameTaken {
+                        name: trimmed_name.to_string(),
+                    }
+                }
+                other => ChannelError::DatabaseError(other),
+            })?;
+
+        self.repository.commit(tx).await?;
+
+        
+        let event = Event::ChannelUpdated {
+            channel: channel.clone(),
+        };
+
+        let _ = self
+            .notifier
+            .notify(
+                event,
+                RecipientType::GroupRights {
+                    group_id: channel.group_id,
+                    minimum_rights: 1,
+                },
+            )
+            .await;
+
+        Ok(channel)
+    }
+
+    pub async fn get_channel(
+        &self,
+        channel_id: i64,
+        user_id: i64,
+    ) -> Result<Channel, ChannelError> {
+        if !self.verify_user_permission(channel_id, user_id, 1).await? {
+            return Err(ChannelError::PermissionDenied);
+        }
+
+        let channel_data = self
+            .repository
+            .find_by_id(channel_id)
+            .await?
+            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+
+        Ok(channel_data)
+    }
+
+    pub async fn list_user_channels(&self, user_id: i64) -> Result<Vec<Channel>, ChannelError> {
+        let channels = self.repository.list_by_user_role(user_id).await?;
+
+        Ok(channels)
+    }
+
+    pub async fn update_channel_name(
+        &self,
+        channel_id: i64,
+        new_name: String,
+        user_id: i64,
+    ) -> Result<(), ChannelError> {
+        let mut tx = self.repository.begin().await?;
+
+        let role_id = tx
+            .find_user_role(user_id)
+            .await?
+            .ok_or(ChannelError::PermissionDenied)?;
+
+        
+        if role_id != 0 && role_id != 1 {
+            return Err(ChannelError::PermissionDenied);
+        }
+
+        
+        let trimmed_name = new_name.trim();
+        if trimmed_name.is_empty() {
+            return Err(ChannelError::InvalidName { name: new_name });
+        }
+        if trimmed_name.len() > 100 {
+            return Err(ChannelError::InvalidName { name: new_name });
+        }
+
+        
+        let updated_channel = tx
+            .update_name(channel_id, trimmed_name)
+            .await?
+            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+
+        self.repository.commit(tx).await?;
+
+        
+        let event = Event::ChannelUpdated {
+            channel: updated_channel.clone(),
+        };
+        let _ = self
+            .notifier
+            .notify(
+                event,
+                RecipientType::ChannelRights {
+                    channel_id,
+                    minimum_rights: 1,
+                },
+            )
+            .await;
+
+        Ok(())
+    }
+
+    pub async fn update_channel_group(
+        &self,
+        channel_id: i64,
+        new_group_id: i64,
+        user_id: i64,
+    ) -> Result<(), ChannelError> {
+        let mut tx = self.repository.begin().await?;
+
+        let role_id = tx
+            .find_user_role(user_id)
+            .await?
+            .ok_or(ChannelError::PermissionDenied)?;
+
+        
+        if role_id != 0 && role_id != 1 {
+            return Err(ChannelError::PermissionDenied);
+        }
+
+        
+        let updated_channel = tx
+            .update_group(channel_id, new_group_id)
+            .await
+            .map_err(|e| match e {
+                DatabaseError::ForeignKeyViolation { .. } => ChannelError::GroupNotFound {
+                    group_id: new_group_id,
+                },
+                other => ChannelError::DatabaseError(other),
+            })?
+            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+
+        self.repository.commit(tx).await?;
+
+        
+        let event = Event::ChannelUpdated {
+            channel: updated_channel,
+        };
+        let _ = self
+            .notifier
+            .notify(
+                event,
+                RecipientType::ChannelRights {
+                    channel_id,
+                    minimum_rights: 1,
+                },
+            )
+            .await;
+
+        Ok(())
+    }
+
+    pub async fn delete_channel(
+        &self,
+        channel_id: i64,
+        user_id: i64,
+    ) -> Result<Option<Channel>, ChannelError> {
+        let mut tx = self.repository.begin().await?;
+
+        let role_id = tx
+            .find_user_role(user_id)
+            .await?
+            .ok_or(ChannelError::PermissionDenied)?;
+
+        
+        if role_id != 0 {
+            return Err(ChannelError::PermissionDenied);
+        }
+
+        let deleted = tx
+            .delete(channel_id)
+            .await?
+            .ok_or(ChannelError::ChannelNotFound {
+                channel_id: channel_id,
+            })?;
+
+        self.repository.commit(tx).await?;
+
+        
+        let event = Event::ChannelDeleted { channel_id };
+        let _ = self
+            .notifier
+            .notify(
+                event,
+                RecipientType::GroupRights {
+                    group_id: deleted.group_id,
+                    minimum_rights: 1,
+                },
+            )
+            .await;
+
+        Ok(Some(deleted))
+    }
+}
+
+
+
+
+use crate::db::Postgre;
+
+
+pub struct PgChannelTransaction {
+    transaction: sqlx::Transaction<'static, sqlx::Postgres>,
+}
+
+impl ChannelTransaction for PgChannelTransaction {
+    async fn create(
+        &mut self,
+        name: &str,
+        channel_type: &ChannelType,
+        group_id: i64,
+    ) -> Result<Channel, DatabaseError> {
+        let channel_id = sqlx::query_scalar!(
+            "INSERT INTO channels (channel_name, channel_type, group_id) VALUES ($1, $2, $3) RETURNING channel_id",
+            name,
+            channel_type as _,
+            group_id
+        )
+        .fetch_one(&mut *self.transaction)
+        .await
+        ?;
+
+        Ok(Channel {
+            channel_id,
+            channel_name: name.to_string(),
+            group_id,
+            channel_type: channel_type.clone(),
+        })
+    }
+
+    async fn update_name(
+        &mut self,
+        channel_id: i64,
+        name: &str,
+    ) -> Result<Option<Channel>, DatabaseError> {
+        let channel = sqlx::query_as!(
+            Channel,
+            r#"UPDATE channels 
+            SET channel_name = $1 
+            WHERE channel_id = $2 
+            RETURNING 
+                channel_id, 
+                channel_name, 
+                group_id, 
+                channel_type as "channel_type: ChannelType""#,
+            name,
+            channel_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+
+        Ok(channel)
+    }
+
+    async fn update_group(
+        &mut self,
+        channel_id: i64,
+        group_id: i64,
+    ) -> Result<Option<Channel>, DatabaseError> {
+        let channel = sqlx::query_as!(
+            Channel,
+            r#"UPDATE channels 
+            SET group_id = $1 
+            WHERE channel_id = $2 
+            RETURNING 
+                channel_id, 
+                channel_name, 
+                group_id, 
+                channel_type as "channel_type: ChannelType""#,
+            group_id,
+            channel_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+
+        Ok(channel)
+    }
+
+    async fn delete(&mut self, channel_id: i64) -> Result<Option<Channel>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Channel,
+            r#"DELETE FROM channels WHERE channel_id = $1 
+            RETURNING channel_id, channel_name, group_id, channel_type as "channel_type: ChannelType""#,
+            channel_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await
+        ?;
+        Ok(result)
+    }
+
+    async fn find_user_group_rights(
+        &mut self,
+        group_id: i64,
+        user_id: i64,
+    ) -> Result<Option<i64>, DatabaseError> {
+        let result = sqlx::query_scalar!(
+            r#"SELECT grr.rights 
+            FROM group_role_rights grr
+            INNER JOIN users u ON u.role_id = grr.role_id
+            WHERE grr.group_id = $1 AND u.user_id = $2"#,
+            group_id,
+            user_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_user_channel_rights(
+        &mut self,
+        channel_id: i64,
+        user_id: i64,
+    ) -> Result<Option<i64>, DatabaseError> {
+        let result = sqlx::query_scalar!(
+            r#"SELECT grr.rights 
+            FROM group_role_rights grr
+            INNER JOIN channels c ON c.group_id = grr.group_id
+            INNER JOIN users u ON u.role_id = grr.role_id
+            WHERE c.channel_id = $1 AND u.user_id = $2"#,
+            channel_id,
+            user_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
+        let result = sqlx::query_scalar!("SELECT role_id FROM users WHERE user_id = $1", user_id)
+            .fetch_optional(&mut *self.transaction)
+            .await?;
+        Ok(result)
+    }
+}
+
+impl ChannelRepository for Postgre {
+    type Transaction = PgChannelTransaction;
+
+    async fn begin(&self) -> Result<Self::Transaction, DatabaseError> {
+        let tx = self.pool.begin().await?;
+        Ok(PgChannelTransaction { transaction: tx })
+    }
+
+    async fn commit(&self, transaction: Self::Transaction) -> Result<(), DatabaseError> {
+        transaction.transaction.commit().await?;
+        Ok(())
+    }
+
+    async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError> {
+        transaction.transaction.rollback().await?;
+        Ok(())
+    }
+
+    async fn find_by_id(&self, channel_id: i64) -> Result<Option<Channel>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Channel,
+            r#"SELECT 
+                channel_id, 
+                channel_name, 
+                group_id, 
+                channel_type as "channel_type: ChannelType"
+            FROM channels 
+            WHERE channel_id = $1"#,
+            channel_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result.map(|sql_channel| Channel {
+            channel_id: sql_channel.channel_id,
+            channel_name: sql_channel.channel_name,
+            group_id: sql_channel.group_id,
+            channel_type: ChannelType::from(sql_channel.channel_type),
+        }))
+    }
+
+    async fn list_by_user_role(&self, user_id: i64) -> Result<Vec<Channel>, DatabaseError> {
+        let results = sqlx::query_as!(
+            Channel,
+            r#"SELECT DISTINCT
+                c.channel_id, 
+                c.channel_name, 
+                c.group_id, 
+                c.channel_type as "channel_type: ChannelType"
+            FROM channels c
+            INNER JOIN group_role_rights grr ON c.group_id = grr.group_id
+            INNER JOIN users u ON u.role_id = grr.role_id
+            WHERE u.user_id = $1 AND grr.rights >= 1"#,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(results)
+    }
+
+    async fn find_user_channel_rights(
+        &self,
+        channel_id: i64,
+        user_id: i64,
+    ) -> Result<Option<i64>, DatabaseError> {
+        let result = sqlx::query_scalar!(
+            r#"SELECT grr.rights 
+            FROM group_role_rights grr
+            INNER JOIN channels c ON c.group_id = grr.group_id    
+            INNER JOIN users u ON u.role_id = grr.role_id
+            WHERE c.channel_id = $1 AND u.user_id = $2"#,
+            channel_id,
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(result)
+    }
+}
+
+
+
+
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateChannelRequest {
+    pub name: String,
+    pub group_id: i64, 
+    pub r#type: ChannelType,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateChannelResponse {
+    pub channel_id: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct UpdateChannelRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateChannelGroupRequest {
+    pub group_id: i64,
+}
+
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevealChannelData {
+    
+}
+
+
+
+
+
+use axum::http::StatusCode;
+use axum::Json;
+
+impl From<ChannelError> for ApiError {
+    fn from(err: ChannelError) -> Self {
+        match err {
+            ChannelError::ChannelNotFound { channel_id } => {
+                ApiError::UnprocessableEntity(format!("Channel {} not found", channel_id))
+            }
+            ChannelError::GroupNotFound { group_id } => {
+                ApiError::UnprocessableEntity(format!("Group {} not found", group_id))
+            }
+            ChannelError::NameTaken { name } => {
+                ApiError::UnprocessableEntity(format!("Channel name '{}' is already taken", name))
+            }
+            ChannelError::InvalidName { name } => {
+                ApiError::UnprocessableEntity(format!("Invalid channel name: '{}'", name))
+            }
+            ChannelError::PermissionDenied => {
+                ApiError::UnprocessableEntity("Permission denied".to_string())
+            }
+            ChannelError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
+            ChannelError::ServerError => {
+                
+                ApiError::InternalServerError("Internal server error".to_string())
+            }
+        }
+    }
+}
+
+
+use axum::{
+    extract::{Extension, Path, State},
+    middleware::from_fn_with_state,
+};
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+pub fn channel_routes(
+    channel_service: ChannelService<Postgre, DefaultNotifierManager>,
+    authorize_service: AuthorizeService<Postgre>,
+) -> OpenApiRouter<Postgre> {
+    OpenApiRouter::new()
+        .routes(routes!(list_channels_handler))
+        .routes(routes!(get_channel_by_id_handler))
+        .routes(routes!(create_channel_handler))
+        .routes(routes!(delete_channel_handler))
+        .routes(routes!(update_channel_name_handler))
+        .routes(routes!(update_channel_group_handler))
+        .layer(from_fn_with_state(authorize_service, authorize))
+        .with_state(channel_service)
+}
+
+
+
+#[utoipa::path(
+    get,
+    tag = "channel",
+    path = "/",
+    responses(
+        (status = 200, description = "Successfully retrieved channels", body = Vec<Channel>),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+#[axum::debug_handler]
+async fn list_channels_handler(
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
+    Extension(user): Extension<i64>,
+) -> Result<Json<Vec<Channel>>, ApiError> {
+    let channels = service.list_user_channels(user).await?;
+    Ok(Json(channels))
+}
+
+#[utoipa::path(
+    get,
+    tag = "channel",
+    path = "/{id}",
+    params(
+        ("id", Path, description = "The ID of the channel to get details for"),
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved channel details", body = Channel),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 404, description = "Channel not found", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+#[axum::debug_handler]
+async fn get_channel_by_id_handler(
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
+    Extension(user): Extension<i64>,
+    Path(id): Path<i64>,
+) -> Result<Json<Channel>, ApiError> {
+    let channel_data = service.get_channel(id, user).await?;
+    Ok(Json(channel_data))
+}
+
+#[utoipa::path(
+    post,
+    tag = "channel",
+    path = "/",
+    request_body = CreateChannelRequest,
+    responses(
+        (status = 201, description = "Channel created successfully", body = CreateChannelResponse),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 409, description = "Channel name already taken", body = ApiError),
+        (status = 422, description = "Invalid input", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn create_channel_handler(
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
+    Extension(user): Extension<i64>,
+    Json(payload): Json<CreateChannelRequest>,
+) -> Result<(StatusCode, Json<CreateChannelResponse>), ApiError> {
+    let channel = service
+        .create_channel(
+            payload.name.clone(),
+            payload.r#type.clone(),
+            payload.group_id, 
+            user,
+        )
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateChannelResponse {
+            channel_id: channel.channel_id,
+        }),
+    ))
+}
+
+#[utoipa::path(
+    delete,
+    tag = "channel",
+    path = "/{id}",
+    params(
+        ("id", Path, description = "The ID of the channel to delete"),
+    ),
+    responses(
+        (status = 204, description = "Channel deleted successfully"),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 404, description = "Channel not found", body = ApiError),
+        (status = 409, description = "Channel has messages", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+async fn delete_channel_handler(
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
+    Extension(user): Extension<i64>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    service.delete_channel(id, user).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    put,
+    tag = "channel",
+    path = "/{id}",
+    params(
+        ("id", Path, description = "The ID of the channel to update"),
+    ),
+    request_body = UpdateChannelRequest,
+    responses(
+        (status = 204, description = "Channel updated successfully"),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 404, description = "Channel not found", body = ApiError),
+        (status = 409, description = "Channel name already taken", body = ApiError),
+        (status = 422, description = "Invalid input", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+async fn update_channel_name_handler(
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
+    Extension(user): Extension<i64>,
+    Path(id): Path<i64>,
+    Json(payload): Json<UpdateChannelRequest>,
+) -> Result<StatusCode, ApiError> {
+    service
+        .update_channel_name(id, payload.name.clone(), user)
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    put,
+    tag = "channel",
+    path = "/{id}/group",
+    params(
+        ("id", Path, description = "The ID of the channel to update"),
+    ),
+    request_body = UpdateChannelGroupRequest,
+    responses(
+        (status = 204, description = "Channel group updated successfully"),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 404, description = "Channel not found", body = ApiError),
+        (status = 422, description = "Invalid input", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+async fn update_channel_group_handler(
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
+    Extension(user): Extension<i64>,
+    Path(id): Path<i64>,
+    Json(payload): Json<UpdateChannelGroupRequest>,
+) -> Result<StatusCode, ApiError> {
+    service
+        .update_channel_group(id, payload.group_id, user)
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}

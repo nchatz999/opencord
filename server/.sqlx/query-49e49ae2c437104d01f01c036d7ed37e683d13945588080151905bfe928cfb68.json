@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO channel_role_rights (channel_id, role_id, rights)\n             SELECT $1, role_id, rights\n             FROM channel_role_rights\n             WHERE channel_id = $2\n             ON CONFLICT(channel_id, role_id) \n             DO UPDATE SET rights = excluded.rights",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "49e49ae2c437104d01f01c036d7ed37e683d13945588080151905bfe928cfb68"
+}

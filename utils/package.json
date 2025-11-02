@@ -1,0 +1,30 @@
+{
+  "name": "opencord-utils",
+  "version": "1.0.0",
+  "description": "OpenCord utilities",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "result",
+    "monad",
+    "error-handling",
+    "typescript"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT \n                c.channel_id, \n                c.channel_name, \n                c.group_id,\n                c.channel_type as \"channel_type: ChannelTypeSQL\"\n            FROM channels c\n            JOIN channel_role_rights cr ON c.channel_id = cr.channel_id\n            WHERE cr.role_id = $1 AND cr.rights >= 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_type: ChannelTypeSQL",
+        "type_info": {
+          "Custom": {
+            "name": "channel_type",
+            "kind": {
+              "Enum": [
+                "Text",
+                "VoIP"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "ad49aad3bcede7686745126709f0f319dec04053e1e5ab3f54cd1ac462603e52"
+}

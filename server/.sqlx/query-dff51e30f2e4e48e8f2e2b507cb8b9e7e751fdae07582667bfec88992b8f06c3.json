@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT role_id, rights FROM channel_role_rights WHERE channel_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "rights",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "dff51e30f2e4e48e8f2e2b507cb8b9e7e751fdae07582667bfec88992b8f06c3"
+}

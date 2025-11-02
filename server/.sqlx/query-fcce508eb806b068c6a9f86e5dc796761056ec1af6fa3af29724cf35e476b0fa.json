@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM channel_role_rights WHERE channel_id = $1 AND role_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fcce508eb806b068c6a9f86e5dc796761056ec1af6fa3af29724cf35e476b0fa"
+}

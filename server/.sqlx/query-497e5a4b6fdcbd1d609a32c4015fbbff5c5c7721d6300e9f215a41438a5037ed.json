@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT file_id, file_uuid, message_id, file_name, file_type, file_size, file_hash, created_at\n             FROM files WHERE message_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "file_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "file_uuid",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "file_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "file_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "file_size",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "file_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "497e5a4b6fdcbd1d609a32c4015fbbff5c5c7721d6300e9f215a41438a5037ed"
+}

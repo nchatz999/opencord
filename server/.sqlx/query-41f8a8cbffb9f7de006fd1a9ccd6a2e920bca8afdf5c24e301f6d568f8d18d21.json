@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM roles WHERE role_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "role_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "41f8a8cbffb9f7de006fd1a9ccd6a2e920bca8afdf5c24e301f6d568f8d18d21"
+}

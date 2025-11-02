@@ -1,0 +1,31 @@
+{
+  "name": "opencord-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bigmistqke/solid-contenteditable": "^0.0.12",
+    "@msgpack/msgpack": "^3.1.2",
+    "@sapphi-red/web-noise-suppressor": "^0.3.5",
+    "@timephy/rnnoise-wasm": "^1.0.0",
+    "@types/dom-mediacapture-transform": "^0.1.11",
+    "clsx": "^2.1.1",
+    "lucide-solid": "^0.523.0",
+    "msgpack-lite": "^0.1.26",
+    "solid-js": "^1.9.7",
+    "tailwind-merge": "^3.3.1",
+    "opencord-transport": "file:../transport/client/",
+    "opencord-utils": "file:../utils/"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}

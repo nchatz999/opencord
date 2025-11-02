@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT role_id, rights FROM group_role_rights WHERE group_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "rights",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "bed5f2ea2ad90e3dadc50e7a87819409a5314dfc4e95dbb09a77e3267915019f"
+}

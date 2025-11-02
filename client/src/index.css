@@ -1,0 +1,41 @@
+@import "tailwindcss";
+[contenteditable="true"]:active,
+[contenteditable="true"]:focus {
+  border: none;
+  outline: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #1e1f22;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #2e3338;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #3e4146;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1e1f22 transparent;
+}
+
+@theme {
+  --font-poppins: Poppins, sans-serif;
+  --color-dis-white: #f2f3f5;
+  --color-dis-gray: #949ba4;
+  --transparent: transparent;
+}

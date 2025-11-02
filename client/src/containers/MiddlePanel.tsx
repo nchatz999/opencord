@@ -1,0 +1,46 @@
+import type { Component } from "solid-js";
+import { createMemo, Show } from "solid-js";
+import { messageDomain } from "../store";
+import ChatHeader from "../message/ChatHeader";
+import ChatContent from "../message/ChatContent";
+import MessageInput from "../message/MessageInput";
+import StreamsContent from "../message/StreamsContent";
+import { Tabs } from "../components/Tabs";
+
+const MiddlePanel: Component = () => {
+  const tabItems = createMemo(() => {
+    const items = [
+      {
+        id: "chat",
+        label: "Messages",
+        content: (
+          <div class="flex flex-col h-[calc(100vh-50px)] overflow-hidden">
+            <Show when={messageDomain.getContext()}>
+              {(ctx) => <ChatHeader context={ctx()} />}
+            </Show>
+
+            <ChatContent />
+            <Show when={messageDomain.getContext()}>
+              {(ctx) => <MessageInput context={ctx()} />}
+            </Show>
+          </div>
+        ),
+      },
+      {
+        id: "streams",
+        label: "Streams",
+        content: <StreamsContent />,
+      },
+    ];
+
+    return items;
+  });
+
+  return (
+    <div class="flex-1 flex flex-col bg-[#313338] h-full overflow-hidden">
+      <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
+    </div>
+  );
+};
+
+export default MiddlePanel;

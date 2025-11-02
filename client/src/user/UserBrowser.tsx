@@ -1,0 +1,26 @@
+import type { Component } from "solid-js";
+import { For } from "solid-js";
+
+import { UserEntry } from "./UserEntry";
+import type { User } from "../model";
+
+export const UserBrowser: Component<{
+  users: User[];
+  onUserClick: (user: any) => void;
+}> = (props) => {
+  return (
+    <div class="p-2">
+      <div class="flex items-center justify-between px-2 py-1 mb-2">
+        <h3 class="text-xs font-semibold text-[#949ba4] uppercase">
+          All Users — {props.users.length}
+        </h3>
+      </div>
+
+      <For each={props.users}>
+        {(user) => (
+          <UserEntry user={user} onClick={() => props.onUserClick(user)} />
+        )}
+      </For>
+    </div>
+  );
+};

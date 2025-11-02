@@ -1,0 +1,83 @@
+{
+  "name": "opencord-transport",
+  "version": "1.0.0",
+  "description": "OpenCord transport layer",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx examples/main.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "prepublishOnly": "npm run build && npm run test",
+    "example:basic": "tsx examples/basic-usage.ts",
+    "example:chat": "tsx examples/chat-application.ts"
+  },
+  "keywords": [
+    "webtransport",
+    "multiplexer",
+    "tcp",
+    "reliable",
+    "ordered",
+    "flow-control",
+    "streaming",
+    "real-time",
+    "networking",
+    "datagram",
+    "fragmentation"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/webtransport-multiplexer"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/webtransport-multiplexer/issues"
+  },
+  "homepage": "https://github.com/your-username/webtransport-multiplexer#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "msgpack-lite": "^0.1.26",
+    "opencord-utils": "file:../../utils"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.9",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "@fails-components/webtransport": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@fails-components/webtransport": {
+      "optional": true
+    }
+  }
+}
