@@ -6,6 +6,8 @@ import Loading from "./Loading";
 import Auth from "./Auth";
 import App from "../App";
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const AuthHandler: Component = () => {
   createEffect(async () => {
     const appState = userDomain.getAppState();
@@ -25,13 +27,28 @@ const AuthHandler: Component = () => {
       userDomain.setCurrentUser(maybeToken.value.userId);
       connection.setToken(maybeToken.value.sessionToken);
 
-      const connectResult = await connection.connect();
+      let retryCount = 0;
+      const maxRetries = 5;
+      let connectResult;
 
-      if (!connectResult.ok) {
-        console.error(connectResult.error)
-        //userDomain.setAppState({ type: 'unauthenticated' });
-        //clearSession()
-        return;
+      while (retryCount <= maxRetries) {
+        connectResult = await connection.connect();
+
+        if (connectResult.ok) {
+          break;
+        }
+
+        console.error(`Connection attempt ${retryCount + 1} failed:`, connectResult.error);
+        
+        if (retryCount === maxRetries) {
+          console.error('Max connection retries reached');
+          return;
+        }
+
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+        console.log(`Retrying connection in ${delay}ms...`);
+        await sleep(delay);
+        retryCount++;
       }
 
       await handleConnect()
