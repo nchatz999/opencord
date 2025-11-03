@@ -57,7 +57,7 @@ export class Microphone {
       this.encoderConfig = { ...this.encoderConfig, ...encoderConfig };
     }
 
-    
+
     const [getVolume, setVolume] = createSignal<number>(1.0);
     this.getVolumeSignal = getVolume;
     this.setVolumeSignal = setVolume;
@@ -78,7 +78,7 @@ export class Microphone {
     this.getAvailableInputsSignal = getAvailableInputs;
     this.setAvailableInputsSignal = setAvailableInputs;
 
-    
+
     this.initializeDeviceList();
     this.setupDeviceChangeListener();
   }
@@ -116,7 +116,7 @@ export class Microphone {
   async setDevice(deviceId: string): Promise<void> {
     this.setDeviceIdSignal(deviceId);
 
-    
+
     if (this.getIsRecordingSignal()) {
       await this.stop();
       await this.start();
@@ -179,7 +179,7 @@ export class Microphone {
     }
 
     try {
-      
+
       const mediaConstraints: MediaStreamConstraints = {
         audio: {
           deviceId: this.getDeviceIdSignal() ? { exact: this.getDeviceIdSignal() } : undefined,
@@ -193,7 +193,7 @@ export class Microphone {
 
       this.stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
 
-      
+
       this.audioContext = new AudioContext({
         sampleRate: this.constraints.sampleRate,
       });
@@ -202,18 +202,18 @@ export class Microphone {
       this.gainNode.gain.value = this.getVolumeSignal();
       source.connect(this.gainNode);
 
-      
+
       const audioTrack = this.stream.getAudioTracks()[0];
       this.processor = new MediaStreamTrackProcessor({ track: audioTrack });
 
-      
+
       this.setupEncoder();
 
-      
+
       this.isProcessing = true;
       this.processAudioStream();
 
-      
+
       await this.updateAvailableDevices();
 
       this.setIsRecordingSignal(true);
@@ -250,12 +250,12 @@ export class Microphone {
 
         if (value) {
 
-          
+
           if (this.encoder && this.encoder.state === 'configured') {
             this.encoder.encode(value);
           }
 
-          
+
           value.close();
         }
       }
@@ -273,7 +273,7 @@ export class Microphone {
 
     this.isProcessing = false;
 
-    
+
     if (this.encoder && this.encoder.state === 'configured') {
       await this.encoder.flush();
     }
@@ -283,17 +283,17 @@ export class Microphone {
   }
 
   private async cleanup(): Promise<void> {
-    
+
     if (this.reader) {
       try {
         await this.reader.cancel();
       } catch (e) {
-        
+
       }
       this.reader = null;
     }
 
-    
+
     if (this.encoder) {
       if (this.encoder.state !== 'closed') {
         this.encoder.close();
@@ -301,13 +301,13 @@ export class Microphone {
       this.encoder = null;
     }
 
-    
+
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
     }
 
-    
+
     if (this.audioContext) {
       await this.audioContext.close();
       this.audioContext = null;

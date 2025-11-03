@@ -37,10 +37,10 @@ export class ScreenShare {
   };
 
   private encoderConfig: VideoEncoderConfig = {
-    codec: 'vp09.00.10.08',
+    codec: 'vp8',
     width: 1920,
     height: 1080,
-    bitrate: 2500000, 
+    bitrate: 2500000,
     framerate: 30,
     keyFrameIntervalCount: 30,
   };
@@ -52,13 +52,13 @@ export class ScreenShare {
       this.encoderConfig = { ...this.encoderConfig, ...encoderConfig };
     }
 
-    
+
     const [getIsRecording, setIsRecording] = createSignal<boolean>(false);
     this.getIsRecordingSignal = getIsRecording;
     this.setIsRecordingSignal = setIsRecording;
 
 
-    const [getQuality, setQuality] = createSignal<number>(1.0); 
+    const [getQuality, setQuality] = createSignal<number>(1.0);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
   }
@@ -67,10 +67,10 @@ export class ScreenShare {
     const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
     this.setQualitySignal(clampedQuality);
 
-    
+
     if (this.encoder && this.encoder.state === 'configured') {
       const newBitrate = Math.floor(this.encoderConfig.bitrate! * clampedQuality);
-      
+
       console.log(`Quality changed to ${clampedQuality}, bitrate: ${newBitrate}`);
     }
   }
@@ -95,7 +95,7 @@ export class ScreenShare {
     return this.stream;
   }
 
-  onEncodedData(callback: (chunk: EncodedVideoChunk) => void) {
+  onEncodedVideoData(callback: (chunk: EncodedVideoChunk) => void) {
     this.encodedDataCallback = callback
   }
 
@@ -106,7 +106,7 @@ export class ScreenShare {
     }
 
     try {
-      
+
       const mediaConstraints: DisplayMediaStreamConstraints = {
         video: {
           width: this.constraints.width,
@@ -115,15 +115,15 @@ export class ScreenShare {
           cursor: this.constraints.cursor,
           displaySurface: this.constraints.displaySurface,
         } as MediaTrackConstraints,
-        audio: false, 
+        audio: false,
       };
 
       this.stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
 
-      
+
       const videoTrack = this.stream.getVideoTracks()[0];
 
-      
+
       videoTrack.onended = () => {
         console.log('Screen share ended by user');
         this.stop();
@@ -131,10 +131,10 @@ export class ScreenShare {
 
       this.processor = new MediaStreamTrackProcessor({ track: videoTrack });
 
-      
+
       this.setupEncoder();
 
-      
+
       this.isProcessing = true;
       this.processVideoStream();
 
@@ -176,13 +176,13 @@ export class ScreenShare {
         if (done) break;
 
         if (value) {
-          
+
           if (this.encoder && this.encoder.state === 'configured') {
-            const keyFrame = Math.random() < 0.03; 
+            const keyFrame = Math.random() < 0.03;
             this.encoder.encode(value, { keyFrame });
           }
 
-          
+
           value.close();
         }
       }
@@ -200,7 +200,7 @@ export class ScreenShare {
 
     this.isProcessing = false;
 
-    
+
     if (this.encoder && this.encoder.state === 'configured') {
       await this.encoder.flush();
     }
@@ -210,17 +210,17 @@ export class ScreenShare {
   }
 
   private async cleanup(): Promise<void> {
-    
+
     if (this.reader) {
       try {
         await this.reader.cancel();
       } catch (e) {
-        
+
       }
       this.reader = null;
     }
 
-    
+
     if (this.encoder) {
       if (this.encoder.state !== 'closed') {
         this.encoder.close();
@@ -228,7 +228,7 @@ export class ScreenShare {
       this.encoder = null;
     }
 
-    
+
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;

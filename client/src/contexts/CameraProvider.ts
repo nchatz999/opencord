@@ -38,10 +38,10 @@ export class Camera {
   };
 
   private encoderConfig: VideoEncoderConfig = {
-    codec: 'vp09.00.10.08',
+    codec: 'vp8',
     width: 1280,
     height: 720,
-    bitrate: 1500000, 
+    bitrate: 1500000,
     framerate: 30,
   };
 
@@ -52,13 +52,13 @@ export class Camera {
       this.encoderConfig = { ...this.encoderConfig, ...encoderConfig };
     }
 
-    
+
     const [getIsRecording, setIsRecording] = createSignal<boolean>(false);
     this.getIsRecordingSignal = getIsRecording;
     this.setIsRecordingSignal = setIsRecording;
 
 
-    const [getQuality, setQuality] = createSignal<number>(1.0); 
+    const [getQuality, setQuality] = createSignal<number>(1.0);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
 
@@ -69,7 +69,7 @@ export class Camera {
     const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
     this.setQualitySignal(clampedQuality);
 
-    
+
     if (this.encoder && this.encoder.state === 'configured') {
       const newBitrate = Math.floor(this.encoderConfig.bitrate! * clampedQuality);
       console.log(`Camera quality changed to ${clampedQuality}, bitrate: ${newBitrate}`);
@@ -109,7 +109,7 @@ export class Camera {
     }
 
     try {
-      
+
       const mediaConstraints: MediaStreamConstraints = {
         video: {
           width: { ideal: this.constraints.width },
@@ -118,15 +118,15 @@ export class Camera {
           facingMode: this.constraints.facingMode,
           aspectRatio: this.constraints.aspectRatio,
         },
-        audio: false, 
+        audio: false,
       };
 
       this.stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
 
-      
+
       const videoTrack = this.stream.getVideoTracks()[0];
 
-      
+
       videoTrack.onended = () => {
         console.log('Camera track ended');
         this.stop();
@@ -134,10 +134,10 @@ export class Camera {
 
       this.processor = new MediaStreamTrackProcessor({ track: videoTrack });
 
-      
+
       this.setupEncoder();
 
-      
+
       this.isProcessing = true;
       this.processVideoStream();
 
@@ -182,13 +182,13 @@ export class Camera {
         if (done) break;
 
         if (value) {
-          
+
           if (this.encoder && this.encoder.state === 'configured') {
-            const keyFrame = Math.random() < 0.03; 
+            const keyFrame = Math.random() < 0.03;
             this.encoder.encode(value, { keyFrame });
           }
 
-          
+
           value.close();
         }
       }
@@ -206,7 +206,7 @@ export class Camera {
 
     this.isProcessing = false;
 
-    
+
     if (this.encoder && this.encoder.state === 'configured') {
       await this.encoder.flush();
     }
@@ -216,17 +216,17 @@ export class Camera {
   }
 
   private async cleanup(): Promise<void> {
-    
+
     if (this.reader) {
       try {
         await this.reader.cancel();
       } catch (e) {
-        
+
       }
       this.reader = null;
     }
 
-    
+
     if (this.encoder) {
       if (this.encoder.state !== 'closed') {
         this.encoder.close();
@@ -234,7 +234,7 @@ export class Camera {
       this.encoder = null;
     }
 
-    
+
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;

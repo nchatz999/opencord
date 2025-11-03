@@ -48,7 +48,7 @@ const VolumeIcon: Component<{ volume: number }> = (props) => (
 );
 
 export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser; channelId: number }> = (props) => {
-  
+
   const volume = () => Math.round(voipDomain.getUserVolume(props.participant.user.userId) * 100);
   const setVolume = (value: number) => voipDomain.setUserVolume(props.participant.user.userId, value / 100);
 

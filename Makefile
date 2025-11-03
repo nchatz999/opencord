@@ -16,7 +16,7 @@ build: check-requirements
 
 run:
 	cd server && ./target/release/server &
-	caddy run --config Caddyfile.prod --adapter caddyfile
+	caddy run --config Caddyfile.prod --adapter caddyfile --envfile .env
 
 stop:
 	pkill -f "target/release/server" || true

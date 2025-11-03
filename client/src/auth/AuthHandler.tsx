@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { createEffect, Match, Switch } from "solid-js";
 import { userDomain, connection, handleConnect } from "../store";
-import { clearSession, loadSession } from "../contexts/Session";
+import { loadSession } from "../contexts/Session";
 import Loading from "./Loading";
 import Auth from "./Auth";
 import App from "../App";
@@ -27,28 +27,16 @@ const AuthHandler: Component = () => {
       userDomain.setCurrentUser(maybeToken.value.userId);
       connection.setToken(maybeToken.value.sessionToken);
 
-      let retryCount = 0;
-      const maxRetries = 5;
       let connectResult;
 
-      while (retryCount <= maxRetries) {
+      while (true) {
         connectResult = await connection.connect();
 
         if (connectResult.ok) {
           break;
         }
 
-        console.error(`Connection attempt ${retryCount + 1} failed:`, connectResult.error);
-        
-        if (retryCount === maxRetries) {
-          console.error('Max connection retries reached');
-          return;
-        }
-
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
-        console.log(`Retrying connection in ${delay}ms...`);
-        await sleep(delay);
-        retryCount++;
+        await sleep(1000);
       }
 
       await handleConnect()

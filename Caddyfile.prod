@@ -1,4 +1,4 @@
-{$DOMAIN:localhost} {
+{$VITE_DOMAIN:localhost} {
     # API backend
     handle /api/* {
         uri strip_prefix /api

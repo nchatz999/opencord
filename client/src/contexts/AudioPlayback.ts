@@ -219,7 +219,6 @@ export class AudioPlayback {
   }
 
   handleAudioData(audioData: AudioData) {
-    console.log(audioData)
     if (!this.workletNode) {
       audioData.close();
       return;

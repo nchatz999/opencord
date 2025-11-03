@@ -620,10 +620,10 @@ export class VoipDomain {
     setState(
       'voipState',
       produce(voipState => {
+        const index = voipState.findIndex(p => p.userId === userId);
         updates.playback = new AudioPlayback(voipDomain.getAudio(), 200)
         updates.screenPlayback = new VideoPlayback(200)
         updates.cameraPlayback = new VideoPlayback(200)
-        const index = voipState.findIndex(p => p.userId === userId);
         if (index !== -1) {
           voipState[index] = { ...voipState[index], ...updates };
         } else {
@@ -633,25 +633,33 @@ export class VoipDomain {
     );
   }
 
-  pushAudioToParticipant(userId: number, packet: EncodedAudioChunk, frameId: number) {
+  pushAudioToParticipant(userId: number, packet: EncodedAudioChunk, timestamp: number) {
     let voipUser = voipDomain.getParticipant(userId)
     if (voipUser && voipUser.playback) {
-      voipUser.playback.pushChunk(packet, frameId)
+      voipUser.playback.pushChunk(packet, timestamp)
     }
   }
 
-  pushScreenToParticipant(userId: number, packet: EncodedVideoChunk, frameId: number) {
+  pushScreenToParticipant(userId: number, packet: EncodedVideoChunk, timestamp: number) {
     let voipUser = voipDomain.getParticipant(userId)
     if (voipUser && voipUser.screenPlayback)
-      voipUser.screenPlayback.pushFrame(packet, frameId)
+      voipUser.screenPlayback.pushFrame(packet, timestamp)
 
   }
-  pushCameraToParticipant(userId: number, packet: EncodedVideoChunk, frameId: number) {
+  pushCameraToParticipant(userId: number, packet: EncodedVideoChunk, timestamp: number) {
     let voipUser = voipDomain.getParticipant(userId)
     if (voipUser && voipUser.cameraPlayback)
-      voipUser.cameraPlayback.pushFrame(packet, frameId)
+      voipUser.cameraPlayback.pushFrame(packet, timestamp)
 
   }
+
+  pushScreenSoundToParticipant(userId: number, packet: EncodedVideoChunk, timestamp: number) {
+    let voipUser = voipDomain.getParticipant(userId)
+    if (voipUser && voipUser.screenSoundPlayback)
+      voipUser.screenSoundPlayback.pushChunk(packet, timestamp)
+
+  }
+
 
   removeParticipant(userId: number): void {
     setState(
@@ -977,34 +985,43 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
   certificateHash,
   (data: any) => {
     let frame = decode(data) as VoipDataMessage
-
     if (frame.type === "voice") {
       let packet = new EncodedAudioChunk({
         type: frame.key,
-        timestamp: frame.timestamp,
+        timestamp: frame.realTimestamp,
         duration: undefined,
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushAudioToParticipant(frame.userId, packet, i)
+      voipDomain.pushAudioToParticipant(frame.userId, packet, frame.timestamp)
     } else if (frame.type === 'screen') {
       let videoPacket = new EncodedVideoChunk({
         type: frame.key as EncodedVideoChunkType,
-        timestamp: frame.timestamp,
+        timestamp: frame.realTimestamp,
         duration: undefined,
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushScreenToParticipant(frame.userId, videoPacket, i)
+      voipDomain.pushScreenToParticipant(frame.userId, videoPacket, frame.timestamp)
     } else if (frame.type === 'camera') {
       let videoPacket = new EncodedVideoChunk({
         type: frame.key as EncodedVideoChunkType,
-        timestamp: frame.timestamp,
+        timestamp: frame.realTimestamp,
         duration: undefined,
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushCameraToParticipant(frame.userId, videoPacket, i)
+      voipDomain.pushCameraToParticipant(frame.userId, videoPacket, frame.timestamp)
+    } else if (frame.type === "screenSound") {
+      let videoPacket = new EncodedAudioChunk({
+        type: frame.key as EncodedAudioChunkType,
+        timestamp: frame.realTimestamp,
+        duration: undefined,
+        data: new Uint8Array(frame.data)
+      })
+      i++
+      voipDomain.pushScreenSoundToParticipant(frame.userId, videoPacket, frame.timestamp)
+
     }
   },
   (data) => {
@@ -1015,7 +1032,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
     }
   },
   () => { },
-  () => { userDomain.setConnectionStatus("disconnected") },
+  (_code, message) => { console.log(message); userDomain.setAppState({ type: "unauthenticated" }) },
   (error) => { console.log(error) }
 )
 
@@ -1029,25 +1046,27 @@ microphone.onEncodedData((data) => {
   data.copyTo(buffer);
 
   if (!user) return
-
   let voipMessage: VoipDataMessage = {
     type: "voice",
     userId: user.userId,
     data: buffer,
-    timestamp: data.timestamp,
+    timestamp: Date.now(),
+    realTimestamp: data.timestamp,
     key: data.type
   }
+  console.log(voipMessage)
   connection.send(encode([
     voipMessage.type,
     voipMessage.userId,
     new Uint8Array(voipMessage.data),
     voipMessage.timestamp,
+    voipMessage.realTimestamp,
     voipMessage.key
   ]))
 })
 
 export let screenShare = new ScreenShare();
-screenShare.onEncodedData((data) => {
+screenShare.onEncodedVideoData((data) => {
   let user = voipDomain.getCurrentUserParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
 
@@ -1058,8 +1077,9 @@ screenShare.onEncodedData((data) => {
     type: "screen",
     userId: user.userId,
     data: buffer,
-    timestamp: data.timestamp,
-    key: "key"
+    timestamp: Date.now(),
+    realTimestamp: data.timestamp,
+    key: data.type
   }
 
   connection.send(
@@ -1068,10 +1088,12 @@ screenShare.onEncodedData((data) => {
       voipMessage.userId,
       new Uint8Array(voipMessage.data),
       voipMessage.timestamp,
+      voipMessage.realTimestamp,
       voipMessage.key
     ])
   )
 })
+
 
 export let camera = new Camera();
 camera.onEncodedData((data) => {
@@ -1085,8 +1107,9 @@ camera.onEncodedData((data) => {
     type: "camera",
     userId: user.userId,
     data: buffer,
-    timestamp: data.timestamp,
-    key: "key"
+    timestamp: Date.now(),
+    realTimestamp: data.timestamp,
+    key: data.type
   }
 
   connection.send(encode([
@@ -1094,6 +1117,7 @@ camera.onEncodedData((data) => {
     voipMessage.userId,
     new Uint8Array(voipMessage.data),
     voipMessage.timestamp,
+    voipMessage.realTimestamp,
     voipMessage.key
   ]))
 })

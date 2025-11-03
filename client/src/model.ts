@@ -101,7 +101,8 @@ export interface VoipParticipant {
   createdAt: string;
   playback?: AudioPlayback
   cameraPlayback?: VideoPlayback,
-  screenPlayback?: VideoPlayback
+  screenPlayback?: VideoPlayback,
+  screenSoundPlayback?: AudioPlayback
 }
 
 
@@ -117,6 +118,7 @@ export type VoipDataMessage = {
   userId: number,
   data: ArrayBuffer,
   timestamp: number,
+  realTimestamp: number
   key: "key" | "delta"
 }
 
@@ -135,6 +137,7 @@ export interface VoipParticipantWithUser {
   createdAt: string;
   playback?: AudioPlayback
   cameraPlayback?: VideoPlayback,
-  screenPlayback?: VideoPlayback
+  screenPlayback?: VideoPlayback,
+  screenSoundPlayback?: AudioPlayback
 }
 

@@ -2,7 +2,6 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { Result } from 'opencord-utils'
 import { err, ok } from 'opencord-utils'
-
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -25,7 +24,7 @@ type ErrorResponse = {
 };
 
 const getBaseUrl = () => {
-  return import.meta.env.DOMAIN;
+  return (import.meta.env.VITE_DOMAIN || 'https://localhost') + "/api"
 
 };
 
@@ -64,6 +63,7 @@ export async function fetchApi<T = any>(
     fetchOptions.body = JSON.stringify(body);
   }
   try {
+    console.log(finalUrl)
     const response = await fetch(finalUrl, fetchOptions);
     if (!response.ok) {
       console.log(response)

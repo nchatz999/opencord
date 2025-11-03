@@ -75,6 +75,7 @@ pub struct VoipDataMessage {
     user_id: u64,
     data: Vec<u8>,
     timestamp: u64,
+    real_timestamp: u64,
     key: KeyType,
 }
 
@@ -496,7 +497,7 @@ impl Subject {
 
     async fn handle_new_connection(
         &mut self,
-        connection: Connection,
+        mut connection: Connection,
         subject_tx: &mpsc::Sender<SubjectMessage>,
     ) {
         println!("New WebTransport connection accepted");
@@ -504,7 +505,9 @@ impl Subject {
         let user_id = match self.service.get_user_from_session(&connection.id()).await {
             Ok(user_id) => user_id,
             Err(e) => {
-                error!("Session validation failed: {}", e);
+                connection
+                    .disconnect_with_message(200, "Authentication Fail")
+                    .await;
                 return;
             }
         };
