@@ -1,9 +1,7 @@
 import { createSignal, createEffect } from 'solid-js';
 
 interface BufferItem {
-  seq: number;
   timestamp: number;
-  pst: number;
   chunk: EncodedAudioChunk;
 }
 
@@ -131,14 +129,9 @@ export class AudioPlayback {
   context: AudioContext;
   workletNode: AudioWorkletNode | null;
   gainNode: GainNode;
-  missedChunks: number;
-  droppedChunks: number;
-  startTimestamp: number | null;
-  baseTimestamp: number | null;
-  lastSeq: number;
   bufferInterval: number | null;
 
-  
+
   volume: () => number;
   setVolume: (value: number) => void;
   isMuted: () => boolean;
@@ -154,13 +147,13 @@ export class AudioPlayback {
 
     this.gainNode = this.context.createGain();
 
-    
+
     this.gainNode.connect(this.context.destination);
 
     this.workletNode = null;
     this.bufferInterval = null;
 
-    
+
     const [volume, setVolume] = createSignal(1);
     const [isMuted, setIsMuted] = createSignal(false);
 
@@ -172,7 +165,7 @@ export class AudioPlayback {
     this.isMuted = isMuted;
     this.setIsMuted = setIsMuted;
 
-    
+
     createEffect(() => {
       if (this.isMuted()) {
         this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
@@ -190,36 +183,31 @@ export class AudioPlayback {
     this.decoder.configure(decoderConfig);
 
     this.buffer = [];
-    this.droppedChunks = 0;
-    this.missedChunks = 0;
-    this.startTimestamp = null;
-    this.baseTimestamp = null;
-    this.lastSeq = -1;
 
-    
+
     this.initialize();
   }
 
   async initialize() {
     try {
-      
+
       if (this.context.state === "suspended") {
         await this.context.resume();
       }
 
-      
+
       await ensureWorkletInitialized(this.context);
 
-      
+
       this.workletNode = new AudioWorkletNode(
         this.context,
         "audio-buffer-processor"
       );
 
-      
+
       this.workletNode.connect(this.gainNode);
 
-      
+
       this.bufferInterval = setInterval(() => {
         this.processBuffer();
       }, 10);
@@ -231,16 +219,17 @@ export class AudioPlayback {
   }
 
   handleAudioData(audioData: AudioData) {
+    console.log(audioData)
     if (!this.workletNode) {
       audioData.close();
       return;
     }
 
-    
+
     const audioSamples = new Float32Array(audioData.numberOfFrames);
     audioData.copyTo(audioSamples, { planeIndex: 0 });
 
-    
+
     this.workletNode.port.postMessage({
       type: "audioData",
       data: audioSamples,
@@ -249,66 +238,48 @@ export class AudioPlayback {
     audioData.close();
   }
 
-  pushChunk(chunk: EncodedAudioChunk, seq: number) {
-    if (!this.startTimestamp || !this.baseTimestamp) {
-      this.startTimestamp = chunk.timestamp;
-      this.baseTimestamp = performance.now() + this.delay;
-    }
+  pushChunk(chunk: EncodedAudioChunk, timestamp: number) {
 
-    if (seq <= this.lastSeq) {
-      this.droppedChunks++;
-      return;
-    }
+    const presentationTime = timestamp + this.delay
 
-    const presentationTime =
-      this.baseTimestamp + (chunk.timestamp - this.startTimestamp) / 1000;
 
     this.buffer.push({
-      seq,
-      timestamp: chunk.timestamp,
-      pst: presentationTime,
+      timestamp: presentationTime,
       chunk,
     });
   }
 
   processBuffer() {
-    const now = performance.now();
+    const now = Date.now()
     this.buffer.sort((a, b) => a.timestamp - b.timestamp);
 
-    while (this.buffer.length > 0 && this.buffer[0].pst <= now) {
+    while (this.buffer.length > 0 && this.buffer[0].timestamp <= now) {
       const item = this.buffer.shift();
       if (item) {
-        let diff = item.seq - this.lastSeq;
-        if (diff > 1) {
-          this.missedChunks += diff - 1;
-        }
         this.decoder.decode(item.chunk);
-        this.lastSeq = item.seq;
       }
     }
   }
 
   resetTimestamps() {
-    this.startTimestamp = null;
-    this.baseTimestamp = null;
   }
 
   clearBuffer() {
-    
+
     this.buffer = [];
 
-    
+
     if (this.workletNode) {
       this.workletNode.port.postMessage({ type: "clearBuffer" });
     }
 
-    
+
     this.resetTimestamps();
 
     console.log("Buffer cleared");
   }
 
-  
+
   mute() {
     this.setIsMuted(true);
   }
@@ -322,20 +293,20 @@ export class AudioPlayback {
   }
 
   cleanup() {
-    
+
     if (this.bufferInterval !== null) {
       clearInterval(this.bufferInterval);
       this.bufferInterval = null;
     }
 
-    
+
     this.clearBuffer();
 
-    
+
     this.workletNode?.disconnect();
     this.gainNode.disconnect();
 
-    
+
   }
 }
 
