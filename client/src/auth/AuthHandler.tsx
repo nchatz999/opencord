@@ -11,40 +11,32 @@ const AuthHandler: Component = () => {
     const appState = userDomain.getAppState();
 
     if (appState.type === 'loading') {
-      
+
       const maybeToken = loadSession();
 
-      console.log(maybeToken)
       if (!maybeToken.ok) {
-        
+
         userDomain.setAppState({ type: 'unauthenticated' });
         return;
       }
 
-      
+
       userDomain.setAppState({ type: 'connecting' });
       userDomain.setCurrentUser(maybeToken.value.userId);
       connection.setToken(maybeToken.value.sessionToken);
 
-      try {
-        const connectResult = await connection.connect();
+      const connectResult = await connection.connect();
 
-        if (!connectResult.ok) {
-          
-          userDomain.setAppState({ type: 'unauthenticated' });
-          clearSession()
-          return;
-        }
-
-        
-        
-        await handleConnect()
-        userDomain.setAppState({ type: 'authenticated' });
-
-      } catch (error) {
-        console.error('Connection error:', error);
-        userDomain.setAppState({ type: 'unauthenticated' });
+      if (!connectResult.ok) {
+        console.error(connectResult.error)
+        //userDomain.setAppState({ type: 'unauthenticated' });
+        //clearSession()
+        return;
       }
+
+      await handleConnect()
+      userDomain.setAppState({ type: 'authenticated' });
+
     }
   });
 
