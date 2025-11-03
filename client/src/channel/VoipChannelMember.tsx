@@ -3,6 +3,8 @@ import { Show } from "solid-js";
 import {
   MicOff,
   VolumeX,
+  Monitor,
+  Video,
 } from "lucide-solid";
 import type { VoipParticipantWithUser } from "../model";
 import { useToaster } from "../components/Toaster";
