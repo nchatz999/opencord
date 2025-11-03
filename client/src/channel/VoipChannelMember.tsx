@@ -147,6 +147,18 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
               </div>
             </Show>
 
+            <Show when={props.participant.publishScreen}>
+              <div class="p-0.5 bg-blue-600 rounded-full" title="Sharing screen">
+                <Monitor size={8} class="text-white" />
+              </div>
+            </Show>
+
+            <Show when={props.participant.publishCamera}>
+              <div class="p-0.5 bg-green-600 rounded-full" title="Camera on">
+                <Video size={8} class="text-white" />
+              </div>
+            </Show>
+
           </div>
 
         </div>
