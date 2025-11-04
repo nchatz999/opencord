@@ -599,26 +599,29 @@ impl Subject {
                             }
                             SubjectMessage::ClientTimout { user_id } => {
 
-                                 if let Ok(Some(participant)) =self.service.remove_voip_participant(user_id).await {
-                                        if let Some(channel_id) = participant.channel_id {
-                                            self.notify_observers(
-                                                Event::VoipParticipantDeleted{
-                                                    user_id: participant.user_id,
-                                                },
-                                                crate::managers::RecipientType::ChannelRights { channel_id, minimum_rights: 2 }
-                                            )
-                                            .await;
-                                        } else if let Some(recipient_id) = participant.recipient_id {
-                                            self.notify_observers(
-                                                Event::VoipParticipantDeleted {
-                                                    user_id: participant.user_id,
-                                                },
-                                                crate::managers::RecipientType::User {
-                                                    user_id: recipient_id,
-                                                },
-                                            )
-                                            .await;
-                                        }
+                                if let Ok(Some(participant)) = self.service.remove_voip_participant(user_id).await {
+                                    if let Some(channel_id) = participant.channel_id {
+                                        self.notify_observers(
+                                            Event::VoipParticipantDeleted {
+                                                user_id: participant.user_id,
+                                            },
+                                            crate::managers::RecipientType::ChannelRights { 
+                                                channel_id, 
+                                                minimum_rights: 2 
+                                            }
+                                        )
+                                        .await;
+                                    } else if let Some(recipient_id) = participant.recipient_id {
+                                        self.notify_observers(
+                                            Event::VoipParticipantDeleted {
+                                                user_id: participant.user_id,
+                                            },
+                                            crate::managers::RecipientType::User {
+                                                user_id: recipient_id,
+                                            },
+                                        )
+                                        .await;
+                                    }
                                 }
 
                                 self.unregister(user_id).await;
