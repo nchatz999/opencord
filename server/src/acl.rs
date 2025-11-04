@@ -1,14 +1,9 @@
-
-
-
-
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::channel::{Channel, ChannelType};
 
 use crate::group::{Group, GroupRoleRights};
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum AclError {
@@ -28,9 +23,7 @@ pub enum AclError {
     DatabaseError(#[from] DatabaseError),
 }
 
-
 use crate::error::{ApiError, DatabaseError};
-
 
 pub trait AclTransaction: Send + Sync {
     async fn find_group_role_rights(
@@ -56,16 +49,7 @@ pub trait AclTransaction: Send + Sync {
         &mut self,
         group_id: i64,
     ) -> Result<Vec<VoipParticipant>, DatabaseError>;
-
-    async fn find_user_group_rights(
-        &mut self,
-        group_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError>;
-
-    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
-
 
 pub trait AclRepository: Send + Sync + Clone {
     type Transaction: AclTransaction;
@@ -89,7 +73,6 @@ pub trait AclRepository: Send + Sync + Clone {
 
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
-
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
 use crate::model::Event;
@@ -119,7 +102,7 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 rights: assigne_rights,
             });
         }
-        
+
         if (assigne == 0 || assigne == 1) && assigne_rights != 16 {
             return Err(AclError::PermissionDenied {
                 reason: "Cant change admins rights".to_string(),
@@ -158,14 +141,14 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         let mut tx = self.repository.begin().await?;
 
         for acl in acls {
-            let assigner = tx
-                .find_user_role(user_id)
-                .await?
-                .ok_or(AclError::PermissionDenied {
+            let assigner = self.repository.find_user_role(user_id).await?.ok_or(
+                AclError::PermissionDenied {
                     reason: "User doesnt exist".to_string(),
-                })?;
+                },
+            )?;
 
-            let assigner_rights = tx
+            let assigner_rights = self
+                .repository
                 .find_user_group_rights(acl.group_id, user_id)
                 .await?
                 .ok_or(AclError::PermissionDenied {
@@ -197,7 +180,6 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 })?
                 .unwrap_or(0);
 
-            
             let event = Event::GroupRoleRightUpdated {
                 group_id: acl.group_id,
                 role_id: acl.role_id,
@@ -214,7 +196,6 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 )
                 .await;
 
-            
             if new_right > 0 && acl.rights == 0 {
                 let hide_event = Event::GroupHide {
                     group_id: acl.group_id,
@@ -230,7 +211,6 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                     .await;
             }
 
-            
             if new_right == 0 && acl.rights > 0 {
                 let group = tx.find_group(acl.group_id).await?;
                 let channels = tx.find_channels_by_group(acl.group_id).await?;
@@ -260,12 +240,8 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
     }
 }
 
-
-
-
 use crate::db::Postgre;
 use crate::voip::VoipParticipant;
-
 
 pub struct PgAclTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -378,31 +354,6 @@ impl AclTransaction for PgAclTransaction {
 
         Ok(voip_participants)
     }
-
-    async fn find_user_group_rights(
-        &mut self,
-        group_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            r#"SELECT grr.rights 
-            FROM group_role_rights grr
-            INNER JOIN users u ON u.role_id = grr.role_id
-            WHERE grr.group_id = $1 AND u.user_id = $2"#,
-            group_id,
-            user_id
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-        Ok(result)
-    }
-
-    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!("SELECT role_id FROM users WHERE user_id = $1", user_id)
-            .fetch_optional(&mut *self.transaction)
-            .await?;
-        Ok(result)
-    }
 }
 
 impl AclRepository for Postgre {
@@ -473,10 +424,6 @@ impl AclRepository for Postgre {
     }
 }
 
-
-
-
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetGroupRoleRightsRequest {
@@ -484,10 +431,6 @@ pub struct SetGroupRoleRightsRequest {
     pub role_id: i64,
     pub rights: i64,
 }
-
-
-
-
 
 use axum::http::StatusCode;
 use axum::Json;
@@ -510,7 +453,6 @@ impl From<AclError> for ApiError {
     }
 }
 
-
 use crate::middleware::{authorize, AuthorizeService};
 use axum::{
     extract::{Extension, State},
@@ -528,8 +470,6 @@ pub fn acl_routes(
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(acl_service)
 }
-
-
 
 #[utoipa::path(
     get,
