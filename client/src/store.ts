@@ -935,6 +935,24 @@ export function handleServerEvent(event: ServerEvent): void {
         channelDomain.deleteChannel(channel.channelId);
       });
 
+      const messagesToRemove = messageDomain.getAllMessages().filter((message) => {
+        if (message.channelId === null) return false;
+        const channel = channelDomain.getChannelById(message.channelId);
+        return channel && channel.groupId === event.group_id;
+      });
+      messagesToRemove.forEach(message => {
+        messageDomain.deleteMessage(message.id);
+      });
+
+      const participantsToRemove = voipDomain.getParticipants().filter((participant) => {
+        if (participant.channelId === null) return false;
+        const channel = channelDomain.getChannelById(participant.channelId);
+        return channel && channel.groupId === event.group_id;
+      });
+      participantsToRemove.forEach(participant => {
+        voipDomain.removeParticipant(participant.userId);
+      });
+
       break;
 
     default:
