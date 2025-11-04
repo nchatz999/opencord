@@ -366,7 +366,7 @@ impl AclTransaction for PgAclTransaction {
     ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"DELETE FROM voip_participants 
-            WHERE user_id IN (SELECT user_id FROM users WHERE role_id = $1)"#,
+            WHERE user_id IN (SELECT u.user_id FROM users u WHERE u.role_id = $1)"#,
             role_id
         )
         .execute(&mut *self.transaction)
@@ -378,7 +378,7 @@ impl AclTransaction for PgAclTransaction {
     async fn delete_messages_by_role(&mut self, role_id: i64) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"DELETE FROM messages 
-            WHERE user_id IN (SELECT user_id FROM users WHERE role_id = $1)"#,
+            WHERE user_id IN (SELECT u.user_id FROM users u WHERE u.role_id = $1)"#,
             role_id
         )
         .execute(&mut *self.transaction)
