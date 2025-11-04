@@ -366,19 +366,16 @@ impl Subject {
     }
 
     async fn register(&mut self, new_observer: Observer) {
-        for observer in self.observers.values() {
-            if observer.user_id() == new_observer.user_id() {
-                let _ = observer.sender.send(ObserverMessage::Close).await;
-            }
-        }
-        self.observers
-            .retain(|_, observer| observer.user_id() != new_observer.user_id());
-
         self.observers
             .insert(new_observer.id().to_string(), new_observer);
     }
 
     async fn unregister(&mut self, user_id: i64) {
+        for observer in self.observers.values() {
+            if observer.user_id() == user_id {
+                let _ = observer.sender.send(ObserverMessage::Close).await;
+            }
+        }
         self.observers
             .retain(|_, observer| observer.user_id() != user_id);
     }
@@ -500,16 +497,11 @@ impl Subject {
         mut connection: Connection,
         subject_tx: &mpsc::Sender<SubjectMessage>,
     ) {
-        println!("New WebTransport connection accepted");
-
-        let user_id = match self.service.get_user_from_session(&connection.id()).await {
-            Ok(user_id) => user_id,
-            Err(e) => {
-                connection
-                    .disconnect_with_message(200, "Authentication Fail")
-                    .await;
-                return;
-            }
+        let Ok(user_id) = self.service.get_user_from_session(&connection.id()).await else {
+            connection
+                .disconnect_with_message(200, "Authentication Fail")
+                .await;
+            return;
         };
 
         let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
@@ -518,26 +510,21 @@ impl Subject {
             user_id,
             sender: observer_tx,
         };
+        self.unregister(user_id).await;
         self.register(observer).await;
-
         self.remove_user_active_connections(user_id).await;
-        match self
+
+        if let Ok(Some(status)) = self
             .service
             .update_user_status(user_id, UserStatusType::Online)
             .await
         {
-            Ok(Some(status)) => {
-                self.notify_observers(
-                    Event::UserUpdated { user: status },
-                    crate::managers::RecipientType::Broadcast,
-                )
-                .await;
-            }
-            _ => {
-                error!("Failed to update user status for user ");
-            }
+            self.notify_observers(
+                Event::UserUpdated { user: status },
+                crate::managers::RecipientType::Broadcast,
+            )
+            .await;
         }
-
         tokio::spawn(handle_connection(
             connection,
             self.service.clone(),
