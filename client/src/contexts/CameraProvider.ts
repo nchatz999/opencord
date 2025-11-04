@@ -67,12 +67,13 @@ export class Camera {
 
   setQuality(quality: number): void {
     const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
-    this.setQualitySignal(clampedQuality);
-
-
+    
     if (this.encoder && this.encoder.state === 'configured') {
       const newBitrate = Math.floor(this.encoderConfig.bitrate! * clampedQuality);
-      console.log(`Camera quality changed to ${clampedQuality}, bitrate: ${newBitrate}`);
+      this.encoder.configure({
+        ...this.encoderConfig,
+        bitrate: newBitrate
+      } as VideoEncoderConfig);
     }
   }
 

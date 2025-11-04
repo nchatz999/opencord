@@ -136,6 +136,18 @@ export class Microphone {
     }
   }
 
+  setQuality(quality: number): void {
+    const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
+    
+    if (this.encoder && this.encoder.state === 'configured') {
+      const newBitrate = Math.floor(this.encoderConfig.bitrate! * clampedQuality);
+      this.encoder.configure({
+        ...this.encoderConfig,
+        bitrate: newBitrate
+      } as AudioEncoderConfig);
+    }
+  }
+
   getVolume(): number {
     return this.getVolumeSignal();
   }
