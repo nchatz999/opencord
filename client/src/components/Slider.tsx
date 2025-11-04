@@ -1,5 +1,4 @@
-import { mergeProps, type Component, type JSX } from "solid-js";
-import { cn } from "../utils";
+import { createSignal, createEffect, mergeProps, type Component } from 'solid-js';
 
 interface SliderProps {
   value?: number;
@@ -17,65 +16,116 @@ interface SliderProps {
 const Slider: Component<SliderProps> = (props) => {
   const merged = mergeProps(
     {
-      defaultValue: 50,
       min: 0,
       max: 100,
       step: 1,
+      defaultValue: 50,
       disabled: false,
     },
     props
   );
 
-  const handleChange: JSX.EventHandler<HTMLInputElement, Event> = (e) => {
-    const newValue = Number(e.currentTarget.value);
-    merged.onChange?.(newValue);
+  const [internalValue, setInternalValue] = createSignal(
+    props.value ?? merged.defaultValue
+  );
+  const [isDragging, setIsDragging] = createSignal(false);
+
+  // Sync external value changes
+  createEffect(() => {
+    if (props.value !== undefined) {
+      setInternalValue(props.value);
+    }
+  });
+
+  const currentValue = () => props.value ?? internalValue();
+
+  const percentage = () =>
+    ((currentValue() - merged.min) / (merged.max - merged.min)) * 100;
+
+  const handleChange = (e: Event) => {
+    if (merged.disabled) return;
+    const target = e.target as HTMLInputElement;
+    const newValue = Number(target.value);
+    setInternalValue(newValue);
+    props.onChange?.(newValue);
   };
 
-  const handleMouseUp: JSX.EventHandler<HTMLInputElement, MouseEvent> = (e) => {
-    const newValue = Number(e.currentTarget.value);
-    merged.onChangeEnd?.(newValue);
+  const handleMouseDown = () => {
+    if (!merged.disabled) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (isDragging()) {
+      setIsDragging(false);
+      props.onChangeEnd?.(currentValue());
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!merged.disabled) {
+      props.onChangeEnd?.(currentValue());
+    }
   };
 
   return (
-    <div class={cn("relative flex items-center", merged.class)}>
-      <input
-        type="range"
-        min={merged.min}
-        max={merged.max}
-        step={merged.step}
-        value={merged.value}
-        onInput={handleChange}
-        onMouseUp={handleMouseUp}
-        disabled={merged.disabled}
-        title={merged.title}
-        class={cn(
-          "w-full h-1 bg-[#4f545c] rounded-lg appearance-none cursor-pointer",
-          "focus:outline-none focus:ring-0",
-          "[&::-webkit-slider-thumb]:appearance-none",
-          "[&::-webkit-slider-thumb]:w-3",
-          "[&::-webkit-slider-thumb]:h-3",
-          "[&::-webkit-slider-thumb]:bg-[#DBDEE1]",
-          "[&::-webkit-slider-thumb]:rounded-full",
-          "[&::-webkit-slider-thumb]:cursor-pointer",
-          "[&::-webkit-slider-thumb]:transition-all",
-          "[&::-webkit-slider-thumb]:hover:bg-[#00A8FC]",
-          "[&::-webkit-slider-thumb]:hover:scale-110",
-          "[&::-moz-range-thumb]:w-3",
-          "[&::-moz-range-thumb]:h-3",
-          "[&::-moz-range-thumb]:bg-[#DBDEE1]",
-          "[&::-moz-range-thumb]:rounded-full",
-          "[&::-moz-range-thumb]:cursor-pointer",
-          "[&::-moz-range-thumb]:border-0",
-          "[&::-moz-range-thumb]:transition-all",
-          "[&::-moz-range-thumb]:hover:bg-[#00A8FC]",
-          "[&::-moz-range-thumb]:hover:scale-110",
-          "[&::-webkit-slider-runnable-track]:rounded-lg",
-          "[&::-webkit-slider-runnable-track]:bg-[#4f545c]",
-          "[&::-moz-range-track]:rounded-lg",
-          "[&::-moz-range-track]:bg-[#4f545c]",
-          merged.disabled && "opacity-50 cursor-not-allowed"
-        )}
-      />
+    <div class={`w-full ${merged.class || ''}`}>
+      {merged.title && (
+        <div class="mb-2 text-xs font-semibold text-gray-300 uppercase tracking-wide">
+          {merged.title}
+        </div>
+      )}
+      <div class="relative flex items-center">
+        {/* Track */}
+        <div class="absolute w-full h-1 bg-[#1e1f22] rounded-full">
+          {/* Progress fill */}
+          <div
+            class="absolute h-full bg-[#5865f2] rounded-full transition-all"
+            style={{ width: `${percentage()}%` }}
+          />
+        </div>
+
+        {/* Input range */}
+        <input
+          type="range"
+          min={merged.min}
+          max={merged.max}
+          step={merged.step}
+          value={currentValue()}
+          onInput={handleChange}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onTouchEnd={handleTouchEnd}
+          disabled={merged.disabled}
+          class={`
+            relative w-full h-1 appearance-none bg-transparent cursor-pointer
+            disabled:cursor-not-allowed disabled:opacity-50
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:w-4
+            [&::-webkit-slider-thumb]:h-4
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:bg-white
+            [&::-webkit-slider-thumb]:shadow-md
+            [&::-webkit-slider-thumb]:cursor-grab
+            [&::-webkit-slider-thumb]:transition-transform
+            [&::-webkit-slider-thumb]:hover:scale-110
+            [&::-webkit-slider-thumb]:active:cursor-grabbing
+            [&::-webkit-slider-thumb]:active:scale-125
+            [&::-moz-range-thumb]:w-4
+            [&::-moz-range-thumb]:h-4
+            [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:bg-white
+            [&::-moz-range-thumb]:border-0
+            [&::-moz-range-thumb]:shadow-md
+            [&::-moz-range-thumb]:cursor-grab
+            [&::-moz-range-thumb]:transition-transform
+            [&::-moz-range-thumb]:hover:scale-110
+            [&::-moz-range-thumb]:active:cursor-grabbing
+            [&::-moz-range-thumb]:active:scale-125
+          `}
+        />
+      </div>
     </div>
   );
 };
