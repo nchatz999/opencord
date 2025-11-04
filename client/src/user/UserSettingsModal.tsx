@@ -25,6 +25,7 @@ import { connection, microphone, modalDomain, outputManager, userDomain, camera,
 import { Input } from "../components/Input";
 import Button from "../components/Button";
 import Select from "../components/Select";
+import Slider from "../components/Slider";
 import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
 import { fetchApi } from "../utils";
@@ -460,17 +461,14 @@ const UserSettingsModal: Component = () => {
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">
                   Camera Quality: {Math.round(cameraQuality())}%
                 </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="100"
+                <Slider
                   value={cameraQuality()}
-                  onInput={(e) => {
-                    const value = parseInt(e.currentTarget.value);
+                  min={10}
+                  max={100}
+                  onChange={(value) => {
                     setCameraQuality(value);
                     camera.setQuality(value / 100);
                   }}
-                  class="w-full h-2 bg-[#2b2d31] rounded-lg appearance-none cursor-pointer"
                 />
                 <p class="text-xs text-[#b9bbbe] mt-1">
                   Adjusts video quality for camera stream
@@ -481,17 +479,14 @@ const UserSettingsModal: Component = () => {
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">
                   Screen Share Quality: {Math.round(screenQuality())}%
                 </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="100"
+                <Slider
                   value={screenQuality()}
-                  onInput={(e) => {
-                    const value = parseInt(e.currentTarget.value);
+                  min={10}
+                  max={100}
+                  onChange={(value) => {
                     setScreenQuality(value);
                     screenShare.setQuality(value / 100);
                   }}
-                  class="w-full h-2 bg-[#2b2d31] rounded-lg appearance-none cursor-pointer"
                 />
                 <p class="text-xs text-[#b9bbbe] mt-1">
                   Adjusts video quality for screen sharing
@@ -502,17 +497,14 @@ const UserSettingsModal: Component = () => {
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">
                   Audio Quality: {Math.round(audioQuality())}%
                 </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="100"
+                <Slider
                   value={audioQuality()}
-                  onInput={(e) => {
-                    const value = parseInt(e.currentTarget.value);
+                  min={10}
+                  max={100}
+                  onChange={(value) => {
                     setAudioQuality(value);
                     microphone.setQuality(value / 100);
                   }}
-                  class="w-full h-2 bg-[#2b2d31] rounded-lg appearance-none cursor-pointer"
                 />
                 <p class="text-xs text-[#b9bbbe] mt-1">
                   Adjusts audio bitrate for microphone
