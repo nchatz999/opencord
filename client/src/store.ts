@@ -627,6 +627,7 @@ export class VoipDomain {
         updates.screenPlayback = new VideoPlayback(200)
         updates.cameraPlayback = new VideoPlayback(200)
         updates.screenSoundPlayback = new AudioPlayback(voipDomain.getAudio(), 200)
+        updates.screenSoundPlayback.setVolume(0)
         if (index !== -1) {
           voipState[index] = { ...voipState[index], ...updates };
         } else {
