@@ -602,6 +602,8 @@ export class VoipDomain {
       part.playback = new AudioPlayback(voipDomain.getAudio(), 200)
       part.screenPlayback = new VideoPlayback(200)
       part.cameraPlayback = new VideoPlayback(200)
+      part.screenSoundPlayback = new AudioPlayback(voipDomain.getAudio(), 200)
+      part.screenSoundPlayback.setVolume(0)
       return part
     }));
   }
@@ -624,6 +626,7 @@ export class VoipDomain {
         updates.playback = new AudioPlayback(voipDomain.getAudio(), 200)
         updates.screenPlayback = new VideoPlayback(200)
         updates.cameraPlayback = new VideoPlayback(200)
+        updates.screenSoundPlayback = new AudioPlayback(voipDomain.getAudio(), 200)
         if (index !== -1) {
           voipState[index] = { ...voipState[index], ...updates };
         } else {
@@ -708,6 +711,20 @@ export class VoipDomain {
     return 1;
   }
 
+  setUserScreenSoundVolume(userId: number, volume: number): void {
+    const participant = this.getParticipant(userId);
+    if (participant && participant.screenSoundPlayback) {
+      participant.screenSoundPlayback.setVolume(volume);
+    }
+  }
+
+  getUserScreenSoundVolume(userId: number): number {
+    const participant = this.getParticipant(userId);
+    if (participant && participant.screenSoundPlayback) {
+      return participant.screenSoundPlayback.volume();
+    }
+    return 1;
+  }
 
   removeUserPublishedStreams(userId: number): void {
     setState(
@@ -1054,7 +1071,6 @@ microphone.onEncodedData((data) => {
     realTimestamp: data.timestamp,
     key: data.type
   }
-  console.log(voipMessage)
   connection.send(encode([
     voipMessage.type,
     voipMessage.userId,
@@ -1072,9 +1088,36 @@ screenShare.onEncodedVideoData((data) => {
 
   data.copyTo(buffer);
   if (!user) return
-
   let voipMessage: VoipDataMessage = {
     type: "screen",
+    userId: user.userId,
+    data: buffer,
+    timestamp: Date.now(),
+    realTimestamp: data.timestamp,
+    key: data.type
+  }
+  console.log(voipMessage)
+
+  connection.send(
+    encode([
+      voipMessage.type,
+      voipMessage.userId,
+      new Uint8Array(voipMessage.data),
+      voipMessage.timestamp,
+      voipMessage.realTimestamp,
+      voipMessage.key
+    ])
+  )
+})
+
+screenShare.onEncodedAudioData((data) => {
+  let user = voipDomain.getCurrentUserParticipant()
+  const buffer = new ArrayBuffer(data.byteLength);
+
+  data.copyTo(buffer);
+  if (!user) return
+  let voipMessage: VoipDataMessage = {
+    type: "screenSound",
     userId: user.userId,
     data: buffer,
     timestamp: Date.now(),
@@ -1093,7 +1136,6 @@ screenShare.onEncodedVideoData((data) => {
     ])
   )
 })
-
 
 export let camera = new Camera();
 camera.onEncodedData((data) => {
