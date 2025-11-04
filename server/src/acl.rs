@@ -209,7 +209,6 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 .await;
 
             if new_right > 0 && acl.rights == 0 {
-                // Delete voip participants and messages for this role in this group
                 tx.delete_voip_participants_by_role(acl.role_id, acl.group_id)
                     .await?;
                 tx.delete_messages_by_role(acl.role_id, acl.group_id)
