@@ -19,8 +19,9 @@ import {
   Monitor,
   Trash2,
   Calendar,
+  Settings,
 } from "lucide-solid";
-import { connection, microphone, modalDomain, outputManager, userDomain } from "../store";
+import { connection, microphone, modalDomain, outputManager, userDomain, camera, screenShare } from "../store";
 import { Input } from "../components/Input";
 import Button from "../components/Button";
 import Select from "../components/Select";
@@ -44,6 +45,10 @@ const UserSettingsModal: Component = () => {
 
   const [inputVolume, setInputVolume] = createSignal("50");
   const [outputVolume, setOutputVolume] = createSignal("50");
+
+  const [cameraQuality, setCameraQuality] = createSignal(camera.getQuality() * 100);
+  const [screenQuality, setScreenQuality] = createSignal(screenShare.getQuality() * 100);
+  const [audioQuality, setAudioQuality] = createSignal(microphone.getQuality() * 100);
 
   const [currentPassword, setCurrentPassword] = createSignal("");
   const [newPassword, setNewPassword] = createSignal("");
@@ -433,6 +438,86 @@ const UserSettingsModal: Component = () => {
                 error={passwordError()}
               />
               <Button onClick={handleChangePassword}>Update Password</Button>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "quality",
+      label: "Quality",
+      icon: <Settings class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <div class="p-4 bg-[#2f3136] rounded-md">
+            <h3 class="text-sm font-medium mb-4 flex items-center">
+              <Settings class="w-4 h-4 mr-2" />
+              Bitrate Settings
+            </h3>
+            
+            <div class="space-y-6">
+              <div>
+                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                  Camera Quality: {Math.round(cameraQuality())}%
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  value={cameraQuality()}
+                  onInput={(e) => {
+                    const value = parseInt(e.currentTarget.value);
+                    setCameraQuality(value);
+                    camera.setQuality(value / 100);
+                  }}
+                  class="w-full h-2 bg-[#2b2d31] rounded-lg appearance-none cursor-pointer"
+                />
+                <p class="text-xs text-[#b9bbbe] mt-1">
+                  Adjusts video quality for camera stream
+                </p>
+              </div>
+
+              <div>
+                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                  Screen Share Quality: {Math.round(screenQuality())}%
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  value={screenQuality()}
+                  onInput={(e) => {
+                    const value = parseInt(e.currentTarget.value);
+                    setScreenQuality(value);
+                    screenShare.setQuality(value / 100);
+                  }}
+                  class="w-full h-2 bg-[#2b2d31] rounded-lg appearance-none cursor-pointer"
+                />
+                <p class="text-xs text-[#b9bbbe] mt-1">
+                  Adjusts video quality for screen sharing
+                </p>
+              </div>
+
+              <div>
+                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                  Audio Quality: {Math.round(audioQuality())}%
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  value={audioQuality()}
+                  onInput={(e) => {
+                    const value = parseInt(e.currentTarget.value);
+                    setAudioQuality(value);
+                    microphone.setQuality(value / 100);
+                  }}
+                  class="w-full h-2 bg-[#2b2d31] rounded-lg appearance-none cursor-pointer"
+                />
+                <p class="text-xs text-[#b9bbbe] mt-1">
+                  Adjusts audio bitrate for microphone
+                </p>
+              </div>
             </div>
           </div>
         </div>

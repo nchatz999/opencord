@@ -152,6 +152,10 @@ export class Microphone {
     return this.getVolumeSignal();
   }
 
+  getQuality(): number {
+    return 1.0; // Default quality value
+  }
+
   setMuted(muted: boolean) {
     this.setMutedSignal(muted)
   }
