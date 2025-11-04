@@ -563,10 +563,8 @@ impl Subject {
                             }
                             SubjectMessage::ClientTimout { user_id } => {
 
-                                match self.service.remove_voip_participant(user_id).await {
-                                    Ok(Some(participant)) => {
+                                 if let Ok(Some(participant)) =self.service.remove_voip_participant(user_id).await {
                                         if let Some(channel_id) = participant.channel_id {
-                                            info!("Removed VoIP participant for timed-out user {} from channel {}", user_id, channel_id);
                                             self.notify_observers(
                                                 Event::VoipParticipantDeleted{
                                                     user_id: participant.user_id,
@@ -575,7 +573,6 @@ impl Subject {
                                             )
                                             .await;
                                         } else if let Some(recipient_id) = participant.recipient_id {
-                                            info!("Removed VoIP participant for timed-out user {} from private call with user {}", user_id, recipient_id);
                                             self.notify_observers(
                                                 Event::VoipParticipantDeleted {
                                                     user_id: participant.user_id,
@@ -586,30 +583,16 @@ impl Subject {
                                             )
                                             .await;
                                         }
-                                    }
-                                    Ok(None) => {
-                                        info!("No VoIP participant found for timed-out user {}", user_id);
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to remove VoIP participant for timed-out user {}: {}", user_id, e);
-                                    }
                                 }
 
-
                                 self.unregister(user_id).await;
-                                info!("Removed connections for timed-out user: {}", user_id);
-                                match self.service.update_user_status(user_id, UserStatusType::Offline).await {
-                                    Ok(Some(user)) => {
-                                        self.notify_observers(
-                                            Event::UserUpdated{
-                                                user,
-                                            },
-                                            crate::managers::RecipientType::Broadcast
-                                        ).await;
-                                    }
-                                    _ => {
-                                        error!("Failed to update user status for user ");
-                                    }
+                                if let Ok(Some(user))= self.service.update_user_status(user_id, UserStatusType::Offline).await {
+                                    self.notify_observers(
+                                        Event::UserUpdated{
+                                            user,
+                                        },
+                                        crate::managers::RecipientType::Broadcast
+                                    ).await;
                                 }
                             }
                         }
@@ -619,10 +602,9 @@ impl Subject {
                 may_connection = server.accept() => {
                     if let Some(connection) = may_connection {
                         self.handle_new_connection(connection, &subject_tx).await;
-                    } else {
-                        warn!("Failed to accept WebTransport connection");
                     }
                 }
+
             }
         }
     }
