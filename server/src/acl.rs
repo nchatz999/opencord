@@ -380,7 +380,7 @@ impl AclTransaction for PgAclTransaction {
         sqlx::query!(
             r#"DELETE FROM messages 
             USING users u 
-            WHERE messages.user_id = u.user_id AND u.role_id = $1"#,
+            WHERE messages.sender_id = u.user_id AND u.role_id = $1"#,
             role_id
         )
         .execute(&mut *self.transaction)
