@@ -1,9 +1,12 @@
 import type { Component } from "solid-js";
 import { For, Show } from "solid-js";
 
-import { Camera, Monitor, Users, Video } from "lucide-solid";
+import { Camera, Monitor, Users, Video, Volume2 } from "lucide-solid";
 import { voipDomain, messageDomain } from "../store";
 import type { VoipParticipantWithUser } from "../model";
+import ContextMenu from "../components/ContextMenu";
+import type { ContextMenuItem } from "../components/ContextMenu";
+import Slider from "../components/Slider";
 
 
 const StreamsContent: Component = () => {
@@ -35,6 +38,33 @@ const StreamsContent: Component = () => {
     if (totalStreams <= 4) return "grid-cols-2";
     if (totalStreams <= 6) return "grid-cols-3";
     return "grid-cols-4";
+  };
+
+  const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
+    const currentVolume = voipDomain.getUserScreenSoundVolume(userId);
+    const volumePercentage = Math.round(currentVolume * 100);
+
+    return [
+      {
+        id: "volume-control",
+        label: `Screen Audio: ${volumePercentage}%`,
+        icon: <Volume2 size={16} />,
+        onClick: () => {},
+        customContent: (
+          <div class="px-2 py-2">
+            <Slider
+              value={volumePercentage}
+              min={0}
+              max={100}
+              onChange={(value) => {
+                voipDomain.setUserScreenSoundVolume(userId, value / 100);
+              }}
+              class="w-32"
+            />
+          </div>
+        ),
+      },
+    ];
   };
 
   return (
@@ -142,7 +172,10 @@ const StreamsContent: Component = () => {
 
                     {}
                     <Show when={participant.publishScreen}>
-                      <div class="relative bg-[#2b2d31] rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
+                      <ContextMenu
+                        items={createVolumeMenuItems(participant.userId)}
+                        class="relative bg-[#2b2d31] rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]"
+                      >
                         <video
                           ref={(ref) => {
                             if (participant.screenPlayback) {
@@ -178,9 +211,14 @@ const StreamsContent: Component = () => {
                             <div class="p-1 rounded-full bg-blue-500 bg-opacity-80">
                               <Monitor size={12} class="text-white" />
                             </div>
+                            <Show when={voipDomain.getUserScreenSoundVolume(participant.userId) === 0}>
+                              <div class="p-1 rounded-full bg-red-500 bg-opacity-80">
+                                <Volume2 size={12} class="text-white" />
+                              </div>
+                            </Show>
                           </div>
                         </div>
-                      </div>
+                      </ContextMenu>
                     </Show>
                   </>
                 )}
