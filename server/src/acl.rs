@@ -49,6 +49,16 @@ pub trait AclTransaction: Send + Sync {
         &mut self,
         group_id: i64,
     ) -> Result<Vec<VoipParticipant>, DatabaseError>;
+
+    async fn delete_voip_participants_by_role(
+        &mut self,
+        role_id: i64,
+    ) -> Result<(), DatabaseError>;
+
+    async fn delete_messages_by_role(
+        &mut self,
+        role_id: i64,
+    ) -> Result<(), DatabaseError>;
 }
 
 pub trait AclRepository: Send + Sync + Clone {
@@ -353,6 +363,36 @@ impl AclTransaction for PgAclTransaction {
         .await?;
 
         Ok(voip_participants)
+    }
+
+    async fn delete_voip_participants_by_role(
+        &mut self,
+        role_id: i64,
+    ) -> Result<(), DatabaseError> {
+        sqlx::query!(
+            r#"DELETE FROM voip_participants 
+            WHERE user_id IN (SELECT user_id FROM users WHERE role_id = $1)"#,
+            role_id
+        )
+        .execute(&mut *self.transaction)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn delete_messages_by_role(
+        &mut self,
+        role_id: i64,
+    ) -> Result<(), DatabaseError> {
+        sqlx::query!(
+            r#"DELETE FROM messages 
+            WHERE user_id IN (SELECT user_id FROM users WHERE role_id = $1)"#,
+            role_id
+        )
+        .execute(&mut *self.transaction)
+        .await?;
+
+        Ok(())
     }
 }
 
