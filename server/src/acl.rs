@@ -377,27 +377,7 @@ impl AclTransaction for PgAclTransaction {
         role_id: i64,
         group_id: i64,
     ) -> Result<(), DatabaseError> {
-        let participants_to_delete = sqlx::query!(
-            r#"SELECT vp.user_id, vp.channel_id
-            FROM voip_participants vp
-            INNER JOIN users u ON vp.user_id = u.user_id
-            INNER JOIN channels c ON vp.channel_id = c.channel_id
-            WHERE u.role_id = $1 AND c.group_id = $2"#,
-            role_id,
-            group_id
-        )
-        .fetch_all(&mut *self.transaction)
-        .await?;
-
-        println!("Found {} voip participants to delete for role_id: {}, group_id: {}", 
-                 participants_to_delete.len(), role_id, group_id);
-        
-        for participant in &participants_to_delete {
-            println!("Deleting voip participant - user_id: {}, channel_id: {:?}", 
-                     participant.user_id, participant.channel_id);
-        }
-
-        let result = sqlx::query!(
+        sqlx::query!(
             r#"DELETE FROM voip_participants 
             USING users u, channels c 
             WHERE voip_participants.user_id = u.user_id 
@@ -409,9 +389,6 @@ impl AclTransaction for PgAclTransaction {
         )
         .execute(&mut *self.transaction)
         .await?;
-
-        println!("Actually deleted {} voip participants for role_id: {}, group_id: {}", 
-                 result.rows_affected(), role_id, group_id);
 
         Ok(())
     }

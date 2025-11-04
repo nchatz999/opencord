@@ -10,7 +10,7 @@ import Slider from "../components/Slider";
 
 
 const StreamsContent: Component = () => {
-  
+
   const getCurrentParticipants = () => {
     const context = voipDomain.getVoipContext();
 
@@ -28,7 +28,7 @@ const StreamsContent: Component = () => {
   }
 
   const getGridCols = (participants: VoipParticipantWithUser[]) => {
-    
+
     const totalStreams = participants.reduce((count, p) => {
       return count + (p.publishCamera ? 1 : 0) + (p.publishScreen ? 1 : 0);
     }, 0);
@@ -49,7 +49,7 @@ const StreamsContent: Component = () => {
         id: "volume-control",
         label: `Screen Audio: ${volumePercentage}%`,
         icon: <Volume2 size={16} />,
-        onClick: () => {},
+        onClick: () => { },
         customContent: (
           <div class="px-2 py-2">
             <Slider
@@ -173,7 +173,7 @@ const StreamsContent: Component = () => {
                     {}
                     <Show when={participant.publishScreen}>
                       <ContextMenu
-                        items={createVolumeMenuItems(participant.userId)}
+                        items={createVolumeMenuItems(participant.user.userId)}
                         class="relative bg-[#2b2d31] rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]"
                       >
                         <video
@@ -211,7 +211,7 @@ const StreamsContent: Component = () => {
                             <div class="p-1 rounded-full bg-blue-500 bg-opacity-80">
                               <Monitor size={12} class="text-white" />
                             </div>
-                            <Show when={voipDomain.getUserScreenSoundVolume(participant.userId) === 0}>
+                            <Show when={voipDomain.getUserScreenSoundVolume(participant.user.userId) === 0}>
                               <div class="p-1 rounded-full bg-red-500 bg-opacity-80">
                                 <Volume2 size={12} class="text-white" />
                               </div>

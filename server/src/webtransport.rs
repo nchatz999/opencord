@@ -691,7 +691,6 @@ async fn handle_connection(
                         }
                         ObserverMessage::Close => {
                             connection.disconnect_with_message(200, "New Connection").await;
-                            info!("Received close message for connection {}", connection.id());
                             break;
                         }
                     }

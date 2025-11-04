@@ -551,8 +551,7 @@ export class AclDomain {
     );
 
     if (rights === 0) {
-      const channelsInGroup = channelDomain.getAllChannels().filter(c => c.groupId === groupId);
-      
+
       const messagesToRemove = messageDomain.getAllMessages().filter(message => {
         if (message.channelId === null) return false;
         const channel = channelDomain.getChannelById(message.channelId);
@@ -571,7 +570,7 @@ export class AclDomain {
         return participant.user.roleId === roleId;
       });
       participantsToRemove.forEach(participant => {
-        voipDomain.removeParticipant(participant.userId);
+        voipDomain.removeParticipant(participant.user.userId);
       });
     }
   }
@@ -634,14 +633,6 @@ export class VoipDomain {
   }
 
 
-  addParticipant(participant: VoipParticipant): void {
-    setState(
-      'voipState',
-      produce(voipState => {
-        voipState.push(participant);
-      })
-    );
-  }
 
   updateParticipant(userId: number, updates: Partial<VoipParticipant>): void {
     setState(
@@ -946,9 +937,7 @@ export function handleServerEvent(event: ServerEvent): void {
       });
 
       event.voip_participants.forEach(participant => {
-        if (!voipDomain.getParticipant(participant.userId)) {
-          voipDomain.addParticipant(participant);
-        }
+        voipDomain.updateParticipant(participant.userId, participant);
       });
       break;
 

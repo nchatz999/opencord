@@ -742,6 +742,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
+name = "opencord-transport-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "bytes",
+ "dotenv",
+ "rand 0.8.5",
+ "rustls-pemfile",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "web-transport",
+]
+
+[[package]]
 name = "openssl-probe"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -829,24 +847,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "beef09f85ae72cea1ef96ba6870c51e6382ebfa4f0e85b643459331f3daa5be0"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "prot-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitflags",
- "bytes",
- "dotenv",
- "rand 0.8.5",
- "rustls-pemfile",
- "thiserror 2.0.12",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "web-transport",
 ]
 
 [[package]]

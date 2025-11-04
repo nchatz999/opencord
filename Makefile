@@ -10,7 +10,9 @@ check-requirements:
 
 build: check-requirements
 	sqlx database create
+	cd transport/client && npm run build
 	cd server && sqlx migrate run
+	cd client && npm install
 	cd client && npm run build
 	cd server && cargo build --release
 

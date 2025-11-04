@@ -5,10 +5,12 @@ import { loadSession } from "../contexts/Session";
 import Loading from "./Loading";
 import Auth from "./Auth";
 import App from "../App";
+import { useToaster } from "../components/Toaster";
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const AuthHandler: Component = () => {
+  const { addToast } = useToaster()
   createEffect(async () => {
     const appState = userDomain.getAppState();
 
@@ -32,11 +34,11 @@ const AuthHandler: Component = () => {
       while (true) {
         connectResult = await connection.connect();
 
-        if (connectResult.ok) {
-          break;
+        if (!connectResult.ok) {
+          addToast(connectResult.error.message.toString(), "error")
+          await sleep(1000);
         }
-
-        await sleep(1000);
+        break
       }
 
       await handleConnect()

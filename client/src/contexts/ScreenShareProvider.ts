@@ -50,7 +50,7 @@ export class ScreenShare {
   private constraints: ScreenShareConstraints = {
     width: 1920,
     height: 1080,
-    frameRate: 30,
+    frameRate: 60,
     cursor: 'always',
     audio: true, // Default to true to include audio
   };
@@ -60,7 +60,7 @@ export class ScreenShare {
     width: 1920,
     height: 1080,
     bitrate: 2500000,
-    framerate: 30,
+    framerate: 60,
     keyFrameIntervalCount: 30,
   };
 
