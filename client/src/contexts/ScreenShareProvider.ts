@@ -92,14 +92,13 @@ export class ScreenShare {
   }
 
   setQuality(quality: number): void {
-    const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
-    
+
+    this.setQualitySignal(quality);
     if (this.videoEncoder && this.videoEncoder.state === 'configured') {
-      const newBitrate = Math.floor(this.videoEncoderConfig.bitrate! * clampedQuality);
       this.videoEncoder.configure({
         ...this.videoEncoderConfig,
-        bitrate: newBitrate
-      } as VideoEncoderConfig);
+        bitrate: quality
+      });
     }
   }
 

@@ -34,6 +34,8 @@ export class Microphone {
   private setMutedSignal: (muted: boolean) => void;
   private getAvailableInputsSignal: () => MediaDeviceInfo[];
   private setAvailableInputsSignal: (devices: MediaDeviceInfo[]) => MediaDeviceInfo[];
+  private getQualitySignal: () => number;
+  private setQualitySignal: (value: number) => number;
 
   private constraints: MicrophoneConstraints = {
     echoCancellation: true,
@@ -77,6 +79,11 @@ export class Microphone {
     const [getAvailableInputs, setAvailableInputs] = createSignal<MediaDeviceInfo[]>([]);
     this.getAvailableInputsSignal = getAvailableInputs;
     this.setAvailableInputsSignal = setAvailableInputs;
+
+    const [getQuality, setQuality] = createSignal<number>(1.0);
+    this.getQualitySignal = getQuality;
+    this.setQualitySignal = setQuality;
+
 
 
     this.initializeDeviceList();
@@ -135,26 +142,27 @@ export class Microphone {
       this.gainNode.gain.value = clampedVolume;
     }
   }
-
   setQuality(quality: number): void {
-    const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
-    
+
+    this.setQualitySignal(quality);
     if (this.encoder && this.encoder.state === 'configured') {
-      const newBitrate = Math.floor(this.encoderConfig.bitrate! * clampedQuality);
       this.encoder.configure({
         ...this.encoderConfig,
-        bitrate: newBitrate
-      } as AudioEncoderConfig);
+        bitrate: quality
+      });
     }
   }
+
+
+  getQuality(): number {
+    return 1.0;
+  }
+
 
   getVolume(): number {
     return this.getVolumeSignal();
   }
 
-  getQuality(): number {
-    return 1.0; // Default quality value
-  }
 
   setMuted(muted: boolean) {
     this.setMutedSignal(muted)

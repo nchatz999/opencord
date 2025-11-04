@@ -66,16 +66,16 @@ export class Camera {
 
 
   setQuality(quality: number): void {
-    const clampedQuality = Math.max(0.1, Math.min(1.0, quality));
-    
+
+    this.setQualitySignal(quality);
     if (this.encoder && this.encoder.state === 'configured') {
-      const newBitrate = Math.floor(this.encoderConfig.bitrate! * clampedQuality);
       this.encoder.configure({
         ...this.encoderConfig,
-        bitrate: newBitrate
-      } as VideoEncoderConfig);
+        bitrate: quality
+      });
     }
   }
+
 
   getQuality(): number {
     return this.getQualitySignal();

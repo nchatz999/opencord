@@ -30,7 +30,6 @@ const Slider: Component<SliderProps> = (props) => {
   );
   const [isDragging, setIsDragging] = createSignal(false);
 
-  // Sync external value changes
   createEffect(() => {
     if (props.value !== undefined) {
       setInternalValue(props.value);
@@ -77,16 +76,13 @@ const Slider: Component<SliderProps> = (props) => {
         </div>
       )}
       <div class="relative flex items-center">
-        {/* Track */}
         <div class="absolute w-full h-1 bg-[#1e1f22] rounded-full">
-          {/* Progress fill */}
           <div
             class="absolute h-full bg-[#5865f2] rounded-full transition-all"
             style={{ width: `${percentage()}%` }}
           />
         </div>
 
-        {/* Input range */}
         <input
           type="range"
           min={merged.min}

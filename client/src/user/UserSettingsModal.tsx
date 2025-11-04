@@ -455,7 +455,7 @@ const UserSettingsModal: Component = () => {
               <Settings class="w-4 h-4 mr-2" />
               Bitrate Settings
             </h3>
-            
+
             <div class="space-y-6">
               <div>
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">

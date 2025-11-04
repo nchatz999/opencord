@@ -11,7 +11,7 @@ use rmp_serde;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebTransportError {
@@ -138,10 +138,8 @@ pub trait WebTransportRepository: Send + Sync + Clone {
         recipient_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
-    async fn find_session_user_id(
-        &self,
-        session_token: &str,
-    ) -> Result<Option<i64>, DatabaseError>;
+    async fn find_session_user_id(&self, session_token: &str)
+        -> Result<Option<i64>, DatabaseError>;
 
     async fn find_voip_participant(
         &self,
@@ -230,12 +228,9 @@ impl WebTransportRepository for Postgre {
     }
 
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            "SELECT role_id FROM users WHERE user_id = $1", 
-            user_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let result = sqlx::query_scalar!("SELECT role_id FROM users WHERE user_id = $1", user_id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(result)
     }
 
@@ -417,52 +412,33 @@ impl Subject {
     }
 
     async fn remove_user_active_connections(&mut self, user_id_to_remove: i64) {
-        match self
+        if let Ok(Some(participant)) = self
             .service
             .remove_voip_participant(user_id_to_remove)
             .await
         {
-            Ok(Some(participant)) => {
-                if let Some(channel_id) = participant.channel_id {
-                    println!(
-                        "Removed VoIP participant for user {} from channel {}",
-                        user_id_to_remove, channel_id
-                    );
-                    self.notify_observers(
-                        Event::VoipParticipantDeleted {
-                            user_id: participant.user_id,
-                        },
-                        crate::managers::RecipientType::ChannelRights {
-                            channel_id,
-                            minimum_rights: 1,
-                        },
-                    )
-                    .await;
-                }
-                if let Some(recipient_id) = participant.recipient_id {
-                    info!(
-                        "Removed VoIP participant for user {} from private call with user {}",
-                        user_id_to_remove, recipient_id
-                    );
-                    self.notify_observers(
-                        Event::VoipParticipantDeleted {
-                            user_id: participant.user_id,
-                        },
-                        crate::managers::RecipientType::User {
-                            user_id: recipient_id,
-                        },
-                    )
-                    .await;
-                }
+            if let Some(channel_id) = participant.channel_id {
+                self.notify_observers(
+                    Event::VoipParticipantDeleted {
+                        user_id: participant.user_id,
+                    },
+                    crate::managers::RecipientType::ChannelRights {
+                        channel_id,
+                        minimum_rights: 1,
+                    },
+                )
+                .await;
             }
-            Ok(None) => {
-                info!("No VoIP participant found for user {}", user_id_to_remove);
-            }
-            Err(e) => {
-                error!(
-                    "Failed to remove VoIP participant for user {}: {}",
-                    user_id_to_remove, e
-                );
+            if let Some(recipient_id) = participant.recipient_id {
+                self.notify_observers(
+                    Event::VoipParticipantDeleted {
+                        user_id: participant.user_id,
+                    },
+                    crate::managers::RecipientType::User {
+                        user_id: recipient_id,
+                    },
+                )
+                .await;
             }
         }
     }
@@ -605,9 +581,9 @@ impl Subject {
                                             Event::VoipParticipantDeleted {
                                                 user_id: participant.user_id,
                                             },
-                                            crate::managers::RecipientType::ChannelRights { 
-                                                channel_id, 
-                                                minimum_rights: 2 
+                                            crate::managers::RecipientType::ChannelRights {
+                                                channel_id,
+                                                minimum_rights: 2
                                             }
                                         )
                                         .await;
@@ -676,23 +652,13 @@ async fn handle_connection(
                 if let Some(msg) = may_msg {
                     match msg {
                         ObserverMessage::Event(event) => {
-                            match rmp_serde::to_vec_named(&event) {
-                                Ok(serialized_event) => {
-                                    connection.send_data_safe(serialized_event.into()).await;
-                                }
-                                Err(e) => {
-                                    error!("Failed to serialize event: {}", e);
-                                }
+                            if let Ok(serialized_event)  = rmp_serde::to_vec_named(&event) {
+                                connection.send_data_safe(serialized_event.into()).await;
                             }
                         }
                         ObserverMessage::Voip(event) => {
-                            match rmp_serde::to_vec_named(&event) {
-                                Ok(serialized_event) => {
-                                    connection.send_data(serialized_event.into()).await;
-                                }
-                                Err(e) => {
-                                    error!("Failed to serialize event: {}", e);
-                                }
+                            if let Ok(serialized_event) = rmp_serde::to_vec_named(&event) {
+                                connection.send_data(serialized_event.into()).await;
                             }
                         }
                         ObserverMessage::Close => {
@@ -703,27 +669,18 @@ async fn handle_connection(
                 }
             }
             may_msg = connection.read_message() => {
-                match may_msg {
-                    Some(msg) => {
-                        match msg {
-                            Message::Unsafe(bytes) => {
-                                match rmp_serde::from_slice::<VoipDataMessage>(&bytes) {
-                                    Ok(voip_msg) => {
-                                        let _ = subject_tx.send(SubjectMessage::BroadcastVoip(voip_msg)).await;
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to deserialize VoIP message with msgpack: {}", e);
-                                    }
-                                }
+                if let Some(msg)=may_msg {
+                    match msg {
+                        Message::Unsafe(bytes) => {
+                            if let Ok(voip_msg) = rmp_serde::from_slice::<VoipDataMessage>(&bytes) {
+                                let _ = subject_tx.send(SubjectMessage::BroadcastVoip(voip_msg)).await;
                             }
-                            _ => {}
                         }
+                        _ => {}
                     }
-                    None => {
-                        info!("Connection closed by client");
-                        let _ = subject_tx.send(SubjectMessage::ClientTimout { user_id }).await;
-                        break;
-                    }
+                }else {
+                    let _ = subject_tx.send(SubjectMessage::ClientTimout { user_id }).await;
+                    break;
                 }
             }
         }
