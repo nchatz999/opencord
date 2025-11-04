@@ -7,7 +7,6 @@ use crate::{
     voip::VoipParticipant,
 };
 use opencord_transport_server::{Connection, Message, Server};
-
 use rmp_serde;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -139,8 +138,10 @@ pub trait WebTransportRepository: Send + Sync + Clone {
         recipient_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
-    async fn find_session_user_id(&self, session_token: &str)
-        -> Result<Option<i64>, DatabaseError>;
+    async fn find_session_user_id(
+        &self,
+        session_token: &str,
+    ) -> Result<Option<i64>, DatabaseError>;
 
     async fn find_voip_participant(
         &self,
@@ -167,14 +168,14 @@ impl WebTransportTransaction for PgWebTransportTransaction {
                    user_id,
                    username, 
                    COALESCE(
-                NULLIF(manual_status, 'Offline'::user_status_type),
-                status
-            ) as "status!: UserStatusType",
-            avatar_file_id,
-            created_at,
-            server_mute,
-            server_deafen,
-            role_id"#,
+                       NULLIF(manual_status, 'Offline'::user_status_type),
+                       status
+                   ) as "status!: UserStatusType",
+                   avatar_file_id,
+                   created_at,
+                   server_mute,
+                   server_deafen,
+                   role_id"#,
             user_id,
             status as UserStatusType
         )
@@ -191,7 +192,15 @@ impl WebTransportTransaction for PgWebTransportTransaction {
             VoipParticipant,
             r#"DELETE FROM voip_participants
                WHERE user_id = $1
-               RETURNING user_id, channel_id, recipient_id, local_deafen, local_mute, publish_screen, publish_camera, created_at"#,
+               RETURNING 
+                   user_id, 
+                   channel_id, 
+                   recipient_id, 
+                   local_deafen, 
+                   local_mute, 
+                   publish_screen, 
+                   publish_camera, 
+                   created_at"#,
             user_id
         )
         .fetch_optional(&mut *self.transaction)
@@ -221,9 +230,12 @@ impl WebTransportRepository for Postgre {
     }
 
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!("SELECT role_id FROM users WHERE user_id = $1", user_id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let result = sqlx::query_scalar!(
+            "SELECT role_id FROM users WHERE user_id = $1", 
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(result)
     }
 
@@ -270,7 +282,15 @@ impl WebTransportRepository for Postgre {
     ) -> Result<Vec<VoipParticipant>, DatabaseError> {
         let results = sqlx::query_as!(
             VoipParticipant,
-            r#"SELECT vp.user_id, vp.channel_id, vp.recipient_id, vp.local_deafen, vp.local_mute, vp.publish_screen, vp.publish_camera, vp.created_at
+            r#"SELECT 
+                   vp.user_id, 
+                   vp.channel_id, 
+                   vp.recipient_id, 
+                   vp.local_deafen, 
+                   vp.local_mute, 
+                   vp.publish_screen, 
+                   vp.publish_camera, 
+                   vp.created_at
                FROM voip_participants vp
                WHERE vp.channel_id = $1"#,
             channel_id
@@ -288,7 +308,15 @@ impl WebTransportRepository for Postgre {
     ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let result = sqlx::query_as!(
             VoipParticipant,
-            r#"SELECT vp.user_id, vp.channel_id, vp.recipient_id, vp.local_deafen, vp.local_mute, vp.publish_screen, vp.publish_camera, vp.created_at
+            r#"SELECT 
+                   vp.user_id, 
+                   vp.channel_id, 
+                   vp.recipient_id, 
+                   vp.local_deafen, 
+                   vp.local_mute, 
+                   vp.publish_screen, 
+                   vp.publish_camera, 
+                   vp.created_at
                FROM voip_participants vp
                WHERE (vp.user_id = $1 AND vp.recipient_id = $2)
                   OR (vp.user_id = $2 AND vp.recipient_id = $1)"#,
@@ -320,7 +348,15 @@ impl WebTransportRepository for Postgre {
     ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let result = sqlx::query_as!(
             VoipParticipant,
-            r#"SELECT vp.user_id, vp.channel_id, vp.recipient_id, vp.local_deafen, vp.local_mute, vp.publish_screen, vp.publish_camera, vp.created_at
+            r#"SELECT 
+                   vp.user_id, 
+                   vp.channel_id, 
+                   vp.recipient_id, 
+                   vp.local_deafen, 
+                   vp.local_mute, 
+                   vp.publish_screen, 
+                   vp.publish_camera, 
+                   vp.created_at
                FROM voip_participants vp
                WHERE vp.user_id = $1"#,
             user_id
@@ -586,9 +622,9 @@ impl Subject {
                                 }
 
                                 self.unregister(user_id).await;
-                                if let Ok(Some(user))= self.service.update_user_status(user_id, UserStatusType::Offline).await {
+                                if let Ok(Some(user)) = self.service.update_user_status(user_id, UserStatusType::Offline).await {
                                     self.notify_observers(
-                                        Event::UserUpdated{
+                                        Event::UserUpdated {
                                             user,
                                         },
                                         crate::managers::RecipientType::Broadcast
@@ -637,7 +673,6 @@ async fn handle_connection(
                 if let Some(msg) = may_msg {
                     match msg {
                         ObserverMessage::Event(event) => {
-
                             match rmp_serde::to_vec_named(&event) {
                                 Ok(serialized_event) => {
                                     connection.send_data_safe(serialized_event.into()).await;
@@ -647,7 +682,7 @@ async fn handle_connection(
                                 }
                             }
                         }
-                        ObserverMessage::Voip(event)=>{
+                        ObserverMessage::Voip(event) => {
                             match rmp_serde::to_vec_named(&event) {
                                 Ok(serialized_event) => {
                                     connection.send_data(serialized_event.into()).await;
@@ -656,7 +691,6 @@ async fn handle_connection(
                                     error!("Failed to serialize event: {}", e);
                                 }
                             }
-
                         }
                         ObserverMessage::Close => {
                             connection.disconnect_with_message(200, "New Connection").await;
@@ -669,19 +703,17 @@ async fn handle_connection(
                 match may_msg {
                     Some(msg) => {
                         match msg {
-                            Message::Unsafe(bytes)=>{
+                            Message::Unsafe(bytes) => {
                                 match rmp_serde::from_slice::<VoipDataMessage>(&bytes) {
                                     Ok(voip_msg) => {
-
                                         let _ = subject_tx.send(SubjectMessage::BroadcastVoip(voip_msg)).await;
-
                                     }
                                     Err(e) => {
                                         error!("Failed to deserialize VoIP message with msgpack: {}", e);
                                     }
                                 }
                             }
-                            _=>{}
+                            _ => {}
                         }
                     }
                     None => {
