@@ -202,6 +202,12 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 .await;
 
             if new_right > 0 && acl.rights == 0 {
+                // Delete voip participants and messages for this role in this group
+                tx.delete_voip_participants_by_role(acl.role_id, acl.group_id)
+                    .await?;
+                tx.delete_messages_by_role(acl.role_id, acl.group_id)
+                    .await?;
+
                 let hide_event = Event::GroupHide {
                     group_id: acl.group_id,
                 };
@@ -363,12 +369,17 @@ impl AclTransaction for PgAclTransaction {
     async fn delete_voip_participants_by_role(
         &mut self,
         role_id: i64,
+        group_id: i64,
     ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"DELETE FROM voip_participants 
-            USING users u 
-            WHERE voip_participants.user_id = u.user_id AND u.role_id = $1"#,
-            role_id
+            USING users u, channels c 
+            WHERE voip_participants.user_id = u.user_id 
+            AND voip_participants.channel_id = c.channel_id 
+            AND u.role_id = $1 
+            AND c.group_id = $2"#,
+            role_id,
+            group_id
         )
         .execute(&mut *self.transaction)
         .await?;
@@ -376,12 +387,20 @@ impl AclTransaction for PgAclTransaction {
         Ok(())
     }
 
-    async fn delete_messages_by_role(&mut self, role_id: i64) -> Result<(), DatabaseError> {
+    async fn delete_messages_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"DELETE FROM messages 
-            USING users u 
-            WHERE messages.sender_id = u.user_id AND u.role_id = $1"#,
-            role_id
+            USING users u, channels c 
+            WHERE messages.sender_id = u.user_id 
+            AND messages.channel_id = c.channel_id 
+            AND u.role_id = $1 
+            AND c.group_id = $2"#,
+            role_id,
+            group_id
         )
         .execute(&mut *self.transaction)
         .await?;
