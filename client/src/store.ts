@@ -549,6 +549,31 @@ export class AclDomain {
         }
       })
     );
+
+    if (rights === 0) {
+      const channelsInGroup = channelDomain.getAllChannels().filter(c => c.groupId === groupId);
+      
+      const messagesToRemove = messageDomain.getAllMessages().filter(message => {
+        if (message.channelId === null) return false;
+        const channel = channelDomain.getChannelById(message.channelId);
+        if (!channel || channel.groupId !== groupId) return false;
+        const sender = userDomain.getUserById(message.senderId);
+        return sender && sender.roleId === roleId;
+      });
+      messagesToRemove.forEach(message => {
+        messageDomain.deleteMessage(message.id);
+      });
+
+      const participantsToRemove = voipDomain.getParticipants().filter(participant => {
+        if (participant.channelId === null) return false;
+        const channel = channelDomain.getChannelById(participant.channelId);
+        if (!channel || channel.groupId !== groupId) return false;
+        return participant.user.roleId === roleId;
+      });
+      participantsToRemove.forEach(participant => {
+        voipDomain.removeParticipant(participant.userId);
+      });
+    }
   }
 
 }
