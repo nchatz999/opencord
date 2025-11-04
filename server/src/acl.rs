@@ -50,10 +50,17 @@ pub trait AclTransaction: Send + Sync {
         group_id: i64,
     ) -> Result<Vec<VoipParticipant>, DatabaseError>;
 
-    async fn delete_voip_participants_by_role(&mut self, role_id: i64)
-        -> Result<(), DatabaseError>;
+    async fn delete_voip_participants_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<(), DatabaseError>;
 
-    async fn delete_messages_by_role(&mut self, role_id: i64) -> Result<(), DatabaseError>;
+    async fn delete_messages_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<(), DatabaseError>;
 }
 
 pub trait AclRepository: Send + Sync + Clone {
