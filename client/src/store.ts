@@ -1129,7 +1129,6 @@ screenShare.onEncodedVideoData((data) => {
     realTimestamp: data.timestamp,
     key: data.type
   }
-  console.log(voipMessage)
 
   connection.send(
     encode([
