@@ -1198,6 +1198,32 @@ camera.onEncodedData((data) => {
 
 export const outputManager = new OutputManager();
 
+export function resetStore(): void {
+  setState(() => ({
+    appState: { type: 'loading' },
+    modal: { type: 'close', id: 0 },
+    status: "disconnected",
+    sessionId: null,
+    activeContext: 'channel',
+    roles: [],
+    users: [],
+    channels: [],
+    groups: [],
+    messages: [],
+    currentUser: null,
+    groupRoleRights: [],
+    voipState: [],
+    audio: createSharedAudioContext(),
+    files: [],
+    notification: {},
+    context: undefined,
+    voipContext: undefined,
+    channelsVisited: [],
+    dmsVisited: [],
+    subscribedStreams: [],
+  }));
+}
+
 
 
 
