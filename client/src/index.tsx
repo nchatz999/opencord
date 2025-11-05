@@ -2,8 +2,7 @@
 import { render } from "solid-js/web";
 import "./index.css";
 
-import "./polyfills/MediaStreamTrackGenerator";
-import "./polyfills/MediaStreamTrackProcessor";
+import "./polyfills/polyfill.js";
 import { ToasterProvider } from "./components/Toaster";
 import { ContextMenuProvider } from "./components/ContentMenu";
 import AuthHandler from "./auth/AuthHandler";

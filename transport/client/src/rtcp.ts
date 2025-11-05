@@ -173,7 +173,7 @@ export class RTCPProtocol {
     }
 
     try {
-      this.transport = new WebTransport(this.url + `/${this.token}`, { serverCertificateHashes: [this.hash] })
+      this.transport = new WebTransport(this.url + `/?${this.token}`, { serverCertificateHashes: [this.hash] })
       await this.transport.ready;
       this.closed = false;
       this.onConnect()
@@ -193,6 +193,7 @@ export class RTCPProtocol {
       this.handleTransportClosed();
       return ok(undefined)
     } catch (e) {
+      console.dir(e);
       this.closed = true;
       return err({ type: "error", message: e as Error })
     }
@@ -201,7 +202,7 @@ export class RTCPProtocol {
   public send(data: Uint8Array) {
     if (this.closed || !this.outWriter) return;
 
-    const mtu = this.mtu - 30;
+    const mtu = this.mtu - 200;
     let currentTime = BigInt(Date.now());
     let fecGroup: RTPPacket[] = [];
     for (let i = 0; i < data.length; i += mtu) {

@@ -10,11 +10,9 @@ use std::{
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration, Instant};
 use tracing::{error, info, warn};
-use web_transport::quinn::{self, quinn::rustls::pki_types::CertificateDer};
+use web_transport::quinn::{self, quinn::rustls::pki_types::CertificateDer, Request};
 
 use crate::packet::{FecEncoder, RtpBody};
-
-
 
 pub struct Server {
     server: quinn::Server,
@@ -53,8 +51,11 @@ impl Server {
         Ok(Self { server })
     }
 
-    pub async fn accept(&mut self) -> Option<Connection> {
-        let incoming = self.server.accept().await?;
+    pub async fn get_request(&mut self) -> Option<Request> {
+        self.server.accept().await
+    }
+
+    pub async fn accept_request(&mut self, incoming: Request) -> Option<Connection> {
         let session = match incoming.ok().await {
             Ok(s) => s,
             Err(e) => {
@@ -107,7 +108,7 @@ impl Connection {
             failed_pings: 0,
             srtt: 0.0,
             rttvar: 0.0,
-            rto: 1000, 
+            rto: 1000,
         };
 
         tokio::spawn(runner.run());
@@ -124,13 +125,7 @@ impl Connection {
         &self.url
     }
     pub fn id(&self) -> String {
-        self.url
-            .path()
-            .split('/')
-            .last()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("")
-            .to_string()
+        self.url.query().unwrap_or_default().to_string()
     }
 
     pub async fn read_message(&mut self) -> Option<Message> {
@@ -182,8 +177,6 @@ impl Connection {
     }
 }
 
-
-
 const MAX_MISSED_PONGS: usize = 15;
 const MAX_RETRANSMISSIONS: u32 = 5;
 const PING_INTERVAL: Duration = Duration::from_millis(200);
@@ -204,7 +197,7 @@ struct ConnectionRunner {
     session: web_transport::quinn::Session,
     outgoing_receiver: mpsc::Receiver<Bytes>,
     outgoing_receiver_safe: mpsc::Receiver<Bytes>,
-    message_sender: mpsc::Sender<Message>, 
+    message_sender: mpsc::Sender<Message>,
     session_command_receiver: mpsc::Receiver<SessionCommand>,
     in_seq: u64,
     out_seq: u64,
@@ -212,32 +205,28 @@ struct ConnectionRunner {
     next_frame_id: u64,
     send_pings: HashMap<u64, PingBody>,
     failed_pings: usize,
-    srtt: f64,    
-    rttvar: f64,  
-    pub rto: u64, 
+    srtt: f64,
+    rttvar: f64,
+    pub rto: u64,
 }
 
 impl ConnectionRunner {
     fn update_rto(&mut self, measured_rtt: f64) {
-        const ALPHA: f64 = 0.125; 
-        const BETA: f64 = 0.25; 
-        const K: f64 = 4.0; 
-        const MIN_RTO: u64 = 10; 
-        const MAX_RTO: u64 = 2000; 
+        const ALPHA: f64 = 0.125;
+        const BETA: f64 = 0.25;
+        const K: f64 = 4.0;
+        const MIN_RTO: u64 = 10;
+        const MAX_RTO: u64 = 2000;
 
         if self.srtt == 0.0 {
-            
             self.srtt = measured_rtt;
             self.rttvar = measured_rtt / 2.0;
         } else {
-            
             let rtt_diff = (measured_rtt - self.srtt).abs();
             self.rttvar = (1.0 - BETA) * self.rttvar + BETA * rtt_diff;
             self.srtt = (1.0 - ALPHA) * self.srtt + ALPHA * measured_rtt;
         }
 
-        
-        
         let calculated_rto = self.srtt + (10.0_f64).max(K * self.rttvar);
         self.rto = (calculated_rto as u64).clamp(MIN_RTO, MAX_RTO);
     }
@@ -254,7 +243,7 @@ impl ConnectionRunner {
 
         loop {
             tokio::select! {
-                
+
                 datagram = self.session.read_datagram() => {
                     let datagram = match datagram {
                         Ok(d) => d,
@@ -266,12 +255,12 @@ impl ConnectionRunner {
                     self.handle_packet(datagram).await;
                 }
 
-                
+
                 maybe_packet = self.outgoing_receiver.recv() => {
                     if let Some(data) = maybe_packet {
                         self.fragment_and_send_data(data).await;
                     } else {
-                        
+
                         println!("Outgoing channel closed, shutting down connection runner.");
                         break;
                     }
@@ -296,12 +285,12 @@ impl ConnectionRunner {
                 stream = self.session.accept_uni() => {
                     match stream {
                         Ok(mut recv_stream) => {
-                            
+
                             match recv_stream.read_to_end(1000).await {
                                 Ok(data) => {
                                     let message = Bytes::from(data);
                                     if let Err(_) = self.message_sender.send(Message::Safe(message)).await {
-                                        break; 
+                                        break;
                                     }
                                 }
                                 Err(e) => {
@@ -421,10 +410,8 @@ impl ConnectionRunner {
                             .as_millis() as u64;
                         let rtt = now - ping.timestamp;
 
-                        
                         self.update_rto(rtt as f64);
 
-                        
                         self.send_pings.remove(&body.timestamp);
                     }
                 }
@@ -506,7 +493,7 @@ impl ConnectionRunner {
     }
 
     async fn fragment_and_send_data(&mut self, mut data: Bytes) {
-        const MAX_FRAGMENT_SIZE: usize = 1170; 
+        const MAX_FRAGMENT_SIZE: usize = 1000;
 
         let frame_id = self.next_frame_id;
         self.next_frame_id = self.next_frame_id.wrapping_add(1);

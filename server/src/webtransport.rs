@@ -6,6 +6,7 @@ use crate::{
     user::{User, UserStatusType},
     voip::VoipParticipant,
 };
+use http::status;
 use opencord_transport_server::{Connection, Message, Server};
 use rmp_serde;
 use serde::{Deserialize, Serialize};
@@ -506,16 +507,10 @@ impl Subject {
 
     async fn handle_new_connection(
         &mut self,
-        mut connection: Connection,
+        user_id: i64,
+        connection: Connection,
         subject_tx: &mpsc::Sender<SubjectMessage>,
     ) {
-        let Ok(user_id) = self.service.get_user_from_session(&connection.id()).await else {
-            connection
-                .disconnect_with_message(200, "Authentication Fail")
-                .await;
-            return;
-        };
-
         let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
         let observer = Observer {
             id: connection.id(),
@@ -613,10 +608,15 @@ impl Subject {
                         }
                     }
                 }
-
-                may_connection = server.accept() => {
-                    if let Some(connection) = may_connection {
-                        self.handle_new_connection(connection, &subject_tx).await;
+                may_request= server.get_request() => {
+                    if let Some(request) = may_request{
+                        if let Ok(user_id)= self.service.get_user_from_session(&request.url().query().unwrap_or_default()).await {
+                            if let Some(conn) = server.accept_request(request).await{
+                                self.handle_new_connection(user_id,conn, &subject_tx).await;
+                            };
+                        }else{
+                            request.close(status::StatusCode::FORBIDDEN).await.unwrap();
+                        }
                     }
                 }
 

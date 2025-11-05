@@ -30,16 +30,13 @@ const AuthHandler: Component = () => {
       connection.setToken(maybeToken.value.sessionToken);
 
       let connectResult;
-
-      while (true) {
+      do {
         connectResult = await connection.connect();
-
         if (!connectResult.ok) {
-          addToast(connectResult.error.message.toString(), "error")
+          addToast(connectResult.error.message.toString(), "error");
           await sleep(1000);
         }
-        break
-      }
+      } while (!connectResult.ok);
 
       await handleConnect()
       userDomain.setAppState({ type: 'authenticated' });
