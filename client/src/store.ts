@@ -725,7 +725,7 @@ export class VoipDomain {
     if (participant && participant.playback) {
       return participant.playback.volume();
     }
-    return 1;
+    return 100;
   }
 
   setUserScreenSoundVolume(userId: number, volume: number): void {
