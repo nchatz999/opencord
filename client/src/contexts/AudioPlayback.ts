@@ -154,24 +154,21 @@ export class AudioPlayback {
     this.bufferInterval = null;
 
 
-    const [volume, setVolume] = createSignal(100); // Default to 100 (middle of 0-200 range)
-    const [isMuted, setIsMuted] = createSignal(false);
+    const [getVolume, setVolume] = createSignal(100); // Default to 100 (middle of 0-200 range)
+    const [getIsMuted, setIsMuted] = createSignal(false);
 
-    this.volume = volume;
-    this.setVolume = (value: number) => {
-      const clampedVolume = Math.max(0, Math.min(200, value));
-      setVolume(clampedVolume);
-    };
-    this.isMuted = isMuted;
-    this.setIsMuted = setIsMuted;
+    this.getVolumeSignal = getVolume;
+    this.setVolumeSignal = setVolume;
+    this.getIsMutedSignal = getIsMuted;
+    this.setIsMutedSignal = setIsMuted;
 
 
     createEffect(() => {
-      if (this.isMuted()) {
+      if (this.getIsMutedSignal()) {
         this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
       } else {
         // Convert 0-200 range to 0-2 range for gain node
-        const gainValue = this.volume() / 100;
+        const gainValue = this.getVolumeSignal() / 100;
         this.gainNode.gain.setValueAtTime(gainValue, this.context.currentTime);
       }
     });
