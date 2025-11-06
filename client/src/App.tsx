@@ -6,6 +6,7 @@ import MiddlePanel from './containers/MiddlePanel'
 import RightPanel from './role/RightPanel'
 import ModalManager from './containers/ModalManager'
 import DebugOverlay from './components/DebugOverlay'
+import EventDebugOverlay from './components/EventDebugOverlay'
 
 
 const App: Component = () => {
@@ -21,6 +22,7 @@ const App: Component = () => {
       <ModalManager />
       <Show when={import.meta.env.VITE_DEBUG_OVERLAY === 'true'}>
         <DebugOverlay />
+        <EventDebugOverlay />
       </Show>
     </div>
   )
