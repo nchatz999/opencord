@@ -131,11 +131,10 @@ export class AudioPlayback {
   gainNode: GainNode;
   bufferInterval: number | null;
 
-
-  volume: () => number;
-  setVolume: (value: number) => void;
-  isMuted: () => boolean;
-  setIsMuted: (value: boolean) => void;
+  private getVolumeSignal: () => number;
+  private setVolumeSignal: (value: number) => void;
+  private getIsMutedSignal: () => boolean;
+  private setIsMutedSignal: (value: boolean) => void;
 
   constructor(
     context: AudioContext,
@@ -278,16 +277,41 @@ export class AudioPlayback {
   }
 
 
+  setVolume(volume: number): void {
+    const clampedVolume = Math.max(0, Math.min(200, volume));
+    this.setVolumeSignal(clampedVolume);
+  }
+
+  getVolume(): number {
+    return this.getVolumeSignal();
+  }
+
+  volume(): number {
+    return this.getVolumeSignal();
+  }
+
+  setMuted(muted: boolean): void {
+    this.setIsMutedSignal(muted);
+  }
+
+  getMuted(): boolean {
+    return this.getIsMutedSignal();
+  }
+
+  isMuted(): boolean {
+    return this.getIsMutedSignal();
+  }
+
   mute() {
-    this.setIsMuted(true);
+    this.setMuted(true);
   }
 
   unmute() {
-    this.setIsMuted(false);
+    this.setMuted(false);
   }
 
   toggleMute() {
-    this.setIsMuted(!this.isMuted());
+    this.setMuted(!this.getMuted());
   }
 
   cleanup() {
