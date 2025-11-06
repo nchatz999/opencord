@@ -1082,8 +1082,8 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
     }
   },
   () => { },
-  (_code, message) => { console.log(message); userDomain.setAppState({ type: "unauthenticated" }) },
-  (error) => { console.log(error) }
+  (_code, message) => { console.log("on disconnect"); console.log(message); userDomain.setAppState({ type: "unauthenticated" }) },
+  (error) => { console.log("error"); console.log(error) }
 )
 
 
