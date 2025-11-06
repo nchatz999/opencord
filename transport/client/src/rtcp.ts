@@ -319,6 +319,7 @@ export class RTCPProtocol {
     this.pings = this.pings.filter((p) => p.timestamp !== packet.timestamp);
     const rtt = Number(BigInt(Date.now()) - ping.timestamp);
     this.updateRTT(rtt)
+    this.missedPongs = 0
   }
 
   public handleFEC(packet: FecPacket) {

@@ -403,6 +403,7 @@ impl Subject {
     }
 
     async fn unregister(&mut self, user_id: i64) {
+        println!("klino ton {user_id}");
         for observer in self.observers.values() {
             if observer.user_id() == user_id {
                 let _ = observer.sender.send(ObserverMessage::Close).await;
@@ -611,6 +612,7 @@ impl Subject {
                 may_request= server.get_request() => {
                     if let Some(request) = may_request{
                         if let Ok(user_id)= self.service.get_user_from_session(&request.url().query().unwrap_or_default()).await {
+                            println!("ekane login o user_id {user_id}");
                             if let Some(conn) = server.accept_request(request).await{
                                 self.handle_new_connection(user_id,conn, &subject_tx).await;
                             };

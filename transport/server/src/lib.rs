@@ -370,15 +370,15 @@ impl ConnectionRunner {
                 Some(command) = self.session_command_receiver.recv() => {
                     match command {
                         SessionCommand::Disconnect { code, reason } => {
-                            info!("Disconnecting with code {} and reason: {:?}", code, String::from_utf8_lossy(&reason));
+                            println!("Disconnecting with code {} and reason: {:?}", code, String::from_utf8_lossy(&reason));
                             self.session.close(code, &reason);
                             break;
                         }
                     }
                 }
 
-                _ = self.session.closed() => {
-                    println!("Connection closes {}", self.session.remote_address());
+                e = self.session.closed() => {
+                    println!("Connection closes {} with error {}", self.session.remote_address(),e);
                     break;
                 }
             }

@@ -1204,7 +1204,7 @@ export function resetStore(): void {
     modal: { type: 'close', id: 0 },
     status: "disconnected",
     sessionId: null,
-    activeContext: 'channel',
+    activeContext: undefined,
     roles: [],
     users: [],
     channels: [],
