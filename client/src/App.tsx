@@ -1,10 +1,11 @@
 import type { Component } from 'solid-js'
-import { onMount } from 'solid-js'
+import { onMount, Show } from 'solid-js'
 
 import LeftPanel from './containers/LeftPanel'
 import MiddlePanel from './containers/MiddlePanel'
 import RightPanel from './role/RightPanel'
 import ModalManager from './containers/ModalManager'
+import DebugOverlay from './components/DebugOverlay'
 
 
 const App: Component = () => {
@@ -18,6 +19,9 @@ const App: Component = () => {
       <MiddlePanel />
       <RightPanel />
       <ModalManager />
+      <Show when={import.meta.env.VITE_DEBUG_OVERLAY === 'true'}>
+        <DebugOverlay />
+      </Show>
     </div>
   )
 }
