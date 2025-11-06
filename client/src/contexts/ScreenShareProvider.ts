@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { fetchApi } from '../utils';
 
 // Define types for Audio Encoding
 export interface AudioEncoderConfig {
@@ -149,8 +150,13 @@ export class ScreenShare {
 
       this.stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
 
-      this.stream.getVideoTracks()[0].onended = () => {
+      this.stream.getVideoTracks()[0].onended = async () => {
         console.log('Screen share ended by user or system');
+        await fetchApi('/voip/screen/publish', {
+          method: 'PUT',
+          body: { publish: false }
+        })
+
         this.stop();
       };
 

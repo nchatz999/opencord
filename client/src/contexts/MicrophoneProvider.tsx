@@ -228,6 +228,9 @@ export class Microphone {
 
 
       const audioTrack = this.stream.getAudioTracks()[0];
+      audioTrack.onended = async () => {
+        this.stop()
+      }
       this.processor = new MediaStreamTrackProcessor({ track: audioTrack });
 
 

@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { fetchApi } from '../utils';
 
 export interface CameraConstraints {
   width?: number;
@@ -128,7 +129,11 @@ export class Camera {
       const videoTrack = this.stream.getVideoTracks()[0];
 
 
-      videoTrack.onended = () => {
+      videoTrack.onended = async () => {
+        await fetchApi('/voip/camera/publish', {
+          method: 'PUT',
+          body: { publish: false }
+        })
         console.log('Camera track ended');
         this.stop();
       };

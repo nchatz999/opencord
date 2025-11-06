@@ -30,30 +30,27 @@ const LeftPanel: Component = () => {
   };
 
   const handleChannelClick = async (channel: Channel) => {
-    
+
     if (channel.channelType === ChannelType.Text) {
       messageDomain.setContext({ type: "channel", id: channel.channelId })
     }
 
-    
+
     if (channel.channelType === ChannelType.VoIP) {
+
+      await microphone.start()
+      await voipDomain.resumeContext()
       const result = await fetchApi(
         `/voip/channel/${channel.channelId}/join/${microphone.getMuted()}/false`,
         {
           method: "POST",
         }
-      );
-
-      if (result.ok) {
-        console.log("Joined VoIP channel:", channel.channelName);
-        addToast(`Joined ${channel.channelName}`, "success");
-        voipDomain.setVoipContext({ type: "channel", id: channel.channelId })
-        await microphone.start()
-        await voipDomain.resumeContext()
-      } else {
-        console.error("Failed to join VoIP channel:", result.error);
+      )
+      if (result.isErr()) {
         addToast(`Failed to join channel: ${result.error.reason}`, "error");
+        return
       }
+      voipDomain.setVoipContext({ type: "channel", id: channel.channelId })
     }
   };
 

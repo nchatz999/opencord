@@ -7,25 +7,53 @@ if (!self.MediaStreamTrackProcessor) {
             track.addEventListener("ended", () => controller.close(), { once: true });
             this.video = document.createElement("video");
             this.video.srcObject = new MediaStream([track]);
-            await Promise.all([this.video.play(), new Promise(r => this.video.onloadedmetadata = r)]);
+            this.video.muted = true;
+            this.video.playsInline = true;
+            await Promise.all([
+              this.video.play(),
+              new Promise(r => this.video.onloadedmetadata = r)
+            ]);
             this.track = track;
-            this.canvas = new OffscreenCanvas(this.video.videoWidth, this.video.videoHeight);
-            this.ctx = this.canvas.getContext('2d', { desynchronized: true });
-            this.t1 = performance.now();
+            this.videoFrameCallback = null;
           },
           async pull(controller) {
             if (track.readyState == "ended") return controller.close();
-            const fps = track.getSettings().frameRate || 30;
-            while (performance.now() - this.t1 < 1000 / fps) {
-              await new Promise(r => requestAnimationFrame(r));
-              if (track.readyState == "ended") return controller.close();
+            await new Promise(resolve => {
+              if (track.readyState == "ended") {
+                controller.close();
+                resolve();
+                return;
+              }
+              // Using requestVideoFrameCallback for frame-perfect timing
+              this.videoFrameCallback = this.video.requestVideoFrameCallback(
+                async (now, metadata) => {
+                  if (track.readyState == "ended") {
+                    controller.close();
+                    resolve();
+                    return;
+                  }
+                  const bitmap = await createImageBitmap(this.video);
+                  const timestamp = (metadata.mediaTime || (now / 1000)) * 1000000;
+                  const videoFrame = new VideoFrame(bitmap, { timestamp });
+                  controller.enqueue(videoFrame);
+                  bitmap.close();
+                  resolve();
+                }
+              );
+            });
+          },
+          cancel() {
+            if (this.videoFrameCallback) {
+              this.video.cancelVideoFrameCallback(this.videoFrameCallback);
             }
-            this.t1 = performance.now();
-            this.ctx.drawImage(this.video, 0, 0);
-            controller.enqueue(new VideoFrame(this.canvas, { timestamp: this.t1 * 1000 }));
+            if (this.video) {
+              this.video.pause();
+              this.video.srcObject = null;
+            }
           }
         });
-      } else if (track.kind == "audio") {
+      }
+      else if (track.kind == "audio") {
         this.readable = new ReadableStream({
           async start(controller) {
             track.addEventListener("ended", () => controller.close(), { once: true });
@@ -61,11 +89,11 @@ if (!self.MediaStreamTrackProcessor) {
               transfer: [joined.buffer]
             }));
           }
-        });
+        })
       }
     }
-  };
-}
+  }
+};
 
 if (!window.MediaStreamTrackGenerator) {
   window.MediaStreamTrackGenerator = class MediaStreamTrackGenerator {

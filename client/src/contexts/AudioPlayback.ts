@@ -153,7 +153,7 @@ export class AudioPlayback {
     this.bufferInterval = null;
 
 
-    const [getVolume, setVolume] = createSignal(100); // Default to 100 (middle of 0-200 range)
+    const [getVolume, setVolume] = createSignal(100);
     const [getIsMuted, setIsMuted] = createSignal(false);
 
     this.getVolumeSignal = getVolume;
@@ -166,7 +166,6 @@ export class AudioPlayback {
       if (this.getIsMutedSignal()) {
         this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
       } else {
-        // Convert 0-200 range to 0-2 range for gain node
         const gainValue = this.getVolumeSignal() / 100;
         this.gainNode.gain.setValueAtTime(gainValue, this.context.currentTime);
       }
@@ -265,11 +264,9 @@ export class AudioPlayback {
 
     this.buffer = [];
 
-
     if (this.workletNode) {
       this.workletNode.port.postMessage({ type: "clearBuffer" });
     }
-
 
     this.resetTimestamps();
 
@@ -292,6 +289,13 @@ export class AudioPlayback {
 
   setMuted(muted: boolean): void {
     this.setIsMutedSignal(muted);
+    if (muted) {
+      this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
+    } else {
+      const gainValue = this.getVolumeSignal() / 100;
+      this.gainNode.gain.setValueAtTime(gainValue, this.context.currentTime);
+    }
+
   }
 
   getMuted(): boolean {
