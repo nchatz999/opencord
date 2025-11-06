@@ -154,12 +154,12 @@ export class AudioPlayback {
     this.bufferInterval = null;
 
 
-    const [volume, setVolume] = createSignal(1);
+    const [volume, setVolume] = createSignal(100); // Default to 100 (middle of 0-200 range)
     const [isMuted, setIsMuted] = createSignal(false);
 
     this.volume = volume;
     this.setVolume = (value: number) => {
-      const clampedVolume = Math.max(0, Math.min(2, value));
+      const clampedVolume = Math.max(0, Math.min(200, value));
       setVolume(clampedVolume);
     };
     this.isMuted = isMuted;
@@ -170,7 +170,9 @@ export class AudioPlayback {
       if (this.isMuted()) {
         this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
       } else {
-        this.gainNode.gain.setValueAtTime(this.volume(), this.context.currentTime);
+        // Convert 0-200 range to 0-2 range for gain node
+        const gainValue = this.volume() / 100;
+        this.gainNode.gain.setValueAtTime(gainValue, this.context.currentTime);
       }
     });
 

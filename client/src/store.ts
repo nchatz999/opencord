@@ -740,7 +740,7 @@ export class VoipDomain {
     if (participant && participant.screenSoundPlayback) {
       return participant.screenSoundPlayback.volume();
     }
-    return 1;
+    return 100;
   }
 
   removeUserPublishedStreams(userId: number): void {
