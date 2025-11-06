@@ -57,6 +57,13 @@ export type ModalType =
   | { type: 'serverSettings'; id: number }
   | { type: 'close'; id: number }
 
+export interface EventLogEntry {
+  id: number;
+  timestamp: string;
+  type: string;
+  data: any;
+}
+
 export interface State {
   appState: AppState
   modal: ModalType
@@ -75,7 +82,7 @@ export interface State {
   subscribedStreams: number[]
   groupRoleRights: GroupRoleRights[]
 
-
+  eventLog: EventLogEntry[]
   notification: Record<number, boolean>
   context: { type: 'channel' | 'dm'; id: number } | undefined
   voipContext: { type: 'channel' | 'dm'; id: number } | undefined
@@ -100,6 +107,7 @@ const initialState: State = {
   voipState: [],
   audio: createSharedAudioContext(),
   files: [],
+  eventLog: [],
   notification: {},
   context: undefined,
   voipContext: undefined,
@@ -817,7 +825,27 @@ export const aclDomain = new AclDomain();
 export const voipDomain = new VoipDomain();
 export const fileDomain = new FileDomain();
 
+let eventIdCounter = 0;
+
+function logEvent(type: string, data: any): void {
+  const logEntry: EventLogEntry = {
+    id: ++eventIdCounter,
+    timestamp: new Date().toISOString(),
+    type,
+    data: structuredClone(data)
+  };
+  
+  setState('eventLog', produce(log => {
+    log.push(logEntry);
+    if (log.length > 1000) {
+      log.splice(0, log.length - 1000);
+    }
+  }));
+}
+
 export function handleServerEvent(event: ServerEvent): void {
+  logEvent(event.type, event);
+  
   switch (event.type) {
     case 'ChannelUpdated':
       channelDomain.updateChannel(event.channel.channelId, {
@@ -1215,6 +1243,7 @@ export function resetStore(): void {
     voipState: [],
     audio: createSharedAudioContext(),
     files: [],
+    eventLog: [],
     notification: {},
     context: undefined,
     voipContext: undefined,

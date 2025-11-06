@@ -2,12 +2,6 @@ import type { Component } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
 import { state } from "../store";
 
-interface EventLogEntry {
-  id: number;
-  timestamp: string;
-  type: string;
-  data: any;
-}
 
 interface DebugItemProps {
   label: string;
