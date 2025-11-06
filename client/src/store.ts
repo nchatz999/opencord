@@ -965,7 +965,7 @@ export function handleServerEvent(event: ServerEvent): void {
         return channel && channel.groupId === event.group_id;
       });
       participantsToRemove.forEach(participant => {
-        voipDomain.removeParticipant(participant.userId);
+        voipDomain.removeParticipant(participant.user.userId);
       });
 
       break;
@@ -1083,8 +1083,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
     }
   },
   () => { },
-  (_code, message) => { console.log("on disconnect"); console.log(message); userDomain.setAppState({ type: "connectionError" }) },
-  (error) => { console.log("error"); console.log(error); userDomain.setAppState({ type: "connectionError" }) }
+  () => { console.log("on disconnect"); userDomain.setAppState({ type: "connectionError" }) },
 )
 
 
