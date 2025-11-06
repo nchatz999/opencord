@@ -42,6 +42,7 @@ export type AppState =
   | { type: 'unauthenticated' }
   | { type: 'connecting' }
   | { type: 'authenticated' }
+  | { type: 'connectionError' }
 
 export type ConnectionStatus = "connected" | "disconnected";
 
@@ -1082,8 +1083,8 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
     }
   },
   () => { },
-  (_code, message) => { console.log("on disconnect"); console.log(message); userDomain.setAppState({ type: "unauthenticated" }) },
-  (error) => { console.log("error"); console.log(error) }
+  (_code, message) => { console.log("on disconnect"); console.log(message); userDomain.setAppState({ type: "connectionError" }) },
+  (error) => { console.log("error"); console.log(error); userDomain.setAppState({ type: "connectionError" }) }
 )
 
 
