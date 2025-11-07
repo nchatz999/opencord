@@ -64,6 +64,7 @@ export interface EventLogEntry {
   data: any;
 }
 
+
 export interface State {
   appState: AppState
   modal: ModalType
