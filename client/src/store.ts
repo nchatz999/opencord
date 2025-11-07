@@ -11,12 +11,9 @@ import {
   type GroupRoleRights,
   type VoipDataMessage,
   type VoipParticipantWithUser,
+  type MessageWithFiles,
 } from './model'
 
-export interface MessageWithFiles {
-  message: Message;
-  files: File[];
-}
 import { decode, encode } from '@msgpack/msgpack'
 import { fetchApi } from './utils'
 import { Microphone } from './contexts/MicrophoneProvider'
@@ -82,7 +79,7 @@ export class MessageStore {
     const timestampMs = new Date(timestamp).getTime();
     let left = 0;
     let right = array.length;
-    
+
     while (left < right) {
       const mid = Math.floor((left + right) / 2);
       const midMessage = this.messages.get(array[mid]);
@@ -92,7 +89,7 @@ export class MessageStore {
         right = mid;
       }
     }
-    
+
     array.splice(left, 0, messageId);
   }
 
@@ -101,14 +98,12 @@ export class MessageStore {
     this.messages.set(message.id, messageWithFiles);
 
     if (message.channelId !== null) {
-      // Channel message
       if (!this.channelMessages.has(message.channelId)) {
         this.channelMessages.set(message.channelId, []);
       }
       const channelArray = this.channelMessages.get(message.channelId)!;
       this.insertSorted(channelArray, message.id, message.createdAt);
     } else if (message.recipientId !== null) {
-      // DM message
       const dmKey = this.getDMKey(message.senderId, message.recipientId);
       if (!this.dmMessages.has(dmKey)) {
         this.dmMessages.set(dmKey, []);
@@ -907,21 +902,6 @@ export class FileDomain {
       if (file) return file;
     }
     return undefined;
-  }
-
-  setFiles(files: File[]): void {
-    // Files are now managed through MessageStore, this method is deprecated
-    console.warn('FileDomain.setFiles is deprecated. Files are now managed through MessageStore.');
-  }
-
-  addFile(file: File): void {
-    // Files are now managed through MessageStore, this method is deprecated
-    console.warn('FileDomain.addFile is deprecated. Files are now managed through MessageStore.');
-  }
-
-  addFiles(newFiles: File[]): void {
-    // Files are now managed through MessageStore, this method is deprecated
-    console.warn('FileDomain.addFiles is deprecated. Files are now managed through MessageStore.');
   }
 }
 
