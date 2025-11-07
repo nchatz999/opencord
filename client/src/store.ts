@@ -119,6 +119,23 @@ export class MessageStore {
     });
   }
 
+  insertMessagesWithFiles(messages: Message[], files: File[] = []): void {
+    // Group files by messageId for efficient lookup
+    const filesByMessageId = new Map<number, File[]>();
+    files.forEach(file => {
+      if (!filesByMessageId.has(file.messageId)) {
+        filesByMessageId.set(file.messageId, []);
+      }
+      filesByMessageId.get(file.messageId)!.push(file);
+    });
+
+    // Insert each message with its associated files
+    messages.forEach(message => {
+      const messageFiles = filesByMessageId.get(message.id) || [];
+      this.insertMessage(message, messageFiles);
+    });
+  }
+
   getMessagesForChannel(channelId: number): MessageWithFiles[] {
     const messageIds = this.channelMessages.get(channelId) || [];
     return messageIds.map(id => this.messages.get(id)!).filter(Boolean);
@@ -535,21 +552,7 @@ export class MessageDomain {
   setMessages(messages: Message[], files: File[] = []): void {
     setState('messageStore', produce(store => {
       store.clear();
-      
-      // Group files by messageId for efficient lookup
-      const filesByMessageId = new Map<number, File[]>();
-      files.forEach(file => {
-        if (!filesByMessageId.has(file.messageId)) {
-          filesByMessageId.set(file.messageId, []);
-        }
-        filesByMessageId.get(file.messageId)!.push(file);
-      });
-
-      // Insert each message with its associated files
-      messages.forEach(message => {
-        const messageFiles = filesByMessageId.get(message.id) || [];
-        store.insertMessage(message, messageFiles);
-      });
+      store.insertMessagesWithFiles(messages, files);
     }));
   }
 
@@ -565,20 +568,7 @@ export class MessageDomain {
 
   addMessages(messages: Message[], files: File[] = []): void {
     setState('messageStore', produce(store => {
-      // Group files by messageId for efficient lookup
-      const filesByMessageId = new Map<number, File[]>();
-      files.forEach(file => {
-        if (!filesByMessageId.has(file.messageId)) {
-          filesByMessageId.set(file.messageId, []);
-        }
-        filesByMessageId.get(file.messageId)!.push(file);
-      });
-
-      // Insert each message with its associated files
-      messages.forEach(message => {
-        const messageFiles = filesByMessageId.get(message.id) || [];
-        store.insertMessage(message, messageFiles);
-      });
+      store.insertMessagesWithFiles(messages, files);
     }));
   }
 
