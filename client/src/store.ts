@@ -532,11 +532,23 @@ export class MessageDomain {
     return messageWithFiles ? messageWithFiles.files : [];
   }
 
-  setMessages(messages: Message[]): void {
+  setMessages(messages: Message[], files: File[] = []): void {
     setState('messageStore', produce(store => {
       store.clear();
+      
+      // Group files by messageId for efficient lookup
+      const filesByMessageId = new Map<number, File[]>();
+      files.forEach(file => {
+        if (!filesByMessageId.has(file.messageId)) {
+          filesByMessageId.set(file.messageId, []);
+        }
+        filesByMessageId.get(file.messageId)!.push(file);
+      });
+
+      // Insert each message with its associated files
       messages.forEach(message => {
-        store.insertMessage(message, []);
+        const messageFiles = filesByMessageId.get(message.id) || [];
+        store.insertMessage(message, messageFiles);
       });
     }));
   }
@@ -551,9 +563,22 @@ export class MessageDomain {
     }));
   }
 
-  addMessages(messagesWithFiles: MessageWithFiles[]): void {
+  addMessages(messages: Message[], files: File[] = []): void {
     setState('messageStore', produce(store => {
-      store.insertMessages(messagesWithFiles);
+      // Group files by messageId for efficient lookup
+      const filesByMessageId = new Map<number, File[]>();
+      files.forEach(file => {
+        if (!filesByMessageId.has(file.messageId)) {
+          filesByMessageId.set(file.messageId, []);
+        }
+        filesByMessageId.get(file.messageId)!.push(file);
+      });
+
+      // Insert each message with its associated files
+      messages.forEach(message => {
+        const messageFiles = filesByMessageId.get(message.id) || [];
+        store.insertMessage(message, messageFiles);
+      });
     }));
   }
 
