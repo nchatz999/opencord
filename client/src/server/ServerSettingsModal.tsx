@@ -28,7 +28,7 @@ const ServerSettingsModal: Component = () => {
   const [isRegistrationOpen, setIsRegistrationOpen] = createSignal(true)
   const [searchTerm, setSearchTerm] = createSignal('')
 
-  
+
   const [invites, setInvites] = createSignal<Invite[]>([])
   const [newInviteCode, setNewInviteCode] = createSignal('')
   const [newInviteRegistrations, setNewInviteRegistrations] = createSignal('1')
@@ -36,7 +36,7 @@ const ServerSettingsModal: Component = () => {
   const [loading, setLoading] = createSignal(false)
 
   const { addToast } = useToaster()
-  
+
   const serverVersion = '1.2.3'
   const clientVersion = '2.0.1'
 
@@ -48,7 +48,7 @@ const ServerSettingsModal: Component = () => {
     )
   )
 
-  
+
   const canManageInvites = () => {
     const user = userDomain.getCurrentUser();
     return user && (user.roleId === 0 || user.roleId === 1);
@@ -239,6 +239,7 @@ const ServerSettingsModal: Component = () => {
                         <Select
                           value={user.roleId}
                           onChange={async (roleId) => {
+                            console.log(roleId)
                             const result = await fetchApi(`/user/${user.userId}/role`, {
                               method: "PUT",
                               body: {
@@ -260,7 +261,7 @@ const ServerSettingsModal: Component = () => {
                         <Button
                           variant="destructive"
                           size="sm"
-                          disabled={user.roleId === 0} 
+                          disabled={user.roleId === 0}
                           title={user.roleId === 0 ? "Cannot delete owner" : "Delete user"}
                         >
                           <Trash2 class="w-4 h-4" />
@@ -450,14 +451,14 @@ const ServerSettingsModal: Component = () => {
   ])
 
 
-  
+
   const handleModalOpen = () => {
     if (canManageInvites()) {
       loadInvites();
     }
   };
 
-  
+
   setTimeout(() => handleModalOpen(), 100);
 
   return (

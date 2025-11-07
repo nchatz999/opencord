@@ -41,8 +41,7 @@ const StreamsContent: Component = () => {
   };
 
   const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
-    const currentVolume = voipDomain.getUserScreenSoundVolume(userId);
-    const volumePercentage = Math.round(currentVolume * 100);
+    const volumePercentage = voipDomain.getUserScreenSoundVolume(userId);
 
     return [
       {
@@ -55,9 +54,9 @@ const StreamsContent: Component = () => {
             <Slider
               value={volumePercentage}
               min={0}
-              max={100}
+              max={200}
               onChange={(value) => {
-                voipDomain.setUserScreenSoundVolume(userId, value / 100);
+                voipDomain.setUserScreenSoundVolume(userId, value);
               }}
               class="w-32"
             />

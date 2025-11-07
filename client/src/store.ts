@@ -694,6 +694,7 @@ export class VoipDomain {
     setState(
       'voipState',
       produce(voipState => {
+        console.log(voipState)
         const index = voipState.findIndex(p => p.userId === userId);
         if (index !== -1) {
           voipState.splice(index, 1);
@@ -834,7 +835,7 @@ function logEvent(type: string, data: any): void {
     type,
     data: structuredClone(data)
   };
-  
+
   setState('eventLog', produce(log => {
     log.push(logEntry);
     if (log.length > 1000) {
@@ -845,7 +846,7 @@ function logEvent(type: string, data: any): void {
 
 export function handleServerEvent(event: ServerEvent): void {
   logEvent(event.type, event);
-  
+
   switch (event.type) {
     case 'ChannelUpdated':
       channelDomain.updateChannel(event.channel.channelId, {
@@ -926,7 +927,6 @@ export function handleServerEvent(event: ServerEvent): void {
       messageDomain.addMessage(message);
 
       event.files.forEach(fileInfo => {
-        console.log(fileInfo)
         fileDomain.addFile({
           fileId: fileInfo.fileId,
           fileName: fileInfo.fileName,
@@ -999,7 +999,6 @@ export function handleServerEvent(event: ServerEvent): void {
       break;
 
     default:
-      console.warn('Unhandled server event:', event);
       break;
   }
 }
@@ -1007,7 +1006,6 @@ export function handleServerEvent(event: ServerEvent): void {
 
 
 export const handleConnect = async () => {
-  console.log('WebTransport connected successfully')
 
   try {
     const [
@@ -1027,7 +1025,6 @@ export const handleConnect = async () => {
     ])
 
     if (!groupsResult.ok || !channelsResult.ok || !rolesResult.ok || !usersResult.ok || !groupRightsResult.ok || !voipStatusResult.ok) {
-      console.error('Failed to load initial data');
       userDomain.setAppState({ type: 'unauthenticated' });
       return;
     }
@@ -1038,12 +1035,9 @@ export const handleConnect = async () => {
     userDomain.setUsers(usersResult.value)
     aclDomain.setRights(groupRightsResult.value)
     voipDomain.setParticipants(voipStatusResult.value)
-    console.log(voipStatusResult.value)
 
     userDomain.setConnectionStatus("connected")
-    console.log('Initial data loaded successfully')
   } catch (error) {
-    console.error('Error loading initial data:', error)
     userDomain.setAppState({ type: 'unauthenticated' });
   }
 }
@@ -1106,7 +1100,6 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
   (data) => {
     let maybeEvent = decode(data) as ServerEvent
     if (maybeEvent) {
-      console.log(maybeEvent)
       handleServerEvent(maybeEvent)
     }
   },

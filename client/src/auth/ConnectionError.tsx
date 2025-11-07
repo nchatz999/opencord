@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
-import { Button } from "../components/Button";
 import { userDomain } from "../store";
+import Button from "../components/Button";
 
 const ConnectionError: Component = () => (
   <div class="min-h-screen bg-[#313338] flex items-center justify-center">

@@ -132,7 +132,6 @@ export class ScreenShare {
 
   async start(): Promise<void> {
     if (this.getIsRecordingSignal()) {
-      console.warn('Already screen sharing');
       return;
     }
 
@@ -151,7 +150,6 @@ export class ScreenShare {
       this.stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
 
       this.stream.getVideoTracks()[0].onended = async () => {
-        console.log('Screen share ended by user or system');
         await fetchApi('/voip/screen/publish', {
           method: 'PUT',
           body: { publish: false }

@@ -80,13 +80,9 @@ export class VideoPlayback {
   }
 
   clearBuffer() {
-
     this.buffer = [];
-
-
     this.resetTimestamps();
 
-    console.log('Video buffer cleared');
   }
 
 

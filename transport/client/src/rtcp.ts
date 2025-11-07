@@ -132,8 +132,7 @@ export class RTCPProtocol {
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
   onConnect: () => void;
-  onDisconnect: ((code: number, reason: string) => void);
-  onError: ((error: RtcpError) => void) = (e) => { };
+  onDisconnect: () => void;
 
   private url: string;
 
@@ -143,8 +142,7 @@ export class RTCPProtocol {
     onFrameConplete: (data: Uint8Array) => void,
     onSafeDataComplete: (data: Uint8Array) => void,
     onConnect: () => void,
-    onDisconnect: ((code: number, reason: string) => void),
-    onError: ((error: RtcpError) => void)
+    onDisconnect: (() => void),
   ) {
     this.url = url;
     this.outSeq = 0n;
@@ -159,7 +157,6 @@ export class RTCPProtocol {
     this.onSafeDataComplete = onSafeDataComplete;
     this.onConnect = onConnect;
     this.onDisconnect = onDisconnect;
-    this.onError = onError;
     this.hash = hash;
   }
 
@@ -188,7 +185,7 @@ export class RTCPProtocol {
       this.runSafePacketHandler();
       this.runIncomingHandler();
       this.runOutgoingSender();
-      this.runPingInterval(10);
+      this.runPingInterval(200);
       this.runCleaner();
       this.handleTransportClosed();
       return ok(undefined)
@@ -199,35 +196,40 @@ export class RTCPProtocol {
     }
   }
 
-  public send(data: Uint8Array) {
+  public async send(data: Uint8Array) {
     if (this.closed || !this.outWriter) return;
-
-    const mtu = this.mtu - 200;
-    let currentTime = BigInt(Date.now());
-    let fecGroup: RTPPacket[] = [];
-    for (let i = 0; i < data.length; i += mtu) {
-      const chunk = data.slice(i, i + mtu);
-      const last = i + mtu >= data.length;
-      let packet: RTPPacket = {
-        type: PacketType.RTP,
-        sequenceNumber: this.outSeq++,
-        timestamp: currentTime,
-        frameId: this.outFrame,
-        fragmentNumber: Math.floor(i / mtu),
-        totalFragments: Math.ceil(data.length / mtu),
-        markerBit: last,
-        data: chunk,
-      };
-      this.sendPackets.set(packet.sequenceNumber, packet);
-      this.outWriter.write(PacketSerializer.serialize(packet));
-      fecGroup.push(packet);
-      if (fecGroup.length == 4) {
-        const fecPacket = FECEncoder.generateFECPacket(fecGroup);
-        this.outWriter.write(PacketSerializer.serialize(fecPacket));
-        fecGroup = [];
+    try {
+      const mtu = this.mtu - 200;
+      let currentTime = BigInt(Date.now());
+      let fecGroup: RTPPacket[] = [];
+      for (let i = 0; i < data.length; i += mtu) {
+        const chunk = data.slice(i, i + mtu);
+        const last = i + mtu >= data.length;
+        let packet: RTPPacket = {
+          type: PacketType.RTP,
+          sequenceNumber: this.outSeq++,
+          timestamp: currentTime,
+          frameId: this.outFrame,
+          fragmentNumber: Math.floor(i / mtu),
+          totalFragments: Math.ceil(data.length / mtu),
+          markerBit: last,
+          data: chunk,
+        };
+        this.sendPackets.set(packet.sequenceNumber, packet);
+        this.outWriter.write(PacketSerializer.serialize(packet));
+        fecGroup.push(packet);
+        if (fecGroup.length == 4) {
+          const fecPacket = FECEncoder.generateFECPacket(fecGroup);
+          this.outWriter.write(PacketSerializer.serialize(fecPacket));
+          fecGroup = [];
+        }
       }
+      this.outFrame += 1n;
+    } catch (e) {
+
+      this.onDisconnect();
+      await this.disconnect()
     }
-    this.outFrame += 1n;
   }
 
   public async sendSafe(data: Uint8Array) {
@@ -239,7 +241,8 @@ export class RTCPProtocol {
       await writer.write(data)
       await writer.close()
     } catch (e) {
-      this.onError({ type: "error", message: e as Error });
+      this.onDisconnect();
+      await this.disconnect()
     }
   }
 
@@ -399,10 +402,7 @@ export class RTCPProtocol {
   public runPingInterval(interval: number) {
     this.pingIntervalId = window.setInterval(async () => {
       if (this.missedPongs >= 5) {
-        this.onDisconnect(
-          100,
-          "Too many missed pings"
-        );
+        this.onDisconnect();
         await this.disconnect()
         return;
       }
@@ -442,7 +442,10 @@ export class RTCPProtocol {
         this.handleSafeDataStream(stream);
       }
     } catch (e) {
-      this.onError({ type: "error", message: e as Error });
+      this.onDisconnect();
+      await this.disconnect()
+      this.onDisconnect();
+      await this.disconnect()
     }
   }
 
@@ -468,7 +471,8 @@ export class RTCPProtocol {
 
       this.onSafeDataComplete(completeMessage);
     } catch (e) {
-      this.onError({ type: "error", message: e as Error });
+      this.onDisconnect();
+      await this.disconnect()
     }
   }
 
@@ -482,7 +486,7 @@ export class RTCPProtocol {
           this.processPacket(packet);
         }
       } catch (e) {
-        this.onError({ type: "error", message: e as Error });
+        await this.disconnect()
         break;
       }
     }
@@ -495,7 +499,7 @@ export class RTCPProtocol {
         if (done || this.closed) break;
         await this.writer.write(value);
       } catch (e) {
-        this.onError({ type: "error", message: e as Error });
+        await this.disconnect()
         break;
       }
     }
@@ -552,10 +556,12 @@ export class RTCPProtocol {
       }
 
       if (this.onDisconnect && closeCode && reason) {
-        this.onDisconnect(closeCode, reason);
+        this.onDisconnect();
+        await this.disconnect()
       }
     } catch (e) {
-      this.onError({ type: "error", message: e as Error });
+      this.onDisconnect();
+      await this.disconnect()
     }
   }
 

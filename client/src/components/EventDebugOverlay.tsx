@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
-import { state } from "../store";
+import { state, type EventLogEntry } from "../store";
 
 
 interface DebugItemProps {
@@ -79,15 +79,15 @@ const DebugItem: Component<DebugItemProps> = (props) => {
         <Show when={isPrimitive(props.value)}>
           <div class="w-4" />
         </Show>
-        
+
         <span class="text-gray-300">{props.label}:</span>
-        
+
         <Show when={isPrimitive(props.value)}>
           <span class={getTypeColor(getValueType(props.value))}>
             {formatPrimitiveValue(props.value)}
           </span>
         </Show>
-        
+
         <Show when={!isPrimitive(props.value)}>
           <span class={getTypeColor(getValueType(props.value))}>
             {getValueType(props.value)}
@@ -97,14 +97,14 @@ const DebugItem: Component<DebugItemProps> = (props) => {
           </span>
         </Show>
       </div>
-      
+
       <Show when={!isPrimitive(props.value) && isExpanded()}>
         <div class="border-l border-gray-600 ml-2">
           <For each={getObjectEntries(props.value)}>
             {([key, value]) => (
-              <DebugItem 
-                label={key} 
-                value={value} 
+              <DebugItem
+                label={key}
+                value={value}
                 depth={depth() + 1}
               />
             )}
@@ -147,7 +147,7 @@ const EventDebugOverlay: Component = () => {
       <Show when={isVisible()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 z-[9998]" onClick={() => setIsVisible(false)} />
         <div class="fixed top-4 left-4 right-4 bottom-4 bg-[#1e1f22] border border-gray-600 rounded-lg z-[9999] flex">
-          
+
           <div class="w-1/3 border-r border-gray-600 flex flex-col">
             <div class="flex items-center justify-between p-4 border-b border-gray-600">
               <h3 class="text-lg font-semibold text-white">Events ({state.eventLog.length})</h3>
@@ -166,14 +166,13 @@ const EventDebugOverlay: Component = () => {
                 </button>
               </div>
             </div>
-            
+
             <div class="flex-1 overflow-auto">
               <For each={[...state.eventLog].reverse()}>
                 {(event) => (
                   <div
-                    class={`p-3 border-b border-gray-700 cursor-pointer hover:bg-[#2b2d31] transition-colors ${
-                      selectedEvent()?.id === event.id ? "bg-[#404249]" : ""
-                    }`}
+                    class={`p-3 border-b border-gray-700 cursor-pointer hover:bg-[#2b2d31] transition-colors ${selectedEvent()?.id === event.id ? "bg-[#404249]" : ""
+                      }`}
                     onClick={() => setSelectedEvent(event)}
                   >
                     <div class="flex items-center justify-between mb-1">
@@ -202,7 +201,7 @@ const EventDebugOverlay: Component = () => {
             <div class="p-4 border-b border-gray-600">
               <h3 class="text-lg font-semibold text-white">Event Details</h3>
             </div>
-            
+
             <div class="flex-1 overflow-auto p-4 bg-[#313338]">
               <Show when={selectedEvent()} fallback={
                 <div class="text-center text-gray-400 mt-8">
@@ -229,7 +228,7 @@ const EventDebugOverlay: Component = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <DebugItem label="data" value={event().data} />
                   </div>
                 )}

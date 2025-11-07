@@ -43,7 +43,7 @@ export default function ContextMenu(props: ContextMenuProps) {
 
     const rect = triggerRef?.getBoundingClientRect();
     if (rect) {
-      
+
       setPosition({
         x: e.clientX,
         y: e.clientY,
@@ -59,7 +59,7 @@ export default function ContextMenu(props: ContextMenuProps) {
     setIsOpen(false);
   };
 
-  
+
   createEffect(() => {
     if (isOpen()) {
       const handleClickOutside = (event: MouseEvent) => {
@@ -84,7 +84,7 @@ export default function ContextMenu(props: ContextMenuProps) {
     }
   });
 
-  
+
   createEffect(() => {
     if (isOpen() && menuRef) {
       const menuRect = menuRef.getBoundingClientRect();
@@ -95,7 +95,7 @@ export default function ContextMenu(props: ContextMenuProps) {
       let adjustedX = pos.x;
       let adjustedY = pos.y;
 
-      
+
       if (pos.x + menuRect.width > viewportWidth) {
         adjustedX = viewportWidth - menuRect.width - 8;
       }
@@ -104,7 +104,7 @@ export default function ContextMenu(props: ContextMenuProps) {
         adjustedY = viewportHeight - menuRect.height - 8;
       }
 
-      
+
       adjustedX = Math.max(8, adjustedX);
       adjustedY = Math.max(8, adjustedY);
 
@@ -129,7 +129,6 @@ export default function ContextMenu(props: ContextMenuProps) {
           <>
             {}
             <div class="fixed inset-0 z-40" />
-
             {}
             <div
               ref={menuRef}

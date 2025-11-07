@@ -66,6 +66,7 @@ const UserSettingsModal: Component = () => {
     { value: UserStatusType.Away, label: 'Away', color: 'text-yellow-500' },
     { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-red-500' },
     { value: UserStatusType.Invisible, label: 'Invisible', color: 'text-gray-500' },
+    { value: UserStatusType.Offline, label: 'Offline', color: 'text-gray-500' },
   ];
 
   const getStatusColor = (status: UserStatusType) => {

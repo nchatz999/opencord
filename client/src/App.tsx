@@ -11,7 +11,7 @@ import EventDebugOverlay from './components/EventDebugOverlay'
 
 const App: Component = () => {
 
-  
+
   onMount(async () => {
   })
   return (

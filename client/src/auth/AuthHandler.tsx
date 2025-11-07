@@ -39,6 +39,7 @@ const AuthHandler: Component = () => {
         }
       } while (!connectResult.ok);
 
+      await sleep(100)
       await handleConnect()
       userDomain.setAppState({ type: 'authenticated' });
 
