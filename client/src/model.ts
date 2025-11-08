@@ -123,9 +123,6 @@ export type VoipDataMessage = {
 }
 
 
-
-
-
 export interface VoipParticipantWithUser {
   user: User;
   channelId: number | null;

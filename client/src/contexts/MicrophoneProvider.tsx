@@ -273,6 +273,7 @@ export class Microphone {
   private setupEncoder(): void {
     this.encoder = new AudioEncoder({
       output: (chunk, _metadata) => {
+        if (!this.getIsSpeech()) return
         this.encodedDataCallbacks.forEach(callback => { if (!this.getMuted()) callback(chunk) });
       },
       error: (error) => {

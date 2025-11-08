@@ -700,6 +700,7 @@ export class VoipDomain {
     let voipUser = voipDomain.getParticipant(userId)
     if (voipUser && voipUser.playback) {
       voipUser.playback.pushChunk(packet, timestamp)
+      voipUser.playback.setSpeaking(200)
     }
   }
 
@@ -1146,7 +1147,6 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
 export let microphone = new Microphone();
 microphone.onEncodedData((data) => {
   let user = voipDomain.getCurrentUserParticipant()
-
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
 
@@ -1159,6 +1159,9 @@ microphone.onEncodedData((data) => {
     realTimestamp: data.timestamp,
     key: data.type
   }
+  let participant = voipDomain.getParticipant(user.userId)
+  if (participant && participant.playback) participant.playback.setSpeaking(200)
+
   connection.send(encode([
     voipMessage.type,
     voipMessage.userId,
