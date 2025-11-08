@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
-import { MicVAD } from '@ricky0123/vad-web'
+import { createVADNode } from './Vad';
+
 export interface MicrophoneConstraints {
   echoCancellation?: boolean;
   noiseSuppression?: boolean;
@@ -214,59 +215,40 @@ export class Microphone {
           channelCount: this.constraints.channelCount,
         },
       };
-      await MicVAD.new({
-        getStream: async () => {
-          return await navigator.mediaDevices.getUserMedia(mediaConstraints);
-        },
-        onnxWASMBasePath:
-          "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
-        baseAssetPath:
-          "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/",
-        onFrameProcessed: (prob, frame) => {
-          if (this.encoder) {
-            console.log('Frame debug:', {
-              frameLength: frame.length,
-              constraintsSampleRate: this.constraints.sampleRate,
-              encoderSampleRate: this.encoderConfig.sampleRate,
-              frameDurationMs: (frame.length / (this.constraints.sampleRate || 48000)) * 1000,
-              frameType: frame.constructor.name,
-              firstFewSamples: Array.from(frame.slice(0, 5))
-            });
-            
-            const audioData = new AudioData({
-              format: 'f32-planar',
-              sampleRate: this.constraints.sampleRate || 48000,
-              numberOfFrames: frame.length,
-              numberOfChannels: 1,
-              timestamp: performance.now() * 1000,
-              data: frame
-            });
-            this.encoder.encode(audioData)
-          }
-        }
+
+      this.stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+
+      this.audioContext = new AudioContext({
+        sampleRate: this.constraints.sampleRate,
+      });
+
+      const vadNode = createVADNode(this.audioContext, {
+        threshold: 0.01,
+        debug: true
+      });
+
+      const source = this.audioContext.createMediaStreamSource(this.stream);
+      source.connect(vadNode.inputNode);
+
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.gain.value = this.getVolumeSignal();
+      vadNode.connect(this.gainNode);
+
+      vadNode.addEventListener('speechstart', () => {
+        console.log('User started speaking');
+      });
+      vadNode.addEventListener('speechend', () => {
+
+        console.log('User  stopped speaking');
       })
 
-
-      //this.audioContext = new AudioContext({
-      //  sampleRate: this.constraints.sampleRate,
-      //});
-      //this.gainNode = this.audioContext.createGain();
-      //this.gainNode.gain.value = this.getVolumeSignal();
-      //source.connect(this.gainNode);
-
-
-      //const audioTrack = this.stream.getAudioTracks()[0];
-      //audioTrack.onended = async () => {
-      //  this.stop()
-      //}
-      //this.processor = new MediaStreamTrackProcessor({ track: audioTrack });
-
-
-      this.setupEncoder();
+      const audioTrack = this.stream.getAudioTracks()[0];
+      audioTrack.onended = () => this.stop();
+      this.processor = new MediaStreamTrackProcessor({ track: audioTrack }); this.setupEncoder();
 
 
       this.isProcessing = true;
-      //this.processAudioStream();
+      this.processAudioStream();
 
 
       await this.updateAvailableDevices();
