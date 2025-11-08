@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { VadNode } from './Vad';
 
 export interface MicrophoneConstraints {
   echoCancellation?: boolean;
@@ -19,6 +20,7 @@ export class Microphone {
   private stream: MediaStream | null = null;
   private audioContext: AudioContext | null = null;
   private gainNode: GainNode | null = null;
+  private vadNode: VadNode | null = null;
   private processor: MediaStreamTrackProcessor<AudioData> | null = null;
   private encoder: AudioEncoder | null = null;
   private reader: ReadableStreamDefaultReader<AudioData> | null = null;
@@ -53,6 +55,8 @@ export class Microphone {
   };
 
   private encodedDataCallbacks: Array<(chunk: EncodedAudioChunk) => void> = [];
+  private speechStartCallbacks: Array<() => void> = [];
+  private speechEndCallbacks: Array<() => void> = [];
 
   constructor(encoderConfig?: EncoderConfig) {
     if (encoderConfig) {
@@ -196,6 +200,28 @@ export class Microphone {
     };
   }
 
+  onSpeechStart(callback: () => void): () => void {
+    this.speechStartCallbacks.push(callback);
+
+    return () => {
+      const index = this.speechStartCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.speechStartCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  onSpeechEnd(callback: () => void): () => void {
+    this.speechEndCallbacks.push(callback);
+
+    return () => {
+      const index = this.speechEndCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.speechEndCallbacks.splice(index, 1);
+      }
+    };
+  }
+
   async start(): Promise<void> {
     if (this.getIsRecordingSignal()) {
       console.warn('Already recording');
@@ -222,9 +248,22 @@ export class Microphone {
         sampleRate: this.constraints.sampleRate,
       });
       const source = this.audioContext.createMediaStreamSource(this.stream);
+      
+      this.vadNode = new VadNode(this.audioContext, {
+        onSpeechStart: () => {
+          this.speechStartCallbacks.forEach(callback => callback());
+        },
+        onSpeechEnd: () => {
+          this.speechEndCallbacks.forEach(callback => callback());
+        }
+      });
+      await this.vadNode.initialize();
+      
       this.gainNode = this.audioContext.createGain();
       this.gainNode.gain.value = this.getVolumeSignal();
-      source.connect(this.gainNode);
+      
+      source.connect(this.vadNode.getNode());
+      this.vadNode.connect(this.gainNode);
 
 
       const audioTrack = this.stream.getAudioTracks()[0];
@@ -341,11 +380,14 @@ export class Microphone {
     }
 
     this.gainNode = null;
+    this.vadNode = null;
     this.processor = null;
   }
 
   async destroy(): Promise<void> {
     await this.stop();
     this.encodedDataCallbacks = [];
+    this.speechStartCallbacks = [];
+    this.speechEndCallbacks = [];
   }
 }
