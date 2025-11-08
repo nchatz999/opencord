@@ -141,3 +141,7 @@ export interface VoipParticipantWithUser {
   screenSoundPlayback?: AudioPlayback
 }
 
+export interface MessageWithFiles {
+  message: Message;
+  files: File[];
+}

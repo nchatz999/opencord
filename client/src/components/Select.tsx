@@ -21,7 +21,7 @@ interface SelectProps {
   placeholder?: string;
   class?: string;
   dropdownClass?: string;
-  
+
   zIndex?: number;
   position?: "absolute" | "fixed";
   maxHeight?: string;
@@ -46,7 +46,8 @@ export default function Select(props: SelectProps) {
   });
 
   const handleSelect = (optionValue: string | number | null) => {
-    props.onChange(optionValue);
+    if (optionValue)
+      props.onChange(optionValue);
     setIsOpen(false);
   };
 

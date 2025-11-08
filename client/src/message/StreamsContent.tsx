@@ -198,6 +198,7 @@ const StreamsContent: Component = () => {
                           }}
                         />
 
+
                         {}
                         <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                           <div class="flex items-center gap-1 bg-black bg-opacity-50 rounded-full px-2 py-1">

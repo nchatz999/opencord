@@ -34,7 +34,6 @@ pub enum VoipType {
 #[serde(rename_all = "PascalCase")]
 #[serde(tag = "type")]
 pub enum Event {
-    
     ChannelUpdated {
         channel: Channel,
     },
@@ -42,7 +41,6 @@ pub enum Event {
         channel_id: i64,
     },
 
-    
     GroupUpdated {
         group: Group,
     },
@@ -57,7 +55,6 @@ pub enum Event {
         role_id: i64,
     },
 
-    
     UserUpdated {
         user: User,
     },
@@ -71,7 +68,6 @@ pub enum Event {
         rights: i64,
     },
 
-    
     VoipParticipantUpdated {
         user: VoipParticipant,
     },
@@ -79,7 +75,6 @@ pub enum Event {
         user_id: i64,
     },
 
-    
     MessageCreated {
         message_id: i64,
         sender_id: i64,
@@ -110,11 +105,11 @@ pub enum Event {
     },
 
     VoIPData {
-        channel_id: i64,         
-        user_id: i64,            
-        data_type: VoipDataType, 
-        data: Vec<u8>,           
+        channel_id: i64,
+        user_id: i64,
+        data_type: VoipDataType,
+        data: Vec<u8>,
         timestamp: u64,
-        key: String, 
+        key: String,
     },
 }

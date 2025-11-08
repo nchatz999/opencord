@@ -63,11 +63,23 @@ export default function ContextMenu(props: ContextMenuProps) {
   createEffect(() => {
     if (isOpen()) {
       const handleClickOutside = (event: MouseEvent) => {
-        if (menuRef && !menuRef.contains(event.target as Node)) {
-          setIsOpen(false);
+        if (menuRef) {
+          const rect = menuRef.getBoundingClientRect();
+          const x = event.clientX;
+          const y = event.clientY;
+
+          const isOutside = (
+            x < rect.left ||
+            x > rect.right ||
+            y < rect.top ||
+            y > rect.bottom
+          );
+
+          if (isOutside) {
+            setIsOpen(false);
+          }
         }
       };
-
       const handleScroll = () => {
         setIsOpen(false);
       };
@@ -127,9 +139,6 @@ export default function ContextMenu(props: ContextMenuProps) {
       <Show when={isOpen()}>
         <Portal>
           <>
-            {}
-            <div class="fixed inset-0 z-40" />
-            {}
             <div
               ref={menuRef}
               class="fixed z-50 min-w-[180px] bg-[#18191c] rounded-md shadow-lg border border-[#2b2d31] py-1"
@@ -146,8 +155,11 @@ export default function ContextMenu(props: ContextMenuProps) {
                   >
                     <Show
                       when={!item.customContent}
+
                       fallback={
-                        <div class="px-3 py-2">{item.customContent}</div>
+                        <div class="px-3 py-2"
+
+                        >{item.customContent}</div>
                       }
                     >
                       <button

@@ -11,9 +11,7 @@ import {
   type GroupRoleRights,
   type VoipDataMessage,
   type VoipParticipantWithUser,
-  type MessageWithFiles,
 } from './model'
-
 import { decode, encode } from '@msgpack/msgpack'
 import { fetchApi } from './utils'
 import { Microphone } from './contexts/MicrophoneProvider'
@@ -66,150 +64,6 @@ export interface EventLogEntry {
   data: any;
 }
 
-export class MessageStore {
-  private messages: Map<number, MessageWithFiles> = new Map();
-  private channelMessages: Map<number, number[]> = new Map();
-  private dmMessages: Map<string, number[]> = new Map();
-
-  private getDMKey(userId1: number, userId2: number): string {
-    return userId1 < userId2 ? `${userId1}-${userId2}` : `${userId2}-${userId1}`;
-  }
-
-  private insertSorted(array: number[], messageId: number, timestamp: string): void {
-    const timestampMs = new Date(timestamp).getTime();
-    let left = 0;
-    let right = array.length;
-
-    while (left < right) {
-      const mid = Math.floor((left + right) / 2);
-      const midMessage = this.messages.get(array[mid]);
-      if (midMessage && new Date(midMessage.message.createdAt).getTime() < timestampMs) {
-        left = mid + 1;
-      } else {
-        right = mid;
-      }
-    }
-
-    array.splice(left, 0, messageId);
-  }
-
-  insertMessage(message: Message, files: File[] = []): void {
-    const messageWithFiles: MessageWithFiles = { message, files };
-    this.messages.set(message.id, messageWithFiles);
-
-    if (message.channelId !== null) {
-      if (!this.channelMessages.has(message.channelId)) {
-        this.channelMessages.set(message.channelId, []);
-      }
-      const channelArray = this.channelMessages.get(message.channelId)!;
-      this.insertSorted(channelArray, message.id, message.createdAt);
-    } else if (message.recipientId !== null) {
-      const dmKey = this.getDMKey(message.senderId, message.recipientId);
-      if (!this.dmMessages.has(dmKey)) {
-        this.dmMessages.set(dmKey, []);
-      }
-      const dmArray = this.dmMessages.get(dmKey)!;
-      this.insertSorted(dmArray, message.id, message.createdAt);
-    }
-  }
-
-  insertMessages(messagesWithFiles: MessageWithFiles[]): void {
-    messagesWithFiles.forEach(mwf => {
-      this.insertMessage(mwf.message, mwf.files);
-    });
-  }
-
-  insertMessagesWithFiles(messages: Message[], files: File[] = []): void {
-    // Group files by messageId for efficient lookup
-    const filesByMessageId = new Map<number, File[]>();
-    files.forEach(file => {
-      if (!filesByMessageId.has(file.messageId)) {
-        filesByMessageId.set(file.messageId, []);
-      }
-      filesByMessageId.get(file.messageId)!.push(file);
-    });
-
-    // Insert each message with its associated files
-    messages.forEach(message => {
-      const messageFiles = filesByMessageId.get(message.id) || [];
-      this.insertMessage(message, messageFiles);
-    });
-  }
-
-  getMessagesForChannel(channelId: number): MessageWithFiles[] {
-    const messageIds = this.channelMessages.get(channelId) || [];
-    return messageIds.map(id => this.messages.get(id)!).filter(Boolean);
-  }
-
-  getMessagesForDM(currentUserId: number, recipientId: number): MessageWithFiles[] {
-    const dmKey = this.getDMKey(currentUserId, recipientId);
-    const messageIds = this.dmMessages.get(dmKey) || [];
-    return messageIds.map(id => this.messages.get(id)!).filter(Boolean);
-  }
-
-  getMessageById(id: number): MessageWithFiles | undefined {
-    return this.messages.get(id);
-  }
-
-  updateMessage(id: number, updates: Partial<Message>): void {
-    const existing = this.messages.get(id);
-    if (existing) {
-      existing.message = { ...existing.message, ...updates };
-    }
-  }
-
-  deleteMessage(id: number): void {
-    const messageWithFiles = this.messages.get(id);
-    if (!messageWithFiles) return;
-
-    const message = messageWithFiles.message;
-    this.messages.delete(id);
-
-    if (message.channelId !== null) {
-      const channelArray = this.channelMessages.get(message.channelId);
-      if (channelArray) {
-        const index = channelArray.indexOf(id);
-        if (index !== -1) {
-          channelArray.splice(index, 1);
-        }
-      }
-    } else if (message.recipientId !== null) {
-      const dmKey = this.getDMKey(message.senderId, message.recipientId);
-      const dmArray = this.dmMessages.get(dmKey);
-      if (dmArray) {
-        const index = dmArray.indexOf(id);
-        if (index !== -1) {
-          dmArray.splice(index, 1);
-        }
-      }
-    }
-  }
-
-  deleteMessagesForChannel(channelId: number): void {
-    const messageIds = this.channelMessages.get(channelId) || [];
-    messageIds.forEach(id => this.messages.delete(id));
-    this.channelMessages.delete(channelId);
-  }
-
-  deleteMessagesForDM(currentUserId: number, recipientId: number): void {
-    const dmKey = this.getDMKey(currentUserId, recipientId);
-    const messageIds = this.dmMessages.get(dmKey) || [];
-    messageIds.forEach(id => this.messages.delete(id));
-    this.dmMessages.delete(dmKey);
-  }
-
-  getAllMessages(): MessageWithFiles[] {
-    return Array.from(this.messages.values());
-  }
-
-  clear(): void {
-    this.messages.clear();
-    this.channelMessages.clear();
-    this.dmMessages.clear();
-  }
-}
-
-
 export interface State {
   appState: AppState
   modal: ModalType
@@ -219,7 +73,8 @@ export interface State {
   users: User[]
   channels: Channel[]
   groups: Group[]
-  messageStore: MessageStore
+  messages: Message[]
+  files: File[]
   currentUser: number | null
 
   voipState: VoipParticipant[]
@@ -246,11 +101,12 @@ const initialState: State = {
   users: [],
   channels: [],
   groups: [],
-  messageStore: new MessageStore(),
+  messages: [],
   currentUser: null,
   groupRoleRights: [],
   voipState: [],
   audio: createSharedAudioContext(),
+  files: [],
   eventLog: [],
   notification: {},
   context: undefined,
@@ -522,81 +378,124 @@ export class ChannelDomain {
 export class MessageDomain {
   constructor() { }
 
-  getAllMessages(): MessageWithFiles[] {
-    return state.messageStore.getAllMessages();
+  getAllMessages(): Message[] {
+    return state.messages;
+  }
+  getMessagesForChannel(channelId: number): Message[] {
+
+    return state.messages
+      .filter(m => m.channelId === channelId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
-  getMessagesForChannel(channelId: number): MessageWithFiles[] {
-    return state.messageStore.getMessagesForChannel(channelId);
-  }
 
-  getMessagesForDM(recipientId: number): MessageWithFiles[] {
+  getMessagesForDM(recipientId: number): Message[] {
     const currentUserId = state.currentUser;
     if (!currentUserId) return [];
-    return state.messageStore.getMessagesForDM(currentUserId, recipientId);
+
+    return state.messages.filter(
+      m =>
+        m.channelId === null &&
+        ((m.senderId === currentUserId && m.recipientId === recipientId) ||
+          (m.senderId === recipientId && m.recipientId === currentUserId))
+    );
   }
 
   getContext() {
     return state.context
   }
 
-  getMessageById(id: number): MessageWithFiles | undefined {
-    return state.messageStore.getMessageById(id);
+  getMessageById(id: number): Message | undefined {
+    return state.messages.find(m => m.id === id);
   }
 
   getFilesForMessage(messageId: number): File[] {
-    const messageWithFiles = state.messageStore.getMessageById(messageId);
-    return messageWithFiles ? messageWithFiles.files : [];
+    return state.files.filter(f => f.messageId === messageId);
   }
 
-  setMessages(messages: Message[], files: File[] = []): void {
-    setState('messageStore', produce(store => {
-      store.clear();
-      store.insertMessagesWithFiles(messages, files);
-    }));
-  }
 
   setContext(ctx: { type: "channel" | "dm", id: number }): void {
     setState("context", ctx)
   }
 
-  addMessage(message: Message, files: File[] = []): void {
-    setState('messageStore', produce(store => {
-      store.insertMessage(message, files);
-    }));
+  addNewMessage(newMessage: Message) {
+    setState(
+      'messages',
+      produce(messages => {
+        const newMessageTime = new Date(newMessage.createdAt).getTime();
+
+        if (!messages || messages.length === 0) {
+          messages.push(newMessage);
+          return;
+        }
+
+        const lastMessageTime = new Date(messages[messages.length - 1].createdAt).getTime();
+        if (newMessageTime >= lastMessageTime) {
+          messages.push(newMessage);
+          return;
+        }
+
+        const firstMessageTime = new Date(messages[0].createdAt).getTime();
+        if (newMessageTime <= firstMessageTime) {
+          messages.unshift(newMessage);
+          return;
+        }
+
+        let left = 0;
+        let right = messages.length - 1;
+
+        while (left <= right) {
+          const mid = Math.floor((left + right) / 2);
+          const midMessageTime = new Date(messages[mid].createdAt).getTime();
+
+          if (midMessageTime <= newMessageTime) {
+            left = mid + 1;
+          } else {
+            right = mid - 1;
+          }
+        }
+
+        messages.splice(left, 0, newMessage);
+      })
+    );
   }
 
-  addMessages(messages: Message[], files: File[] = []): void {
-    setState('messageStore', produce(store => {
-      store.insertMessagesWithFiles(messages, files);
-    }));
+  addMessages(newMessages: Message[]): void {
+    setState(
+      'messages',
+      produce(messages => {
+
+        newMessages.forEach((message) => {
+          this.addNewMessage(message)
+        })
+      })
+    );
   }
 
   updateMessage(id: number, updates: Partial<Message>): void {
-    setState('messageStore', produce(store => {
-      store.updateMessage(id, updates);
-    }));
+    setState(
+      'messages',
+      produce(messages => {
+        const index = messages.findIndex(m => m.id === id);
+        if (index !== -1) {
+          messages[index] = { ...messages[index], ...updates };
+        }
+      })
+    );
   }
 
   deleteMessage(id: number): void {
-    setState('messageStore', produce(store => {
-      store.deleteMessage(id);
-    }));
+    setState(
+      'messages',
+      produce(messages => {
+        const index = messages.findIndex(m => m.id === id);
+        if (index !== -1) {
+          messages.splice(index, 1);
+        }
+      })
+    );
   }
 
-  deleteMessagesForChannel(channelId: number): void {
-    setState('messageStore', produce(store => {
-      store.deleteMessagesForChannel(channelId);
-    }));
-  }
-
-  deleteMessagesForDM(recipientId: number): void {
-    const currentUserId = state.currentUser;
-    if (!currentUserId) return;
-    setState('messageStore', produce(store => {
-      store.deleteMessagesForDM(currentUserId, recipientId);
-    }));
-  }
 }
 
 export class RoleDomain {
@@ -696,16 +595,15 @@ export class AclDomain {
 
     if (rights === 0) {
 
-      const messagesToRemove = messageDomain.getAllMessages().filter(messageWithFiles => {
-        const message = messageWithFiles.message;
+      const messagesToRemove = messageDomain.getAllMessages().filter(message => {
         if (message.channelId === null) return false;
         const channel = channelDomain.getChannelById(message.channelId);
         if (!channel || channel.groupId !== groupId) return false;
         const sender = userDomain.getUserById(message.senderId);
         return sender && sender.roleId === roleId;
       });
-      messagesToRemove.forEach(messageWithFiles => {
-        messageDomain.deleteMessage(messageWithFiles.message.id);
+      messagesToRemove.forEach(message => {
+        messageDomain.deleteMessage(message.id);
       });
 
       const participantsToRemove = voipDomain.getParticipants().filter(participant => {
@@ -907,16 +805,33 @@ export class FileDomain {
   constructor() { }
 
   getAllFiles(): File[] {
-    return state.messageStore.getAllMessages().flatMap(mwf => mwf.files);
+    return state.files;
   }
 
   getFileById(id: number): File | undefined {
-    const allMessages = state.messageStore.getAllMessages();
-    for (const messageWithFiles of allMessages) {
-      const file = messageWithFiles.files.find(f => f.fileId === id);
-      if (file) return file;
-    }
-    return undefined;
+    return state.files.find(f => f.fileId === id);
+  }
+
+  setFiles(files: File[]): void {
+    setState('files', files);
+  }
+
+  addFile(file: File): void {
+    setState(
+      'files',
+      produce(files => {
+        files.push(file);
+      })
+    );
+  }
+
+  addFiles(newFiles: File[]): void {
+    setState(
+      'files',
+      produce(files => {
+        files.push(...newFiles);
+      })
+    );
   }
 }
 
@@ -1043,19 +958,21 @@ export function handleServerEvent(event: ServerEvent): void {
         modifiedAt: event.timestamp,
         createdAt: event.timestamp
       };
+      messageDomain.addMessages([message]);
 
-      const files = event.files.map(fileInfo => ({
-        fileId: fileInfo.fileId,
-        fileName: fileInfo.fileName,
-        fileHash: fileInfo.fileHash,
-        fileUuid: fileInfo.fileUuid,
-        fileType: fileInfo.fileType,
-        fileSize: fileInfo.fileSize,
-        messageId: fileInfo.messageId,
-        createdAt: fileInfo.createdAt,
-      }));
+      event.files.forEach(fileInfo => {
+        fileDomain.addFile({
+          fileId: fileInfo.fileId,
+          fileName: fileInfo.fileName,
+          fileHash: fileInfo.fileHash,
+          fileUuid: fileInfo.fileUuid,
+          fileType: fileInfo.fileType,
+          fileSize: fileInfo.fileSize,
+          messageId: fileInfo.messageId,
+          createdAt: fileInfo.createdAt,
+        });
+      });
 
-      messageDomain.addMessage(message, files);
       break;
 
     case 'MessageUpdated':
@@ -1095,14 +1012,13 @@ export function handleServerEvent(event: ServerEvent): void {
         channelDomain.deleteChannel(channel.channelId);
       });
 
-      const messagesToRemove = messageDomain.getAllMessages().filter((messageWithFiles) => {
-        const message = messageWithFiles.message;
+      const messagesToRemove = messageDomain.getAllMessages().filter((message) => {
         if (message.channelId === null) return false;
         const channel = channelDomain.getChannelById(message.channelId);
         return channel && channel.groupId === event.group_id;
       });
-      messagesToRemove.forEach(messageWithFiles => {
-        messageDomain.deleteMessage(messageWithFiles.message.id);
+      messagesToRemove.forEach(message => {
+        messageDomain.deleteMessage(message.id);
       });
 
       const participantsToRemove = voipDomain.getParticipants().filter((participant) => {
@@ -1348,11 +1264,12 @@ export function resetStore(): void {
     users: [],
     channels: [],
     groups: [],
-    messageStore: new MessageStore(),
+    messages: [],
     currentUser: null,
     groupRoleRights: [],
     voipState: [],
     audio: createSharedAudioContext(),
+    files: [],
     eventLog: [],
     notification: {},
     context: undefined,

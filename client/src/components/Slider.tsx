@@ -1,4 +1,4 @@
-import { createSignal, createEffect, mergeProps, type Component } from 'solid-js';
+import { createSignal, createEffect, Show, type Component } from 'solid-js';
 
 interface SliderProps {
   value?: number;
@@ -14,21 +14,17 @@ interface SliderProps {
 }
 
 const Slider: Component<SliderProps> = (props) => {
-  const merged = mergeProps(
-    {
-      min: 0,
-      max: 100,
-      step: 1,
-      defaultValue: 50,
-      disabled: false,
-    },
-    props
-  );
+  const min = () => props.min ?? 0;
+  const max = () => props.max ?? 100;
+  const step = () => props.step ?? 1;
 
   const [internalValue, setInternalValue] = createSignal(
-    props.value ?? merged.defaultValue
+    props.value ?? props.defaultValue ?? min()
   );
+
   const [isDragging, setIsDragging] = createSignal(false);
+
+  const value = () => props.value ?? internalValue();
 
   createEffect(() => {
     if (props.value !== undefined) {
@@ -36,94 +32,79 @@ const Slider: Component<SliderProps> = (props) => {
     }
   });
 
-  const currentValue = () => props.value ?? internalValue();
+  const percentage = () => ((value() - min()) / (max() - min())) * 100;
 
-  const percentage = () =>
-    ((currentValue() - merged.min) / (merged.max - merged.min)) * 100;
+  const updateValue = (clientX: number, rect: DOMRect) => {
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const percent = x / rect.width;
+    let newValue = min() + percent * (max() - min());
+    newValue = Math.round(newValue / step()) * step();
+    newValue = Math.max(min(), Math.min(max(), newValue));
 
-  const handleChange = (e: Event) => {
-    if (merged.disabled) return;
-    const target = e.target as HTMLInputElement;
-    const newValue = Number(target.value);
     setInternalValue(newValue);
     props.onChange?.(newValue);
   };
 
-  const handleMouseDown = () => {
-    if (!merged.disabled) {
-      setIsDragging(true);
+  const handleMouseDown = (e: MouseEvent) => {
+    if (props.disabled) return;
+    setIsDragging(true);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    updateValue(e.clientX, rect);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging() || props.disabled) return;
+    const track = document.getElementById('slider-track');
+    if (track) {
+      const rect = track.getBoundingClientRect();
+      updateValue(e.clientX, rect);
     }
   };
 
   const handleMouseUp = () => {
     if (isDragging()) {
       setIsDragging(false);
-      props.onChangeEnd?.(currentValue());
+      props.onChangeEnd?.(value());
     }
   };
 
-  const handleTouchEnd = () => {
-    if (!merged.disabled) {
-      props.onChangeEnd?.(currentValue());
+  createEffect(() => {
+    if (isDragging()) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
     }
-  };
+  });
 
   return (
-    <div class={`w-full ${merged.class || ''}`}>
-      {merged.title && (
-        <div class="mb-2 text-xs font-semibold text-gray-300 uppercase tracking-wide">
-          {merged.title}
+    <div class={`w-full ${props.class || ''}`}>
+      <Show when={props.title}>
+        <div class="text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wide">
+          {props.title}
         </div>
-      )}
-      <div class="relative flex items-center">
-        <div class="absolute w-full h-1 bg-[#1e1f22] rounded-full">
+      </Show>
+      <div class="flex items-center gap-3">
+        <div
+          id="slider-track"
+          class={`relative flex-1 h-2 bg-[#1e1f22] rounded-full cursor-pointer ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          onMouseDown={handleMouseDown}
+        >
           <div
-            class="absolute h-full bg-[#5865f2] rounded-full transition-all"
+            class="absolute h-full bg-[#5865f2] rounded-full "
             style={{ width: `${percentage()}%` }}
           />
+          <div
+            class={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg transition-transform ${isDragging() ? 'scale-125' : 'scale-100'
+              }`}
+            style={{ left: `calc(${percentage()}% - 8px)` }}
+          />
         </div>
-
-        <input
-          type="range"
-          min={merged.min}
-          max={merged.max}
-          step={merged.step}
-          value={currentValue()}
-          onInput={handleChange}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onTouchEnd={handleTouchEnd}
-          disabled={merged.disabled}
-          class={`
-            relative w-full h-1 appearance-none bg-transparent cursor-pointer
-            disabled:cursor-not-allowed disabled:opacity-50
-            [&::-webkit-slider-thumb]:appearance-none
-            [&::-webkit-slider-thumb]:w-4
-            [&::-webkit-slider-thumb]:h-4
-            [&::-webkit-slider-thumb]:rounded-full
-            [&::-webkit-slider-thumb]:bg-white
-            [&::-webkit-slider-thumb]:shadow-md
-            [&::-webkit-slider-thumb]:cursor-grab
-            [&::-webkit-slider-thumb]:transition-transform
-            [&::-webkit-slider-thumb]:hover:scale-110
-            [&::-webkit-slider-thumb]:active:cursor-grabbing
-            [&::-webkit-slider-thumb]:active:scale-125
-            [&::-moz-range-thumb]:w-4
-            [&::-moz-range-thumb]:h-4
-            [&::-moz-range-thumb]:rounded-full
-            [&::-moz-range-thumb]:bg-white
-            [&::-moz-range-thumb]:border-0
-            [&::-moz-range-thumb]:shadow-md
-            [&::-moz-range-thumb]:cursor-grab
-            [&::-moz-range-thumb]:transition-transform
-            [&::-moz-range-thumb]:hover:scale-110
-            [&::-moz-range-thumb]:active:cursor-grabbing
-            [&::-moz-range-thumb]:active:scale-125
-          `}
-        />
       </div>
     </div>
   );
-};
-
+}
 export default Slider;

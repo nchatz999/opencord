@@ -18,11 +18,12 @@ import {
 import { microphone, screenShare, camera, modalDomain, userDomain, voipDomain } from '../store'
 import { fetchApi } from '../utils'
 import { UserStatusType } from '../model'
+import Button from '../components/Button'
 
 const UserPanel: Component = () => {
 
 
-  
+
   const PrivateCallStatusPanel: Component = () => {
 
     const privateCallInfo = () => {
@@ -87,9 +88,9 @@ const UserPanel: Component = () => {
     )
   }
 
-  
+
   const ConnectionIndicator: Component = () => {
-    
+
 
     const statusConfig = createMemo(() => {
       if (userDomain.getConnectionStatus() == "connected") {
@@ -130,7 +131,7 @@ const UserPanel: Component = () => {
     )
   }
 
-  
+
   const VoiceVideoControls: Component = () => {
 
     const handleLeaveCall = async () => {
@@ -138,13 +139,13 @@ const UserPanel: Component = () => {
       if (!voipStatus) return
 
       try {
-        
+
         const result = await fetchApi('/voip/leave', { method: 'POST' })
 
         if (result.isOk()) {
           console.log('Successfully left VoIP channel')
 
-          
+
           if (microphone.isRecording()) {
             microphone.stop()
           }
@@ -167,10 +168,11 @@ const UserPanel: Component = () => {
         {}
         <Show when={voipDomain.getCurrentUserParticipant()}>
           {(voip) => (
-            <button
+            <Button
+              variant='ghost'
               onClick={async () => {
                 if (voip().publishScreen) {
-                  
+
                   try {
                     await screenShare.stop()
                   } catch (error) {
@@ -187,7 +189,7 @@ const UserPanel: Component = () => {
                   return
                 }
 
-                
+
                 try {
                   await screenShare.start()
                   const result = await fetchApi('/voip/screen/publish', {
@@ -215,7 +217,7 @@ const UserPanel: Component = () => {
               >
                 <Monitor size={16} />
               </Show>
-            </button>
+            </Button>
           )}
         </Show>
 
@@ -226,7 +228,7 @@ const UserPanel: Component = () => {
               onClick={async () => {
 
                 if (voip().publishCamera) {
-                  
+
                   try {
                     await camera.stop()
                   } catch (error) {
@@ -243,10 +245,9 @@ const UserPanel: Component = () => {
                   return
                 }
 
-                
+
                 try {
                   await camera.start()
-
                   const result = await fetchApi('/voip/camera/publish', {
                     method: 'PUT',
                     body: { publish: true }
@@ -290,7 +291,7 @@ const UserPanel: Component = () => {
     )
   }
 
-  
+
   const UserSection: Component = () => {
     const getStatusColor = (status: UserStatusType) => {
       switch (status) {
@@ -321,7 +322,7 @@ const UserPanel: Component = () => {
 
     const handleDeafenToggle = () => {
       console.log('Toggle deafen - not implemented')
-      
+
     }
 
     const handleUserSettings = () => {

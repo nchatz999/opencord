@@ -239,7 +239,6 @@ const ServerSettingsModal: Component = () => {
                         <Select
                           value={user.roleId}
                           onChange={async (roleId) => {
-                            console.log(roleId)
                             const result = await fetchApi(`/user/${user.userId}/role`, {
                               method: "PUT",
                               body: {

@@ -444,8 +444,6 @@ export class RTCPProtocol {
     } catch (e) {
       this.onDisconnect();
       await this.disconnect()
-      this.onDisconnect();
-      await this.disconnect()
     }
   }
 

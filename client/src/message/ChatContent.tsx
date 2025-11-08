@@ -17,36 +17,36 @@ import MessageComponent from "./Message";
 
 
 const MESSAGES_LIMIT = 50;
-const SCROLL_THRESHOLD = 5; 
+const SCROLL_THRESHOLD = 5;
 
 const ChatContent: Component = () => {
-  
+
   let messagesEndRef: HTMLDivElement | undefined;
   let messagesContainerRef: HTMLDivElement | undefined;
 
-  
+
   const [isLoadingMore, setIsLoadingMore] = createSignal(false);
 
-  
+
   const { addToast } = useToaster();
 
-  
+
   const ctx = createMemo(() => messageDomain.getContext());
 
-  const messages = createMemo(() => {
+  const messages = () => {
     const context = ctx();
     if (!context) return [];
     return context.type === "dm"
       ? messageDomain.getMessagesForDM(context.id)
       : messageDomain.getMessagesForChannel(context.id);
-  });
+  };
 
   const latestMessageId = createMemo(() => {
     const msgs = messages();
     return msgs.length > 0 ? msgs[msgs.length - 1].id : null;
   });
 
-  
+
   const scrollToBottom = () => {
     if (messagesEndRef)
       messagesEndRef.scrollIntoView({ behavior: "smooth" });
@@ -79,7 +79,7 @@ const ChatContent: Component = () => {
       }
       messageDomain.addMessages(result.value.messages);
       fileDomain.addFiles(result.value.files);
-      
+
       requestAnimationFrame(() => {
         const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
         container.scrollTop += scrollHeightDiff;
@@ -89,49 +89,44 @@ const ChatContent: Component = () => {
     }
   };
 
-  
+
   const handleScroll = () => {
     const container = messagesContainerRef;
     if (!container) return;
 
-    
+
     if (container.scrollTop < SCROLL_THRESHOLD) {
       loadMoreMessages();
     }
   };
 
-  
 
-  
+
+
   createEffect(on(ctx, () => {
-    if (messages().length == 0)
+    if (messages().length == 0) {
       loadMoreMessages()
-    setTimeout(scrollToBottom, 500);
+      setTimeout(scrollToBottom, 500);
+    }
   }));
 
-  
+
   createEffect(on(
     latestMessageId,
     (newId, prevId) => {
-      if (prevId && newId && newId !== prevId) {
+      if (newId !== prevId) {
         setTimeout(scrollToBottom, 500);
       }
     }
   ));
 
-  
+
   return (
     <div
       ref={messagesContainerRef}
       class="flex-1 flex flex-col overflow-auto px-4 py-2 space-y-2 min-h-0"
       onScroll={handleScroll}
     >
-      <Show when={isLoadingMore()}>
-        <div class="text-center py-2 text-[#949ba4]">
-          <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-[#00A8FC]" />
-          <span class="ml-2">Loading more messages...</span>
-        </div>
-      </Show>
 
       <Show when={ctx()}>
         {(context) => (

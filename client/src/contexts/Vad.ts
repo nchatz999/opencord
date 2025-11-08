@@ -21,7 +21,7 @@ export class VadNode {
       class VadProcessor extends AudioWorkletProcessor {
         constructor() {
           super();
-          this.threshold = 0.01;
+          this.threshold = 0.03;
           this.smoothingFactor = 0.95;
           this.smoothedEnergy = 0;
           this.isSpeaking = false;
