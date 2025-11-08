@@ -183,7 +183,7 @@ if (!window.MediaStreamTrackGenerator) {
   window.MediaStreamTrackGenerator = class MediaStreamTrackGenerator {
     constructor({ kind }) {
       if (kind == "video") {
-        const canvas = document.createElement("canvas");
+        this.canvas = document.createElement("canvas");
         const ctx = canvas.getContext('2d', { desynchronized: true });
         const track = canvas.captureStream(30).getVideoTracks()[0];
         track.writable = new WritableStream({
