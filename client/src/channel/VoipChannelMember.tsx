@@ -50,7 +50,7 @@ const VolumeIcon: Component<{ volume: number }> = (props) => (
 export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser; channelId: number }> = (props) => {
 
   const volume = () => Math.round(voipDomain.getUserVolume(props.participant.user.userId));
-
+  const isSpeaking = () => props.participant.playback?.getIsSpeaking() || false;
 
   const { addToast } = useToaster();
 
@@ -108,11 +108,13 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
     <ContextMenu items={contextMenuItems()}>
       <div class="flex items-center gap-2 px-2 py-1 text-[#949ba4] hover:bg-[#383a40] rounded transition-all">
         <div class="relative shrink-0">
-          <img
-            src={`/api/user/${props.participant.user.avatarFileId}/avatar`}
-            alt={props.participant.user.username}
-            class="w-6 h-6 rounded-full"
-          />
+          <div class={`rounded-full p-0.5 transition-all duration-200 ${isSpeaking() ? 'bg-green-500 shadow-lg shadow-green-500/50' : ''}`}>
+            <img
+              src={`/api/user/${props.participant.user.avatarFileId}/avatar`}
+              alt={props.participant.user.username}
+              class="w-6 h-6 rounded-full"
+            />
+          </div>
           <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#2b2d31] bg-green-500" />
         </div>
         <div class="flex items-center gap-1 flex-1 min-w-0">
