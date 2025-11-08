@@ -184,8 +184,8 @@ if (!window.MediaStreamTrackGenerator) {
     constructor({ kind }) {
       if (kind == "video") {
         this.canvas = document.createElement("canvas");
-        const ctx = canvas.getContext('2d', { desynchronized: true });
-        const track = canvas.captureStream(30).getVideoTracks()[0];
+        const ctx = this.canvas.getContext('2d', { desynchronized: true });
+        const track = this.canvas.captureStream(30).getVideoTracks()[0];
         track.writable = new WritableStream({
           write(frame) {
             if (this.currentWidth !== frame.displayWidth ||
