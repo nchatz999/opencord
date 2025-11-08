@@ -37,6 +37,8 @@ export class Microphone {
   private setAvailableInputsSignal: (devices: MediaDeviceInfo[]) => MediaDeviceInfo[];
   private getQualitySignal: () => number;
   private setQualitySignal: (value: number) => number;
+  private getIsSpeechSignal: () => boolean;
+  private setIsSpeechSignal: (isSpeech: boolean) => void;
 
   private constraints: MicrophoneConstraints = {
     echoCancellation: true,
@@ -84,6 +86,10 @@ export class Microphone {
     const [getQuality, setQuality] = createSignal<number>(1.0);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
+
+    const [getIsSpeech, setIsSpeech] = createSignal<boolean>(false);
+    this.getIsSpeechSignal = getIsSpeech;
+    this.setIsSpeechSignal = setIsSpeech;
 
 
 
@@ -173,6 +179,10 @@ export class Microphone {
     return this.getMutedSignal()
   }
 
+  getIsSpeech(): boolean {
+    return this.getIsSpeechSignal()
+  }
+
   isRecording(): boolean {
     return this.getIsRecordingSignal();
   }
@@ -235,11 +245,10 @@ export class Microphone {
       vadNode.connect(this.gainNode);
 
       vadNode.addEventListener('speechstart', () => {
-        console.log('User started speaking');
+        this.setIsSpeechSignal(true);
       });
       vadNode.addEventListener('speechend', () => {
-
-        console.log('User  stopped speaking');
+        this.setIsSpeechSignal(false);
       })
 
       const audioTrack = this.stream.getAudioTracks()[0];
