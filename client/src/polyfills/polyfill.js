@@ -183,23 +183,24 @@ if (!window.MediaStreamTrackGenerator) {
   window.MediaStreamTrackGenerator = class MediaStreamTrackGenerator {
     constructor({ kind }) {
       if (kind == "video") {
-        this.canvas = document.createElement("canvas");
-        const ctx = this.canvas.getContext('2d', { desynchronized: true });
-        const track = this.canvas.captureStream(30).getVideoTracks()[0];
-        track.writable = new WritableStream({
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext('2d', { desynchronized: true });
+        const track = canvas.captureStream(60).getVideoTracks()[0];
+
+        let currentWidth = 0;
+        let currentHeight = 0; track.writable = new WritableStream({
           write(frame) {
-            if (this.currentWidth !== frame.displayWidth ||
-              this.currentHeight !== frame.displayHeight) {
-              this.canvas.width = frame.displayWidth;
-              this.canvas.height = frame.displayHeight;
-              this.currentWidth = frame.displayWidth;
-              this.currentHeight = frame.displayHeight;
+            if (currentWidth !== frame.displayWidth ||
+              currentHeight !== frame.displayHeight) {
+              canvas.width = frame.displayWidth;
+              canvas.height = frame.displayHeight;
+              currentWidth = frame.displayWidth;
+              currentHeight = frame.displayHeight;
             }
             ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
             frame.close();
           }
-        });
-        return track;
+        }); return track;
       } else if (kind == "audio") {
         const ac = new AudioContext;
         const dest = ac.createMediaStreamDestination();
