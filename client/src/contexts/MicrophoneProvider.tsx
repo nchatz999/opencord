@@ -214,32 +214,50 @@ export class Microphone {
           channelCount: this.constraints.channelCount,
         },
       };
-      let mic = await MicVAD.new()
+      await MicVAD.new({
+        getStream: async () => {
+          return await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        },
+        onnxWASMBasePath:
+          "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
+        baseAssetPath:
+          "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/",
+        onFrameProcessed: (prob, frame) => {
+          if (this.encoder) {
+            const audioData = new AudioData({
+              format: 'f32-planar',
+              sampleRate: this.constraints.sampleRate || 48000,
+              numberOfFrames: frame.length,
+              numberOfChannels: 1,
+              timestamp: performance.now() * 1000,
+              data: frame
+            });
+            this.encoder.encode(audioData)
+          }
+        }
+      })
 
-      this.stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+
+      //this.audioContext = new AudioContext({
+      //  sampleRate: this.constraints.sampleRate,
+      //});
+      //this.gainNode = this.audioContext.createGain();
+      //this.gainNode.gain.value = this.getVolumeSignal();
+      //source.connect(this.gainNode);
 
 
-      this.audioContext = new AudioContext({
-        sampleRate: this.constraints.sampleRate,
-      });
-      const source = this.audioContext.createMediaStreamSource(this.stream);
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = this.getVolumeSignal();
-      source.connect(this.gainNode);
-
-
-      const audioTrack = this.stream.getAudioTracks()[0];
-      audioTrack.onended = async () => {
-        this.stop()
-      }
-      this.processor = new MediaStreamTrackProcessor({ track: audioTrack });
+      //const audioTrack = this.stream.getAudioTracks()[0];
+      //audioTrack.onended = async () => {
+      //  this.stop()
+      //}
+      //this.processor = new MediaStreamTrackProcessor({ track: audioTrack });
 
 
       this.setupEncoder();
 
 
       this.isProcessing = true;
-      this.processAudioStream();
+      //this.processAudioStream();
 
 
       await this.updateAvailableDevices();
