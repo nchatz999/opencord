@@ -224,6 +224,15 @@ export class Microphone {
           "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/",
         onFrameProcessed: (prob, frame) => {
           if (this.encoder) {
+            console.log('Frame debug:', {
+              frameLength: frame.length,
+              constraintsSampleRate: this.constraints.sampleRate,
+              encoderSampleRate: this.encoderConfig.sampleRate,
+              frameDurationMs: (frame.length / (this.constraints.sampleRate || 48000)) * 1000,
+              frameType: frame.constructor.name,
+              firstFewSamples: Array.from(frame.slice(0, 5))
+            });
+            
             const audioData = new AudioData({
               format: 'f32-planar',
               sampleRate: this.constraints.sampleRate || 48000,
