@@ -1148,8 +1148,8 @@ export let microphone = new Microphone();
 microphone.onEncodedData((data) => {
   let user = voipDomain.getCurrentUserParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
-  data.copyTo(buffer);
 
+  data.copyTo(buffer);
   if (!user) return
   let voipMessage: VoipDataMessage = {
     type: "voice",
@@ -1176,7 +1176,6 @@ export let screenShare = new ScreenShare();
 screenShare.onEncodedVideoData((data) => {
   let user = voipDomain.getCurrentUserParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
-
   data.copyTo(buffer);
   if (!user) return
   let voipMessage: VoipDataMessage = {
@@ -1187,7 +1186,6 @@ screenShare.onEncodedVideoData((data) => {
     realTimestamp: data.timestamp,
     key: data.type
   }
-
   connection.send(
     encode([
       voipMessage.type,
@@ -1203,7 +1201,6 @@ screenShare.onEncodedVideoData((data) => {
 screenShare.onEncodedAudioData((data) => {
   let user = voipDomain.getCurrentUserParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
-
   data.copyTo(buffer);
   if (!user) return
   let voipMessage: VoipDataMessage = {
@@ -1214,7 +1211,6 @@ screenShare.onEncodedAudioData((data) => {
     realTimestamp: data.timestamp,
     key: data.type
   }
-
   connection.send(
     encode([
       voipMessage.type,
@@ -1232,9 +1228,7 @@ camera.onEncodedData((data) => {
   let user = voipDomain.getCurrentUserParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
-
   if (!user) return
-
   let voipMessage: VoipDataMessage = {
     type: "camera",
     userId: user.userId,
@@ -1243,7 +1237,6 @@ camera.onEncodedData((data) => {
     realTimestamp: data.timestamp,
     key: data.type
   }
-
   connection.send(encode([
     voipMessage.type,
     voipMessage.userId,
