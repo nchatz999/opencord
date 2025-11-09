@@ -225,6 +225,13 @@ const StreamsContent: Component = () => {
                             </Show>
                           </div>
                         </div>
+
+                        {}
+                        <div class="absolute top-2 right-2">
+                          <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
+                            {participant?.screenPlayback?.getFPS()() || 0} FPS
+                          </div>
+                        </div>
                       </ContextMenu>
                     </Show>
                   </>
