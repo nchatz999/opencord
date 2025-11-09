@@ -42,7 +42,16 @@ const StreamsContent: Component = () => {
 
   const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
     const volumePercentage = voipDomain.getUserScreenSoundVolume(userId);
+    const participant = voipDomain.getParticipants().find(p => p.user.userId === userId);
+    const fps = participant?.screenPlayback?.getFPS()() || 0;
+    
     return [
+      {
+        id: "fps-info",
+        label: `FPS: ${fps}`,
+        icon: <Monitor size={16} />,
+        onClick: () => { },
+      },
       {
         id: "volume-control",
         label: `Screen Audio: ${volumePercentage}%`,
