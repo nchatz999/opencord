@@ -696,32 +696,36 @@ export class VoipDomain {
     );
   }
 
-  pushAudioToParticipant(userId: number, packet: EncodedAudioChunk, timestamp: number) {
-    let voipUser = voipDomain.getParticipant(userId)
-    if (voipUser && voipUser.playback) {
-      voipUser.playback.pushChunk(packet, timestamp)
-      voipUser.playback.setSpeaking(200)
+  pushMediaToParticipant(userId: number, mediaType: 'voice' | 'screen' | 'camera' | 'screenSound', packet: EncodedAudioChunk | EncodedVideoChunk, timestamp: number) {
+    const voipUser = voipDomain.getParticipant(userId);
+    if (!voipUser) return;
+
+    switch (mediaType) {
+      case 'voice':
+        if (voipUser.playback) {
+          voipUser.playback.pushChunk(packet as EncodedAudioChunk, timestamp);
+          voipUser.playback.setSpeaking(200);
+        }
+        break;
+
+      case 'screen':
+        if (voipUser.screenPlayback) {
+          voipUser.screenPlayback.pushFrame(packet as EncodedVideoChunk, timestamp);
+        }
+        break;
+
+      case 'camera':
+        if (voipUser.cameraPlayback) {
+          voipUser.cameraPlayback.pushFrame(packet as EncodedVideoChunk, timestamp);
+        }
+        break;
+
+      case 'screenSound':
+        if (voipUser.screenSoundPlayback) {
+          voipUser.screenSoundPlayback.pushChunk(packet as EncodedAudioChunk, timestamp);
+        }
+        break;
     }
-  }
-
-  pushScreenToParticipant(userId: number, packet: EncodedVideoChunk, timestamp: number) {
-    let voipUser = voipDomain.getParticipant(userId)
-    if (voipUser && voipUser.screenPlayback)
-      voipUser.screenPlayback.pushFrame(packet, timestamp)
-
-  }
-  pushCameraToParticipant(userId: number, packet: EncodedVideoChunk, timestamp: number) {
-    let voipUser = voipDomain.getParticipant(userId)
-    if (voipUser && voipUser.cameraPlayback)
-      voipUser.cameraPlayback.pushFrame(packet, timestamp)
-
-  }
-
-  pushScreenSoundToParticipant(userId: number, packet: EncodedVideoChunk, timestamp: number) {
-    let voipUser = voipDomain.getParticipant(userId)
-    if (voipUser && voipUser.screenSoundPlayback)
-      voipUser.screenSoundPlayback.pushChunk(packet, timestamp)
-
   }
 
 
@@ -1101,7 +1105,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushAudioToParticipant(frame.userId, packet, frame.timestamp)
+      voipDomain.pushMediaToParticipant(frame.userId, 'voice', packet, frame.timestamp)
     } else if (frame.type === 'screen') {
       let videoPacket = new EncodedVideoChunk({
         type: frame.key as EncodedVideoChunkType,
@@ -1110,7 +1114,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushScreenToParticipant(frame.userId, videoPacket, frame.timestamp)
+      voipDomain.pushMediaToParticipant(frame.userId, 'screen', videoPacket, frame.timestamp)
     } else if (frame.type === 'camera') {
       let videoPacket = new EncodedVideoChunk({
         type: frame.key as EncodedVideoChunkType,
@@ -1119,7 +1123,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushCameraToParticipant(frame.userId, videoPacket, frame.timestamp)
+      voipDomain.pushMediaToParticipant(frame.userId, 'camera', videoPacket, frame.timestamp)
     } else if (frame.type === "screenSound") {
       let videoPacket = new EncodedAudioChunk({
         type: frame.key as EncodedAudioChunkType,
@@ -1128,7 +1132,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
         data: new Uint8Array(frame.data)
       })
       i++
-      voipDomain.pushScreenSoundToParticipant(frame.userId, videoPacket, frame.timestamp)
+      voipDomain.pushMediaToParticipant(frame.userId, 'screenSound', videoPacket, frame.timestamp)
 
     }
   },
