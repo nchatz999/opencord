@@ -17,6 +17,9 @@ export class VideoPlayback {
   writer: WritableStreamDefaultWriter;
   stream: MediaStream;
   bufferInterval: number | null;
+  private frameCount: number = 0;
+  private lastFpsTime: number = Date.now();
+  private currentFps: number = 0;
 
 
   constructor(
@@ -67,6 +70,7 @@ export class VideoPlayback {
           if (item.frame.type == "key") this.hasReceivedKey = true
           if (this.hasReceivedKey) {
             this.decoder.decode(item.frame);
+            this.frameCount++;
           }
         } catch (error) {
           console.error('Failed to decode video frame:', error);
@@ -76,7 +80,10 @@ export class VideoPlayback {
   }
 
   resetTimestamps() {
-    this.hasReceivedKey = false
+    this.hasReceivedKey = false;
+    this.frameCount = 0;
+    this.lastFpsTime = Date.now();
+    this.currentFps = 0;
   }
 
   clearBuffer() {
@@ -92,10 +99,24 @@ export class VideoPlayback {
   }
 
 
+  getFPS(): number {
+    const now = Date.now();
+    const elapsed = (now - this.lastFpsTime) / 1000;
+    
+    if (elapsed >= 1) {
+      this.currentFps = Math.round(this.frameCount / elapsed);
+      this.frameCount = 0;
+      this.lastFpsTime = now;
+    }
+    
+    return this.currentFps;
+  }
+
   getStats() {
     return {
       bufferLength: this.buffer.length,
       decoderState: this.decoder.state,
+      fps: this.getFPS(),
     };
   }
 
