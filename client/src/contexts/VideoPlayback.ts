@@ -20,13 +20,19 @@ export class VideoPlayback {
   bufferInterval: number | null;
   private frameCount: number = 0;
   private lastFpsTime: number = Date.now();
-  private [fps, setFps] = createSignal(0);
+  
+  private getFpsSignal: () => number;
+  private setFpsSignal: (value: number) => number;
 
 
   constructor(
     delay: number = 0,
     decoderConfig: VideoDecoderConfig = DEFAULT_DECODER_CONFIG
   ) {
+    const [getFps, setFps] = createSignal<number>(0);
+    this.getFpsSignal = getFps;
+    this.setFpsSignal = setFps;
+
     this.delay = delay;
     this.decoder = new VideoDecoder({
       output: async (frame) => {
@@ -78,11 +84,23 @@ export class VideoPlayback {
     }
   }
 
+  private updateFPS() {
+    const now = Date.now();
+    const elapsed = (now - this.lastFpsTime) / 1000;
+
+    if (elapsed >= 1) {
+      const newFps = Math.round(this.frameCount / elapsed);
+      this.setFpsSignal(newFps);
+      this.frameCount = 0;
+      this.lastFpsTime = now;
+    }
+  }
+
   resetTimestamps() {
     this.hasReceivedKey = false;
     this.frameCount = 0;
     this.lastFpsTime = Date.now();
-    this.setFps(0);
+    this.setFpsSignal(0);
   }
 
   clearBuffer() {
@@ -96,14 +114,14 @@ export class VideoPlayback {
   }
 
   getFPS() {
-    return this.fps;
+    return this.getFpsSignal;
   }
 
   getStats() {
     return {
       bufferLength: this.buffer.length,
       decoderState: this.decoder.state,
-      fps: this.fps(),
+      fps: this.getFpsSignal(),
     };
   }
 
