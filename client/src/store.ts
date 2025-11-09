@@ -464,7 +464,6 @@ export class MessageDomain {
     setState(
       'messages',
       produce(messages => {
-
         newMessages.forEach((message) => {
           this.addNewMessage(message)
         })

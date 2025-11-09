@@ -341,12 +341,11 @@ const UserSettingsModal: Component = () => {
 
               <div class="flex items-center space-x-2">
                 <Mic class="w-4 h-4" />
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={inputVolume()}
-                  onInput={(e) => setInputVolume(e.currentTarget.value)}
+                <Slider
+                  min={0}
+                  max={200}
+                  value={microphone.getVolume()}
+                  onChange={(e) => microphone.setVolume(e)}
                   class="w-full"
                 />
               </div>

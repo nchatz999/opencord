@@ -327,11 +327,11 @@ export class AudioPlayback {
 
   setSpeaking(duration: number = 1000): void {
     this.setIsSpeakingSignal(true);
-    
+
     if (this.speakingTimeout !== null) {
       clearTimeout(this.speakingTimeout);
     }
-    
+
     this.speakingTimeout = setTimeout(() => {
       this.setIsSpeakingSignal(false);
       this.speakingTimeout = null;

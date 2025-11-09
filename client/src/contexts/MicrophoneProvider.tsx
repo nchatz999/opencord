@@ -63,7 +63,7 @@ export class Microphone {
     }
 
 
-    const [getVolume, setVolume] = createSignal<number>(1.0);
+    const [getVolume, setVolume] = createSignal<number>(100.0);
     this.getVolumeSignal = getVolume;
     this.setVolumeSignal = setVolume;
 
@@ -142,13 +142,19 @@ export class Microphone {
   }
 
   setVolume(volume: number): void {
-    const clampedVolume = Math.max(0, volume);
-    this.setVolumeSignal(clampedVolume);
+
+    const clampedVolume = Math.max(0, Math.min(200, volume));
+    this.setVolumeSignal(volume);
 
     if (this.gainNode) {
       this.gainNode.gain.value = clampedVolume;
     }
   }
+
+  getVolume(): number {
+    return this.getVolumeSignal();
+  }
+
   setQuality(quality: number): void {
 
     this.setQualitySignal(quality);
@@ -166,9 +172,6 @@ export class Microphone {
   }
 
 
-  getVolume(): number {
-    return this.getVolumeSignal();
-  }
 
 
   setMuted(muted: boolean) {
@@ -232,28 +235,28 @@ export class Microphone {
         sampleRate: this.constraints.sampleRate,
       });
 
-      const vadNode = createVADNode(this.audioContext, {
-        threshold: 0.01,
-        debug: true
-      });
+      const vad = await createVADNode(this.audioContext, 'sensitive');
 
       const source = this.audioContext.createMediaStreamSource(this.stream);
-      source.connect(vadNode.inputNode);
+      const destination = this.audioContext.createMediaStreamDestination();
+      source.connect(vad.getInput());
 
       this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = this.getVolumeSignal();
-      vadNode.connect(this.gainNode);
+      this.gainNode.gain.value = this.getVolumeSignal() / 100;
+      vad.connect(this.gainNode);
+      this.gainNode.connect(destination);
 
-      vadNode.addEventListener('speechstart', () => {
+      vad.addEventListener('speechstart', () => {
         this.setIsSpeechSignal(true);
       });
-      vadNode.addEventListener('speechend', () => {
+      vad.addEventListener('speechend', () => {
         this.setIsSpeechSignal(false);
       })
 
-      const audioTrack = this.stream.getAudioTracks()[0];
+      const audioTrack = destination.stream.getAudioTracks()[0];
       audioTrack.onended = () => this.stop();
-      this.processor = new MediaStreamTrackProcessor({ track: audioTrack }); this.setupEncoder();
+      this.processor = new MediaStreamTrackProcessor({ track: audioTrack });
+      this.setupEncoder();
 
 
       this.isProcessing = true;
@@ -273,7 +276,6 @@ export class Microphone {
   private setupEncoder(): void {
     this.encoder = new AudioEncoder({
       output: (chunk, _metadata) => {
-        if (!this.getIsSpeech()) return
         this.encodedDataCallbacks.forEach(callback => { if (!this.getMuted()) callback(chunk) });
       },
       error: (error) => {
@@ -294,8 +296,26 @@ export class Microphone {
         const { done, value } = await this.reader.read();
         if (done) break;
         if (value) {
+
           if (this.encoder && this.encoder.state === 'configured') {
-            this.encoder.encode(value);
+            if (value.numberOfChannels === 2 && this.encoderConfig.numberOfChannels === 1) {
+              const buffer = new ArrayBuffer(value.numberOfFrames * 4);
+
+              value.copyTo(buffer, { planeIndex: 0 });
+
+              const monoData = new AudioData({
+                format: value.format,
+                sampleRate: value.sampleRate,
+                numberOfFrames: value.numberOfFrames,
+                numberOfChannels: 1,
+                timestamp: value.timestamp,
+                data: buffer,
+              });
+
+              this.encoder.encode(monoData);
+            } else {
+              this.encoder.encode(value)
+            }
           }
           value.close();
         }
