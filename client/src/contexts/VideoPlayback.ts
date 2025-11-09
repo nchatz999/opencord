@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 
 interface BufferItem {
   timestamp: number;
@@ -19,7 +20,7 @@ export class VideoPlayback {
   bufferInterval: number | null;
   private frameCount: number = 0;
   private lastFpsTime: number = Date.now();
-  private currentFps: number = 0;
+  private [fps, setFps] = createSignal(0);
 
 
   constructor(
@@ -68,6 +69,7 @@ export class VideoPlayback {
           if (this.hasReceivedKey) {
             this.decoder.decode(item.frame);
             this.frameCount++;
+            this.updateFPS();
           }
         } catch (error) {
           console.error('Failed to decode video frame:', error);
@@ -80,7 +82,7 @@ export class VideoPlayback {
     this.hasReceivedKey = false;
     this.frameCount = 0;
     this.lastFpsTime = Date.now();
-    this.currentFps = 0;
+    this.setFps(0);
   }
 
   clearBuffer() {
@@ -93,24 +95,15 @@ export class VideoPlayback {
     return this.stream;
   }
 
-  getFPS(): number {
-    const now = Date.now();
-    const elapsed = (now - this.lastFpsTime) / 1000;
-
-    if (elapsed >= 1) {
-      this.currentFps = Math.round(this.frameCount / elapsed);
-      this.frameCount = 0;
-      this.lastFpsTime = now;
-    }
-
-    return this.currentFps;
+  getFPS() {
+    return this.fps;
   }
 
   getStats() {
     return {
       bufferLength: this.buffer.length,
       decoderState: this.decoder.state,
-      fps: this.getFPS(),
+      fps: this.fps(),
     };
   }
 
