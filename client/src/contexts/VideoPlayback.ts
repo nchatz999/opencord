@@ -27,9 +27,6 @@ export class VideoPlayback {
     decoderConfig: VideoDecoderConfig = DEFAULT_DECODER_CONFIG
   ) {
     this.delay = delay;
-
-
-
     this.decoder = new VideoDecoder({
       output: async (frame) => {
         await this.writer.write(frame);
@@ -92,23 +89,20 @@ export class VideoPlayback {
 
   }
 
-
-
   getStream(): MediaStream {
     return this.stream;
   }
 
-
   getFPS(): number {
     const now = Date.now();
     const elapsed = (now - this.lastFpsTime) / 1000;
-    
+
     if (elapsed >= 1) {
       this.currentFps = Math.round(this.frameCount / elapsed);
       this.frameCount = 0;
       this.lastFpsTime = now;
     }
-    
+
     return this.currentFps;
   }
 
