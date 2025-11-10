@@ -278,6 +278,110 @@ export type OkType<R> = R extends Result<infer T, any> ? T : never;
 
 export type ErrType<R> = R extends Result<any, infer E> ? E : never;
 
+export class RingBuffer<T> {
+  private buffer: T[];
+  private head: number = 0;
+  private tail: number = 0;
+  private size: number = 0;
+  private capacity: number;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.buffer = new Array(capacity);
+  }
+
+  push(item: T): boolean {
+    if (this.size === this.capacity) {
+      this.head = (this.head + 1) % this.capacity;
+    } else {
+      this.size++;
+    }
+    
+    this.buffer[this.tail] = item;
+    this.tail = (this.tail + 1) % this.capacity;
+    return true;
+  }
+
+  pop(): T | undefined {
+    if (this.size === 0) {
+      return undefined;
+    }
+    
+    this.tail = (this.tail - 1 + this.capacity) % this.capacity;
+    const item = this.buffer[this.tail];
+    this.size--;
+    return item;
+  }
+
+  shift(): T | undefined {
+    if (this.size === 0) {
+      return undefined;
+    }
+    
+    const item = this.buffer[this.head];
+    this.head = (this.head + 1) % this.capacity;
+    this.size--;
+    return item;
+  }
+
+  peek(): T | undefined {
+    if (this.size === 0) {
+      return undefined;
+    }
+    return this.buffer[this.head];
+  }
+
+  peekLast(): T | undefined {
+    if (this.size === 0) {
+      return undefined;
+    }
+    return this.buffer[(this.tail - 1 + this.capacity) % this.capacity];
+  }
+
+  get(index: number): T | undefined {
+    if (index < 0 || index >= this.size) {
+      return undefined;
+    }
+    return this.buffer[(this.head + index) % this.capacity];
+  }
+
+  clear(): void {
+    this.head = 0;
+    this.tail = 0;
+    this.size = 0;
+  }
+
+  isFull(): boolean {
+    return this.size === this.capacity;
+  }
+
+  isEmpty(): boolean {
+    return this.size === 0;
+  }
+
+  length(): number {
+    return this.size;
+  }
+
+  getCapacity(): number {
+    return this.capacity;
+  }
+
+  toArray(): T[] {
+    const result = new Array(this.size);
+    for (let i = 0; i < this.size; i++) {
+      result[i] = this.buffer[(this.head + i) % this.capacity];
+    }
+    return result;
+  }
+
+  forEach(callback: (item: T, index: number) => void): void {
+    for (let i = 0; i < this.size; i++) {
+      callback(this.buffer[(this.head + i) % this.capacity], i);
+    }
+  }
+}
+
 
 
 const workerCode = `
