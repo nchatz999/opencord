@@ -28,10 +28,10 @@ const CreateChannelModal: Component = () => {
 
   createEffect(() => {
     setRoleRights(Object.fromEntries(
-      roleDomain.getAllRoles()
+      roleDomain.list()
         .filter((role) => role.roleId > 1)
         .map((role) => [role.roleId,
-        aclDomain.getRightsForGroupRole(group(), role.roleId) || 0,
+        aclDomain.getGroupRights(group(), role.roleId) || 0,
         ])
     ))
   })
@@ -66,7 +66,7 @@ const CreateChannelModal: Component = () => {
             <h3 class="text-lg font-semibold">Role Permissions</h3>
           </div>
           <Select
-            options={groupDomain.getAllGroups().map((group) => ({ value: group.groupId, label: group.groupName }))}
+            options={groupDomain.list().map((group) => ({ value: group.groupId, label: group.groupName }))}
             value={group()}
             onChange={(value) => setGroup(value as number)}
           />
@@ -81,7 +81,7 @@ const CreateChannelModal: Component = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              <For each={roleDomain.getAllRoles().filter((role) => role.roleId > 1)}>
+              <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
                 {(role) => (
                   <TableRow>
                     <TableCell>{role.roleName}</TableCell>
@@ -118,12 +118,12 @@ const CreateChannelModal: Component = () => {
         return
       }
 
-      
+
       const createResult = await fetchApi('/channel', {
         method: 'POST',
         body: {
           name: name().trim(),
-          groupId: group(), 
+          groupId: group(),
           type: type(),
         },
       })
@@ -139,8 +139,8 @@ const CreateChannelModal: Component = () => {
 
       addToast(`Channel "${name().trim()}" created successfully!`, 'success')
 
-      
-      modalDomain.setModal({ type: "close", id: 0 })
+
+      modalDomain.open({ type: "close", id: 0 })
     } catch (error) {
       addToast(
         `Error creating channel: ${error instanceof Error ? error.message : 'Unknown error'
@@ -164,7 +164,7 @@ const CreateChannelModal: Component = () => {
             )}
             Create New Channel
           </h2>
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -172,7 +172,7 @@ const CreateChannelModal: Component = () => {
         <Tabs items={tabItems()} />
 
         <div class="mt-6 flex justify-end space-x-2">
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="secondary">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
             Cancel
           </Button>
           <Button

@@ -52,7 +52,7 @@ const RoleSection: Component<RoleSectionProps> = (props) => {
             <div class="flex items-center gap-1 text-[#949ba4]">
               <Users size={12} />
               <span class="text-xs">
-                {userDomain.getAllUsers().filter(u => u.roleId == props.role.roleId).length} </span>
+                {userDomain.list().filter(u => u.roleId == props.role.roleId).length} </span>
             </div>
           </div>
 
@@ -65,10 +65,10 @@ const RoleSection: Component<RoleSectionProps> = (props) => {
 
       {}
       <Show
-        when={!isCollapsed() && userDomain.getAllUsers().filter(u => u.roleId == props.role.roleId).length > 0}
+        when={!isCollapsed() && userDomain.list().filter(u => u.roleId == props.role.roleId).length > 0}
       >
         <div class="ml-6 mt-1 space-y-0.5">
-          <For each={userDomain.getAllUsers().filter(u => u.roleId == props.role.roleId)}>
+          <For each={userDomain.list().filter(u => u.roleId == props.role.roleId)}>
             {(user) => <RoleUser user={user} />}
           </For>
         </div>
@@ -76,7 +76,7 @@ const RoleSection: Component<RoleSectionProps> = (props) => {
 
       {}
       <Show
-        when={!isCollapsed() && userDomain.getAllUsers().filter(u => u.roleId == props.role.roleId).length === 0}
+        when={!isCollapsed() && userDomain.list().filter(u => u.roleId == props.role.roleId).length === 0}
       >
         <div class="ml-6 mt-1 px-2 py-1">
           <span class="text-xs text-[#6d6f78] italic">

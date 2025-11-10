@@ -13,44 +13,44 @@ import ChannelSettingsModal from "../channel/ChannelSettingsModal";
 
 
 const ModalManager: Component = () => {
-  
+
   return (
     <Switch>
-      <Match when={modalDomain.getModal().type == "close"}>{null}</Match>
+      <Match when={modalDomain.getCurrent().type == "close"}>{null}</Match>
 
-      <Match when={modalDomain.getModal().type == "groupSettings"}>
-        <Show when={groupDomain.getGroupById(modalDomain.getModal().id)}>
+      <Match when={modalDomain.getCurrent().type == "groupSettings"}>
+        <Show when={groupDomain.findById(modalDomain.getCurrent().id)}>
           {(group) => <GroupSettingsModal group={group()} />}
         </Show>
       </Match>
 
-      <Match when={modalDomain.getModal().type === "channelSettings"}>
-        <Show when={channelDomain.getChannelById(modalDomain.getModal().id)}>
+      <Match when={modalDomain.getCurrent().type === "channelSettings"}>
+        <Show when={channelDomain.findById(modalDomain.getCurrent().id)}>
           {(channel) => <ChannelSettingsModal channel={channel()} />}
         </Show>
       </Match>
 
-      <Match when={modalDomain.getModal().type === "roleSettings"}>
-        <Show when={roleDomain.getRoleById(modalDomain.getModal().id)}>
+      <Match when={modalDomain.getCurrent().type === "roleSettings"}>
+        <Show when={roleDomain.findById(modalDomain.getCurrent().id)}>
           {(role) => <RoleSettingsModal role={role()} />}
         </Show>
       </Match>
 
-      <Match when={modalDomain.getModal().type === "userSettings"}>
+      <Match when={modalDomain.getCurrent().type === "userSettings"}>
         <UserSettingsModal />
       </Match>
 
-      <Match when={modalDomain.getModal().type === "createRole"}>
+      <Match when={modalDomain.getCurrent().type === "createRole"}>
         <CreateRoleModal />
       </Match>
 
-      <Match when={modalDomain.getModal().type === "createChannel"}>
+      <Match when={modalDomain.getCurrent().type === "createChannel"}>
         <CreateChannelModal />
       </Match>
-      <Match when={modalDomain.getModal().type === "createGroup"}>
+      <Match when={modalDomain.getCurrent().type === "createGroup"}>
         <CreateGroupModal />
       </Match>
-      <Match when={modalDomain.getModal().type === "serverSettings"}>
+      <Match when={modalDomain.getCurrent().type === "serverSettings"}>
         <ServerSettingsModal />
       </Match>
 

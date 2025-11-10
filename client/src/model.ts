@@ -103,8 +103,8 @@ export interface VoipParticipant {
   cameraPlayback?: VideoPlayback,
   screenPlayback?: VideoPlayback,
   screenSoundPlayback?: AudioPlayback
+  isSpeaking?: boolean
 }
-
 
 export interface GroupRoleRights {
   groupId: number;
@@ -112,16 +112,21 @@ export interface GroupRoleRights {
   rights: number;
 }
 
-
-export type VoipDataMessage = {
-  type: "voice" | "camera" | "screen" | "screenSound"
-  userId: number,
-  data: ArrayBuffer,
-  timestamp: number,
-  realTimestamp: number
-  key: "key" | "delta"
-}
-
+export type VoipDataMessage =
+  | {
+    type: "speech"
+    userId: number
+    isSpeaking: boolean
+  }
+  | {
+    type: "mediaData"
+    userId: number
+    mediaType: "voice" | "camera" | "screen" | "screenSound"
+    data: ArrayBuffer
+    timestamp: number
+    realTimestamp: number
+    key: "key" | "delta"
+  }
 
 export interface VoipParticipantWithUser {
   user: User;
@@ -136,6 +141,7 @@ export interface VoipParticipantWithUser {
   cameraPlayback?: VideoPlayback,
   screenPlayback?: VideoPlayback,
   screenSoundPlayback?: AudioPlayback
+  isSpeaking?: boolean
 }
 
 export interface MessageWithFiles {

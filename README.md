@@ -1,4 +1,4 @@
-# OpenCord
+# Opencord
 
 <div align="center">
   <img src="client/src/assets/opencord.webp" alt="OpenCord Logo" width="200" height="200">

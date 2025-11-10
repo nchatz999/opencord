@@ -8,7 +8,7 @@ import { fetchApi } from "../utils";
 export const UserEntry: Component<{ user: User; onClick: () => void }> = (
   props
 ) => {
-  
+
 
   const statusColors: Record<UserStatusType | number, string> = {
     [UserStatusType.Online]: "bg-green-500",
@@ -16,7 +16,7 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
     [UserStatusType.DoNotDisturb]: "bg-red-500",
     [UserStatusType.Invisible]: "bg-gray-500",
     [UserStatusType.Offline]: "bg-gray-500",
-    0: "bg-gray-500", 
+    0: "bg-gray-500",
   };
 
   const isOffline = () => props.user.status === UserStatusType.Offline;
@@ -37,10 +37,10 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
   };
 
   const isUserCallingMe = () => {
-    const currentUserId = userDomain.getCurrentUserId();
+    const currentUserId = userDomain.getCurrentId();
     if (!currentUserId) return false;
 
-    const userParticipant = voipDomain.getParticipant(props.user.userId);
+    const userParticipant = voipDomain.findById(props.user.userId);
     return userParticipant?.recipientId === currentUserId;
   };
 
@@ -54,8 +54,8 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
     if (result.ok) {
 
       await microphone.start()
-      await voipDomain.resumeContext()
-      voipDomain.setVoipContext({ type: "dm", id: props.user.userId })
+      await voipDomain.resume()
+      voipDomain.switchContext({ type: "dm", id: props.user.userId })
       console.log('Joined private call with', props.user.username);
     } else {
       console.error('Failed to join private call:', result.error);

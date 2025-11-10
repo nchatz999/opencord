@@ -47,7 +47,7 @@ const CreateRoleModal: Component = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              <For each={groupDomain.getAllGroups()}>
+              <For each={groupDomain.list()}>
                 {(group: any) => (
                   <TableRow>
                     <TableCell>{group.groupName}</TableCell>
@@ -96,7 +96,7 @@ const CreateRoleModal: Component = () => {
     }
     let roleId = result.value.roleId
 
-    
+
     const groupRightsPayload = Array.from(Object.entries(groupRights())).map(
       ([groupId, right]) => ({
         groupId: Number(groupId),
@@ -118,21 +118,21 @@ const CreateRoleModal: Component = () => {
     }
 
     addToast(`Role "${roleName().trim()}" created successfully!`, 'success')
-    
-    modalDomain.setModal({ type: "close", id: 0 })
+
+    modalDomain.open({ type: "close", id: 0 })
   }
   return (
     <div class="fixed inset-0 bg-black text-[#dcddde] bg-opacity-50 flex items-center justify-center">
       <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Create Role</h2>
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
         <Tabs items={tabItems()} />
         <div class="mt-6 flex justify-end space-x-2">
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="secondary">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
             Cancel
           </Button>
           <Button onClick={handleSave}> Save Changes</Button>

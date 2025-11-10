@@ -55,7 +55,7 @@ pub enum ObserverMessage {
 
 #[derive(Debug)]
 pub enum SubjectMessage {
-    BroadcastVoip(VoipDataMessage),
+    BroadcastVoip(i64, VoipDataMessage),
     ClientTimout { user_id: i64 },
 }
 
@@ -69,14 +69,20 @@ pub enum VoipDataType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VoipDataMessage {
-    r#type: VoipDataType,
-    user_id: u64,
-    data: Vec<u8>,
-    timestamp: u64,
-    real_timestamp: u64,
-    key: KeyType,
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum VoipDataMessage {
+    #[serde(rename_all = "camelCase")]
+    Speech { user_id: u64, is_speaking: bool },
+
+    #[serde(rename_all = "camelCase")]
+    MediaData {
+        user_id: u64,
+        media_type: VoipDataType,
+        data: Vec<u8>,
+        timestamp: u64,
+        real_timestamp: u64,
+        key: KeyType,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -403,7 +409,6 @@ impl Subject {
     }
 
     async fn unregister(&mut self, user_id: i64) {
-        println!("klino ton {user_id}");
         for observer in self.observers.values() {
             if observer.user_id() == user_id {
                 let _ = observer.sender.send(ObserverMessage::Close).await;
@@ -451,8 +456,8 @@ impl Subject {
             .await;
     }
 
-    async fn broadcast_voip(&self, data: VoipDataMessage) {
-        let sender_id = data.user_id as i64;
+    async fn broadcast_voip(&self, user_id: i64, data: VoipDataMessage) {
+        let sender_id = user_id;
 
         let sender_participant = self
             .service
@@ -476,13 +481,20 @@ impl Subject {
                         .unwrap_or_default();
 
                     for participant in &participants {
-                        if participant.user_id != sender_id {
-                            for observer in self.observers.values() {
-                                if observer.user_id() == participant.user_id {
-                                    let _ =
-                                        observer.send(ObserverMessage::Voip(data.clone())).await;
-                                    break;
-                                }
+                        let should_send = match &data {
+                            VoipDataMessage::Speech { .. } => true,
+                            VoipDataMessage::MediaData { user_id, .. } => {
+                                participant.user_id != (*user_id as i64)
+                            }
+                        };
+
+                        if should_send {
+                            if let Some(observer) = self
+                                .observers
+                                .values()
+                                .find(|observer| observer.user_id() == participant.user_id)
+                            {
+                                let _ = observer.send(ObserverMessage::Voip(data.clone())).await;
                             }
                         }
                     }
@@ -566,8 +578,8 @@ impl Subject {
                 may_msg = subject_rx.recv() => {
                     if let Some(msg) = may_msg {
                         match msg {
-                            SubjectMessage::BroadcastVoip(voip_msg) => {
-                                self.broadcast_voip(voip_msg).await;
+                            SubjectMessage::BroadcastVoip(user_id, voip_msg) => {
+                                self.broadcast_voip(user_id, voip_msg).await;
                             }
                             SubjectMessage::ClientTimout { user_id } => {
 
@@ -612,7 +624,6 @@ impl Subject {
                 may_request= server.get_request() => {
                     if let Some(request) = may_request{
                         if let Ok(user_id)= self.service.get_user_from_session(&request.url().query().unwrap_or_default()).await {
-                            println!("ekane login o user_id {user_id}");
                             if let Some(conn) = server.accept_request(request).await{
                                 self.handle_new_connection(user_id,conn, &subject_tx).await;
                             };
@@ -675,7 +686,7 @@ async fn handle_connection(
                     match msg {
                         Message::Unsafe(bytes) => {
                             if let Ok(voip_msg) = rmp_serde::from_slice::<VoipDataMessage>(&bytes) {
-                                let _ = subject_tx.send(SubjectMessage::BroadcastVoip(voip_msg)).await;
+                                let _ = subject_tx.send(SubjectMessage::BroadcastVoip(user_id, voip_msg)).await;
                             }
                         }
                         _ => {}

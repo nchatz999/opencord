@@ -12,16 +12,16 @@ import Slider from "../components/Slider";
 const StreamsContent: Component = () => {
 
   const getCurrentParticipants = () => {
-    const context = voipDomain.getVoipContext();
+    const context = voipDomain.getCurrentContext();
 
     if (!context) {
       return [] as VoipParticipantWithUser[];
     }
 
     if (context.type === 'channel') {
-      return voipDomain.getParticipants().filter((part) => (part.publishCamera || part.publishScreen) && part.channelId == context.id || part.user.userId == context.id);
+      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && part.channelId == context.id || part.user.userId == context.id);
     } else if (context.type === 'dm') {
-      return voipDomain.getParticipants().filter((part) => (part.publishCamera || part.publishScreen) && part.recipientId == context.id || part.user.userId == context.id);
+      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && part.recipientId == context.id || part.user.userId == context.id);
     }
 
     return [] as VoipParticipantWithUser[];
@@ -41,17 +41,9 @@ const StreamsContent: Component = () => {
   };
 
   const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
-    const volumePercentage = voipDomain.getUserScreenSoundVolume(userId);
-    const participant = voipDomain.getParticipants().find(p => p.user.userId === userId);
-    const fps = participant?.screenPlayback?.getFPS()() || 0;
-    
+    const volumePercentage = voipDomain.getScreenAudioVolume(userId);
+
     return [
-      {
-        id: "fps-info",
-        label: `FPS: ${fps}`,
-        icon: <Monitor size={16} />,
-        onClick: () => { },
-      },
       {
         id: "volume-control",
         label: `Screen Audio: ${volumePercentage}%`,
@@ -64,7 +56,7 @@ const StreamsContent: Component = () => {
               min={0}
               max={200}
               onChange={(value) => {
-                voipDomain.setUserScreenSoundVolume(userId, value);
+                voipDomain.adjustScreenAudio(userId, value);
               }}
               class="w-32"
             />
@@ -76,7 +68,7 @@ const StreamsContent: Component = () => {
 
   return (
     <Show
-      when={voipDomain.getCurrentUserParticipant()}
+      when={voipDomain.getCurrentParticipant()}
       fallback={
         <div class="flex-1 flex items-center justify-center text-[#949ba4]">
           <div class="text-center">
@@ -218,7 +210,7 @@ const StreamsContent: Component = () => {
                             <div class="p-1 rounded-full bg-blue-500 bg-opacity-80">
                               <Monitor size={12} class="text-white" />
                             </div>
-                            <Show when={voipDomain.getUserScreenSoundVolume(participant.user.userId) === 0}>
+                            <Show when={voipDomain.getScreenAudioVolume(participant.user.userId) === 0}>
                               <div class="p-1 rounded-full bg-red-500 bg-opacity-80">
                                 <Volume2 size={12} class="text-white" />
                               </div>
@@ -226,7 +218,6 @@ const StreamsContent: Component = () => {
                           </div>
                         </div>
 
-                        {}
                         <div class="absolute top-2 right-2">
                           <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
                             {participant?.screenPlayback?.getFPS()() || 0} FPS

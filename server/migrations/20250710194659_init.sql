@@ -297,8 +297,8 @@ INSERT INTO roles (role_id, role_name) VALUES (1, 'Admin');
 INSERT INTO roles (role_id, role_name) VALUES (2, 'Default');
 
 -- Insert default avatar file (1.jpg)
-INSERT INTO avatar_files (file_id, file_uuid, file_name, file_type, file_size, file_hash) 
-VALUES (1, '1', '1.jpg', 'image/jpeg', 0, 'default_hash');
+INSERT INTO avatar_files (file_uuid, file_name, file_type, file_size, file_hash) 
+VALUES ('1', '1.jpg', 'image/jpeg', 0, 'default_hash');
 
 
 INSERT INTO invites (code, available_registrations, role_id) VALUES ('ADMIN_INVITE_2024', 1, 0);

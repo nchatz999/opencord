@@ -135,9 +135,6 @@ export class AudioPlayback {
   private setVolumeSignal: (value: number) => void;
   private getIsMutedSignal: () => boolean;
   private setIsMutedSignal: (value: boolean) => void;
-  private getIsSpeakingSignal: () => boolean;
-  private setIsSpeakingSignal: (isSpeaking: boolean) => void;
-  private speakingTimeout: number | null = null;
 
   constructor(
     context: AudioContext,
@@ -158,16 +155,11 @@ export class AudioPlayback {
 
     const [getVolume, setVolume] = createSignal(100);
     const [getIsMuted, setIsMuted] = createSignal(false);
-    const [getIsSpeaking, setIsSpeaking] = createSignal(false);
 
     this.getVolumeSignal = getVolume;
     this.setVolumeSignal = setVolume;
     this.getIsMutedSignal = getIsMuted;
     this.setIsMutedSignal = setIsMuted;
-    this.getIsSpeakingSignal = getIsSpeaking;
-    this.setIsSpeakingSignal = setIsSpeaking;
-    this.speakingTimeout = null;
-
 
     createEffect(() => {
       if (this.getIsMutedSignal()) {
@@ -212,7 +204,7 @@ export class AudioPlayback {
       this.workletNode.connect(this.gainNode);
 
 
-      this.bufferInterval = setInterval(() => {
+      this.bufferInterval = window.setInterval(() => {
         this.processBuffer();
       }, 10);
 
@@ -325,33 +317,11 @@ export class AudioPlayback {
     this.setMuted(!this.getMuted());
   }
 
-  setSpeaking(duration: number = 1000): void {
-    this.setIsSpeakingSignal(true);
-
-    if (this.speakingTimeout !== null) {
-      clearTimeout(this.speakingTimeout);
-    }
-
-    this.speakingTimeout = setTimeout(() => {
-      this.setIsSpeakingSignal(false);
-      this.speakingTimeout = null;
-    }, duration);
-  }
-
-  getIsSpeaking(): boolean {
-    return this.getIsSpeakingSignal();
-  }
-
   cleanup() {
 
     if (this.bufferInterval !== null) {
-      clearInterval(this.bufferInterval);
+      window.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
-    }
-
-    if (this.speakingTimeout !== null) {
-      clearTimeout(this.speakingTimeout);
-      this.speakingTimeout = null;
     }
 
     this.clearBuffer();

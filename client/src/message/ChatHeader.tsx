@@ -15,7 +15,7 @@ const ChatHeader: Component<{
   return (
     <div>
       <Show when={props.context.type == "dm"}>
-        <Show when={userDomain.getUserById(props.context.id)}>
+        <Show when={userDomain.findById(props.context.id)}>
           {(user) => (
             <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-[#1e1f22] bg-[#313338] shrink-0">
               {}
@@ -70,7 +70,7 @@ const ChatHeader: Component<{
         </Show >
       </Show>
       <Show when={props.context.type == "channel"}>
-        <Show when={channelDomain.getChannelById(props.context.id)}>
+        <Show when={channelDomain.findById(props.context.id)}>
           {(channel) => (
             <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-[#1e1f22] bg-[#313338]">
               {}
@@ -84,7 +84,7 @@ const ChatHeader: Component<{
                   <h2 class="text-[#DBDEE1] font-semibold truncate">
                     {channel().channelName}
                   </h2>
-                  <Show when={groupDomain.getGroupById(channel().groupId)}>
+                  <Show when={groupDomain.findById(channel().groupId)}>
                     {(group) => (
                       <span class="text-xs text-[#949ba4] bg-[#2b2d31] px-2 py-0.5 rounded">
                         {group().groupName}

@@ -28,17 +28,17 @@ const UserPanel: Component = () => {
 
     const privateCallInfo = () => {
 
-      let isInPrivateCall = voipDomain.getCurrentUserParticipant();
+      let isInPrivateCall = voipDomain.getCurrentParticipant();
       if (!isInPrivateCall) return null
       if (!isInPrivateCall.recipientId) return null
 
-      let currentUser = userDomain.getCurrentUser();
-      let otherUser = userDomain.getUserById(isInPrivateCall.recipientId)
+      let currentUser = userDomain.getCurrent();
+      let otherUser = userDomain.findById(isInPrivateCall.recipientId)
       if (!otherUser) return null
-      let otherUserConnected = voipDomain.getParticipant(otherUser.userId)
+      let otherUserConnected = voipDomain.findById(otherUser.userId)
 
       return {
-        currentUser: userDomain.getCurrentUser(),
+        currentUser: userDomain.getCurrent(),
         otherUser,
         currentUserConnected: true,
         otherUserConnected: otherUserConnected
@@ -135,7 +135,7 @@ const UserPanel: Component = () => {
   const VoiceVideoControls: Component = () => {
 
     const handleLeaveCall = async () => {
-      const voipStatus = voipDomain.getParticipant(userDomain.getCurrentUser().userId)
+      const voipStatus = voipDomain.findById(userDomain.getCurrent().userId)
       if (!voipStatus) return
 
       try {
@@ -166,7 +166,7 @@ const UserPanel: Component = () => {
     return (
       <div class="flex items-center gap-1">
         {}
-        <Show when={voipDomain.getCurrentUserParticipant()}>
+        <Show when={voipDomain.getCurrentParticipant()}>
           {(voip) => (
             <Button
               variant='ghost'
@@ -222,7 +222,7 @@ const UserPanel: Component = () => {
         </Show>
 
         {}
-        <Show when={voipDomain.getCurrentUserParticipant()}>
+        <Show when={voipDomain.getCurrentParticipant()}>
           {(voip) => (
             <button
               onClick={async () => {
@@ -278,7 +278,7 @@ const UserPanel: Component = () => {
         </Show>
 
         {}
-        <Show when={voipDomain.getCurrentUserParticipant()}>
+        <Show when={voipDomain.getCurrentParticipant()}>
           <button
             onClick={handleLeaveCall}
             class="p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
@@ -311,7 +311,7 @@ const UserPanel: Component = () => {
     }
     const handleMuteToggle = async () => {
       microphone.setMuted(!microphone.getMuted())
-      if (!voipDomain.getCurrentUserParticipant()) return
+      if (!voipDomain.getCurrentParticipant()) return
       await fetchApi("/voip/mute", {
         method: "PUT",
         body: {
@@ -326,7 +326,7 @@ const UserPanel: Component = () => {
     }
 
     const handleUserSettings = () => {
-      modalDomain.setModal({ type: 'userSettings', id: 0 })
+      modalDomain.open({ type: 'userSettings', id: 0 })
     }
 
     return (
@@ -335,9 +335,9 @@ const UserPanel: Component = () => {
         <div class="flex items-center gap-2 flex-1 min-w-0">
           <div class="relative">
             <img
-              src={`/api/user/${userDomain.getCurrentUser().avatarFileId
+              src={`/api/user/${userDomain.getCurrent().avatarFileId
                 }/avatar`}
-              alt={userDomain.getCurrentUser().username}
+              alt={userDomain.getCurrent().username}
               class="w-8 h-8 rounded-full object-cover"
             />
             {}
@@ -345,14 +345,14 @@ const UserPanel: Component = () => {
 
           <div class="flex-1 min-w-0">
             <div class="text-sm text-[#DBDEE1] font-medium truncate">
-              {userDomain.getCurrentUser().username}
+              {userDomain.getCurrent().username}
             </div>
             <div class="flex items-center gap-1 text-xs text-[#949ba4] truncate">
               <Circle
                 size={8}
-                class={`${getStatusColor(userDomain.getCurrentUser().status)} fill-current`}
+                class={`${getStatusColor(userDomain.getCurrent().status)} fill-current`}
               />
-              <span>{userDomain.getCurrentUser().status}</span>
+              <span>{userDomain.getCurrent().status}</span>
             </div>
           </div>
         </div>

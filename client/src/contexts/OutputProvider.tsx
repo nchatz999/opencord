@@ -23,12 +23,12 @@ export class OutputManager {
     this.setDevicesSignal = setDevices;
     this.getSelectedDeviceSignal = selectedDevice;
     this.setSelectedDeviceSignal = setSelectedDevice;
-    this.audioContext = voipDomain.getAudio();
+    this.audioContext = voipDomain.getAudioContext();
 
-    
+
     this.loadDevices();
 
-    
+
     navigator.mediaDevices.addEventListener('devicechange', this.handleDeviceChange);
 
     onCleanup(() => {
@@ -54,7 +54,7 @@ export class OutputManager {
 
       this.setDevicesSignal(audioOutputs);
 
-      
+
       if (!this.getSelectedDeviceSignal() && audioOutputs.length > 0) {
         this.setSelectedDeviceSignal(audioOutputs[0]);
       }
@@ -73,7 +73,7 @@ export class OutputManager {
 
   async setOutput(device: AudioOutputDevice): Promise<boolean> {
     try {
-      
+
       if ('setSinkId' in this.audioContext && typeof this.audioContext.setSinkId === 'function') {
         await this.audioContext.setSinkId(device.deviceId);
         this.setSelectedDeviceSignal(device);
@@ -88,7 +88,7 @@ export class OutputManager {
     }
   }
 
-  
+
   getCurrentSinkId(): string {
     if ('sinkId' in this.audioContext) {
       return this.audioContext.sinkId as string;

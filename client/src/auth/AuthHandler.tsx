@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createEffect, Match, Switch } from "solid-js";
-import { userDomain, connection, handleConnect } from "../store";
+import { userDomain, connection, getInitialData } from "../store";
 import { loadSession } from "../contexts/Session";
 import Loading from "./Loading";
 import Auth from "./Auth";
@@ -20,7 +20,6 @@ const AuthHandler: Component = () => {
       const maybeToken = loadSession();
 
       if (!maybeToken.ok) {
-
         userDomain.setAppState({ type: 'unauthenticated' });
         return;
       }
@@ -31,16 +30,15 @@ const AuthHandler: Component = () => {
       connection.setToken(maybeToken.value.sessionToken);
 
       let connectResult;
-      do {
-        connectResult = await connection.connect();
-        if (!connectResult.ok) {
-          addToast(connectResult.error.message.toString(), "error");
-          await sleep(1000);
-        }
-      } while (!connectResult.ok);
+      connectResult = await connection.connect();
+      if (!connectResult.ok) {
+        addToast(connectResult.error.message.toString(), "error");
+        userDomain.setAppState({ type: 'connectionError' })
+        return
+      }
 
       await sleep(100)
-      await handleConnect()
+      await getInitialData()
       userDomain.setAppState({ type: 'authenticated' });
 
     }

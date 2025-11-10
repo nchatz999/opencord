@@ -11,12 +11,12 @@ export const ChannelEntry: Component<{
   onClick: () => void;
 }> = (props) => {
 
-  
-  const joinedUsers = () => voipDomain.getParticipantsByChannelId(props.channel.channelId);
+
+  const joinedUsers = () => voipDomain.findByChannel(props.channel.channelId);
 
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
-    modalDomain.setModal({ type: "channelSettings", id: props.channel.channelId })
+    modalDomain.open({ type: "channelSettings", id: props.channel.channelId })
   };
 
   return (

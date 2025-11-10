@@ -16,7 +16,7 @@ interface RoleSettingsModalProps {
 }
 
 export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
-  const user = userDomain.getCurrentUser()
+  const user = userDomain.getCurrent()
 
   if (!user) {
     return null
@@ -28,15 +28,15 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
 
   const [groupRights, setGroupRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
-      groupDomain.getAllGroups().map((group: any) => [
+      groupDomain.list().map((group: any) => [
         group.groupId,
-        aclDomain.getRightsForGroupRole(group.groupId, props.role.roleId) ?? 0,
+        aclDomain.getGroupRights(group.groupId, props.role.roleId) ?? 0,
       ])
     )
   )
 
   const filteredUsers = createMemo(() =>
-    userDomain.getAllUsers()
+    userDomain.list()
       .filter((user) => user.roleId === props.role.roleId)
       .filter((user) =>
         user.username.toLowerCase().includes(searchTerm().toLowerCase())
@@ -100,7 +100,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              <For each={groupDomain.getAllGroups()}>
+              <For each={groupDomain.list()}>
                 {(group: any) => (
                   <TableRow>
                     <TableCell>{group.groupName}</TableCell>
@@ -137,7 +137,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
   ])
 
   const handleSave = async () => {
-    
+
     const groupRightsPayload = Array.from(Object.entries(groupRights())).map(
       ([groupId, right]) => ({
         groupId: Number(groupId),
@@ -165,8 +165,8 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
       `Role "${props.role.roleName.trim()}" has been updated!`,
       'success'
     )
-    
-    modalDomain.setModal({ type: "close", id: 0 })
+
+    modalDomain.open({ type: "close", id: 0 })
   }
 
   const handleDelete = async () => {
@@ -186,7 +186,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
     }
 
     addToast(`Role "${props.role.roleName}" deleted successfully!`, 'success')
-    modalDomain.setModal({ type: "close", id: 0 })
+    modalDomain.open({ type: "close", id: 0 })
   }
 
   return (
@@ -197,7 +197,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             Role Settings: {props.role.roleName}
           </h2>
 
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -212,7 +212,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             {isDeleting() ? "Deleting..." : "Delete Role"}
           </Button>
           <div class="flex space-x-2">
-            <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="secondary">
+            <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
               Cancel
             </Button>
             <Button onClick={handleSave}>Save Changes</Button>

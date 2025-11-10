@@ -11,13 +11,9 @@
   "dependencies": {
     "@bigmistqke/solid-contenteditable": "^0.0.12",
     "@msgpack/msgpack": "^3.1.2",
-    "@ricky0123/vad-web": "^0.0.29",
-    "@sapphi-red/web-noise-suppressor": "^0.3.5",
-    "@timephy/rnnoise-wasm": "^1.0.0",
     "@types/dom-mediacapture-transform": "^0.1.11",
     "clsx": "^2.1.1",
     "lucide-solid": "^0.523.0",
-    "msgpack-lite": "^0.1.26",
     "opencord-transport": "file:../transport/client/",
     "opencord-utils": "file:../utils/",
     "solid-js": "^1.9.7",

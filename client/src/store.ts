@@ -22,21 +22,6 @@ import { VideoPlayback } from './contexts/VideoPlayback'
 import { OutputManager } from './contexts/OutputProvider'
 import { RTCPProtocol } from 'opencord-transport'
 
-export interface VideoStream {
-  userId: number
-  type: 'video' | 'audio' | 'screen'
-  username: string
-  avatar: string
-  isActive: boolean
-  stream?: MediaStream
-  lastDataTimestamp: number
-  videoElement?: HTMLVideoElement
-}
-
-export interface AudioStream {
-  userId: number
-  audioElement: HTMLAudioElement
-}
 export type AppState =
   | { type: 'loading' }
   | { type: 'unauthenticated' }
@@ -148,11 +133,11 @@ export const [state, setState] = createStore(initialState)
 export class UserDomain {
   constructor() { }
 
-  getAllUsers(): User[] {
+  list(): User[] {
     return state.users;
   }
 
-  getCurrentUserId(): number | null {
+  getCurrentId(): number | null {
     return state.currentUser;
   }
 
@@ -165,7 +150,7 @@ export class UserDomain {
   }
 
   getUserColorStatusById(id: number) {
-    let user = this.getUserById(id)
+    let user = this.findById(id)
     const statusColors = {
       online: 'bg-green-500',
       idle: 'bg-yellow-500',
@@ -185,18 +170,18 @@ export class UserDomain {
     }
   }
 
-  getCurrentUser(): User {
+  getCurrent(): User {
     let user = state.users.find(u => u.userId === state.currentUser);
     if (!user) throw new Error('Issue')
     return user;
   }
 
-  getUserById(id: number): User | undefined {
+  findById(id: number): User | undefined {
     return state.users.find(u => u.userId === id);
   }
 
 
-  setUsers(users: User[]): void {
+  replaceAll(users: User[]): void {
     setState('users', users);
   }
 
@@ -213,16 +198,8 @@ export class UserDomain {
     setState('currentUser', userId);
   }
 
-  addUser(user: User): void {
-    setState(
-      'users',
-      produce(users => {
-        users.push(user);
-      })
-    );
-  }
 
-  updateUser(id: number, updates: Partial<User>): void {
+  update(id: number, updates: Partial<User>): void {
     setState(
       'users',
       produce(users => {
@@ -236,7 +213,7 @@ export class UserDomain {
     );
   }
 
-  deleteUser(id: number): void {
+  remove(id: number): void {
     setState(
       'users',
       produce(users => {
@@ -247,29 +224,28 @@ export class UserDomain {
       })
     );
   }
-
 }
 
 export class GroupDomain {
   constructor() { }
 
-  getAllGroups(): Group[] {
+  list(): Group[] {
     return state.groups;
   }
 
-  getGroupById(id: number): Group | undefined {
+  findById(id: number): Group | undefined {
     return state.groups.find(g => g.groupId === id);
   }
 
-  getChannelsInGroup(groupId: number): Channel[] {
+  getChannels(groupId: number): Channel[] {
     return state.channels.filter(c => c.groupId === groupId);
   }
 
-  setGroups(groups: Group[]): void {
+  replaceAll(groups: Group[]): void {
     setState('groups', groups);
   }
 
-  addGroup(group: Group): void {
+  add(group: Group): void {
     setState(
       'groups',
       produce(groups => {
@@ -278,7 +254,7 @@ export class GroupDomain {
     );
   }
 
-  updateGroup(id: number, updates: Partial<Group>): void {
+  update(id: number, updates: Partial<Group>): void {
     setState(
       'groups',
       produce(groups => {
@@ -292,7 +268,7 @@ export class GroupDomain {
     );
   }
 
-  deleteGroup(id: number): void {
+  delete(id: number): void {
     setState(
       'groups',
       produce(groups => {
@@ -305,13 +281,13 @@ export class GroupDomain {
 
     const channelsToDelete = state.channels.filter(c => c.groupId === id);
     channelsToDelete.forEach(channel => {
-      channelDomain.deleteChannel(channel.channelId);
+      channelDomain.delete(channel.channelId);
     });
 
     channelsToDelete.forEach(channel => {
       const participantsToRemove = state.voipState.filter(p => p.channelId === channel.channelId);
       participantsToRemove.forEach(participant => {
-        voipDomain.removeParticipant(participant.userId);
+        voipDomain.delete(participant.userId);
       });
     });
   }
@@ -321,19 +297,19 @@ export class GroupDomain {
 export class ChannelDomain {
   constructor() { }
 
-  getAllChannels(): Channel[] {
+  list(): Channel[] {
     return state.channels;
   }
 
-  getChannelById(id: number): Channel | undefined {
+  findById(id: number): Channel | undefined {
     return state.channels.find(c => c.channelId === id);
   }
 
-  setChannels(channels: Channel[]): void {
+  replaceAll(channels: Channel[]): void {
     setState('channels', channels);
   }
 
-  addChannel(channel: Channel): void {
+  add(channel: Channel): void {
     setState(
       'channels',
       produce(channels => {
@@ -342,7 +318,7 @@ export class ChannelDomain {
     );
   }
 
-  updateChannel(id: number, updates: Partial<Channel>): void {
+  update(id: number, updates: Partial<Channel>): void {
     setState(
       'channels',
       produce(channels => {
@@ -356,7 +332,7 @@ export class ChannelDomain {
     );
   }
 
-  deleteChannel(id: number): void {
+  delete(id: number): void {
     setState(
       'channels',
       produce(channels => {
@@ -369,7 +345,7 @@ export class ChannelDomain {
 
     const participantsToRemove = state.voipState.filter(p => p.channelId === id);
     participantsToRemove.forEach(participant => {
-      voipDomain.removeParticipant(participant.userId);
+      voipDomain.delete(participant.userId);
     });
   }
 
@@ -378,21 +354,19 @@ export class ChannelDomain {
 export class MessageDomain {
   constructor() { }
 
-  getAllMessages(): Message[] {
+  list(): Message[] {
     return state.messages;
   }
-  getMessagesForChannel(channelId: number): Message[] {
+  findByChannel(channelId: number): Message[] {
 
     return state.messages
       .filter(m => m.channelId === channelId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
-
-  getMessagesForDM(recipientId: number): Message[] {
+  findByRecipient(recipientId: number): Message[] {
     const currentUserId = state.currentUser;
     if (!currentUserId) return [];
-
     return state.messages.filter(
       m =>
         m.channelId === null &&
@@ -400,16 +374,15 @@ export class MessageDomain {
           (m.senderId === recipientId && m.recipientId === currentUserId))
     );
   }
-
   getContext() {
     return state.context
   }
 
-  getMessageById(id: number): Message | undefined {
+  findById(id: number): Message | undefined {
     return state.messages.find(m => m.id === id);
   }
 
-  getFilesForMessage(messageId: number): File[] {
+  getAttachments(messageId: number): File[] {
     return state.files.filter(f => f.messageId === messageId);
   }
 
@@ -418,7 +391,7 @@ export class MessageDomain {
     setState("context", ctx)
   }
 
-  addNewMessage(newMessage: Message) {
+  insert(newMessage: Message) {
     setState(
       'messages',
       produce(messages => {
@@ -460,18 +433,18 @@ export class MessageDomain {
     );
   }
 
-  addMessages(newMessages: Message[]): void {
+  insertMany(newMessages: Message[]): void {
     setState(
       'messages',
       produce(messages => {
         newMessages.forEach((message) => {
-          this.addNewMessage(message)
+          this.insert(message)
         })
       })
     );
   }
 
-  updateMessage(id: number, updates: Partial<Message>): void {
+  update(id: number, updates: Partial<Message>): void {
     setState(
       'messages',
       produce(messages => {
@@ -483,7 +456,7 @@ export class MessageDomain {
     );
   }
 
-  deleteMessage(id: number): void {
+  delete(id: number): void {
     setState(
       'messages',
       produce(messages => {
@@ -500,16 +473,16 @@ export class MessageDomain {
 export class RoleDomain {
   constructor() { }
 
-  getAllRoles(): Role[] {
+  list(): Role[] {
     return state.roles;
   }
 
-  getRoleById(id: number): Role | undefined {
+  findById(id: number): Role | undefined {
     return state.roles.find(r => r.roleId === id)
   }
 
 
-  addRole(roleId: number, roleName: string): void {
+  add(roleId: number, roleName: string): void {
     setState(
       'roles',
       produce(roles => {
@@ -518,7 +491,7 @@ export class RoleDomain {
     );
   }
 
-  updateRole(id: number, updates: Partial<Role>): void {
+  update(id: number, updates: Partial<Role>): void {
     setState(
       'roles',
       produce(roles => {
@@ -532,11 +505,11 @@ export class RoleDomain {
     );
   }
 
-  setRoles(roles: Role[]): void {
+  replaceAll(roles: Role[]): void {
     setState('roles', roles);
   }
 
-  removeRole(roleId: number): void {
+  delete(roleId: number): void {
     setState(
       'roles',
       produce(roles => {
@@ -552,32 +525,33 @@ export class RoleDomain {
 export class AclDomain {
   constructor() { }
 
-  getAllRights(): GroupRoleRights[] {
+  list(): GroupRoleRights[] {
     return state.groupRoleRights;
   }
 
-  getRightsForGroup(groupId: number): GroupRoleRights[] {
+  findByGroup(groupId: number): GroupRoleRights[] {
     return state.groupRoleRights.filter(r => r.groupId === groupId);
   }
-  getRightsForChannelRole(channelId: number, roleId: number): number {
-    let channel = channelDomain.getChannelById(channelId)
+
+  getChannelRights(channelId: number, roleId: number): number {
+    let channel = channelDomain.findById(channelId)
     if (!channel) return 0
-    let group = groupDomain.getGroupById(channel.groupId)
+    let group = groupDomain.findById(channel.groupId)
     if (!group) return 0
-    return this.getRightsForGroupRole(group.groupId, roleId) || 0
+    return this.getGroupRights(group.groupId, roleId) || 0
   }
-  getRightsForGroupRole(groupId: number, roleId: number): number | undefined {
+  getGroupRights(groupId: number, roleId: number): number | undefined {
     if ([0, 1].includes(roleId)) return 16
     let groupRoleRight = state.groupRoleRights.find(r => r.groupId === groupId && r.roleId === roleId)
     if (!groupRoleRight) return undefined
     return groupRoleRight.rights;
   }
 
-  setRights(rights: GroupRoleRights[]): void {
+  replaceAll(rights: GroupRoleRights[]): void {
     setState('groupRoleRights', rights);
   }
 
-  updateRights(groupId: number, roleId: number, rights: number): void {
+  grant(groupId: number, roleId: number, rights: number): void {
     setState(
       'groupRoleRights',
       produce(currentRights => {
@@ -594,25 +568,25 @@ export class AclDomain {
 
     if (rights === 0) {
 
-      const messagesToRemove = messageDomain.getAllMessages().filter(message => {
+      const messagesToRemove = messageDomain.list().filter(message => {
         if (message.channelId === null) return false;
-        const channel = channelDomain.getChannelById(message.channelId);
+        const channel = channelDomain.findById(message.channelId);
         if (!channel || channel.groupId !== groupId) return false;
-        const sender = userDomain.getUserById(message.senderId);
+        const sender = userDomain.findById(message.senderId);
         return sender && sender.roleId === roleId;
       });
       messagesToRemove.forEach(message => {
-        messageDomain.deleteMessage(message.id);
+        messageDomain.delete(message.id);
       });
 
-      const participantsToRemove = voipDomain.getParticipants().filter(participant => {
+      const participantsToRemove = voipDomain.list().filter(participant => {
         if (participant.channelId === null) return false;
-        const channel = channelDomain.getChannelById(participant.channelId);
+        const channel = channelDomain.findById(participant.channelId);
         if (!channel || channel.groupId !== groupId) return false;
         return participant.user.roleId === roleId;
       });
       participantsToRemove.forEach(participant => {
-        voipDomain.removeParticipant(participant.user.userId);
+        voipDomain.delete(participant.user.userId);
       });
     }
   }
@@ -623,34 +597,34 @@ export class VoipDomain {
   constructor() { }
 
 
-  getAudio(): AudioContext {
+  getAudioContext(): AudioContext {
     return state.audio
   }
 
-  getVoipContext(): { type: 'channel' | 'dm'; id: number } | undefined {
+  getCurrentContext(): { type: 'channel' | 'dm'; id: number } | undefined {
     return state.voipContext
   }
 
 
-  getParticipants(): VoipParticipantWithUser[] {
+  list(): VoipParticipantWithUser[] {
     return state.voipState.flatMap((participant) => {
-      const user = userDomain.getUserById(participant.userId);
+      const user = userDomain.findById(participant.userId);
       return user ? [{ ...participant, user }] : [];
     });
   }
 
-  getParticipantsByChannelId(channelId: number): VoipParticipantWithUser[] {
+  findByChannel(channelId: number): VoipParticipantWithUser[] {
     return state.voipState
       .filter((participant) => participant.channelId == channelId)
       .flatMap((participant) => {
-        const user = userDomain.getUserById(participant.userId);
+        const user = userDomain.findById(participant.userId);
         return user ? [{ ...participant, user }] : [];
       });
   }
 
 
-  getParticipant(userId: number): VoipParticipantWithUser | undefined {
-    let user = userDomain.getUserById(userId)
+  findById(userId: number): VoipParticipantWithUser | undefined {
+    let user = userDomain.findById(userId)
     if (!user) return undefined
     let participant = state.voipState.find(p => p.userId === userId)
     if (participant) {
@@ -659,16 +633,16 @@ export class VoipDomain {
     return undefined
   }
 
-  getCurrentUserParticipant(): VoipParticipant | undefined {
-    return state.voipState.find(p => p.userId === userDomain.getCurrentUser().userId);
+  getCurrentParticipant(): VoipParticipant | undefined {
+    return state.voipState.find(p => p.userId === userDomain.getCurrent().userId);
   }
 
-  setParticipants(participants: VoipParticipant[]): void {
+  replaceAll(participants: VoipParticipant[]): void {
     setState('voipState', participants.map((part) => {
-      part.playback = new AudioPlayback(voipDomain.getAudio(), 200)
+      part.playback = new AudioPlayback(voipDomain.getAudioContext(), 200)
       part.screenPlayback = new VideoPlayback(200)
       part.cameraPlayback = new VideoPlayback(200)
-      part.screenSoundPlayback = new AudioPlayback(voipDomain.getAudio(), 200)
+      part.screenSoundPlayback = new AudioPlayback(voipDomain.getAudioContext(), 200)
       part.screenSoundPlayback.setVolume(0)
       return part
     }));
@@ -676,15 +650,15 @@ export class VoipDomain {
 
 
 
-  updateParticipant(userId: number, updates: Partial<VoipParticipant>): void {
+  update(userId: number, updates: Partial<VoipParticipant>): void {
     setState(
       'voipState',
       produce(voipState => {
         const index = voipState.findIndex(p => p.userId === userId);
-        updates.playback = new AudioPlayback(voipDomain.getAudio(), 200)
+        updates.playback = new AudioPlayback(voipDomain.getAudioContext(), 200)
         updates.screenPlayback = new VideoPlayback(200)
         updates.cameraPlayback = new VideoPlayback(200)
-        updates.screenSoundPlayback = new AudioPlayback(voipDomain.getAudio(), 200)
+        updates.screenSoundPlayback = new AudioPlayback(voipDomain.getAudioContext(), 200)
         updates.screenSoundPlayback.setVolume(0)
         if (index !== -1) {
           voipState[index] = { ...voipState[index], ...updates };
@@ -695,15 +669,14 @@ export class VoipDomain {
     );
   }
 
-  pushMediaToParticipant(userId: number, mediaType: 'voice' | 'screen' | 'camera' | 'screenSound', packet: EncodedAudioChunk | EncodedVideoChunk, timestamp: number) {
-    const voipUser = voipDomain.getParticipant(userId);
+  streamMedia(userId: number, mediaType: 'voice' | 'screen' | 'camera' | 'screenSound', packet: EncodedAudioChunk | EncodedVideoChunk, timestamp: number) {
+    const voipUser = voipDomain.findById(userId);
     if (!voipUser) return;
 
     switch (mediaType) {
       case 'voice':
         if (voipUser.playback) {
           voipUser.playback.pushChunk(packet as EncodedAudioChunk, timestamp);
-          voipUser.playback.setSpeaking(200);
         }
         break;
 
@@ -727,8 +700,19 @@ export class VoipDomain {
     }
   }
 
+  updateSpeakingState(userId: number, isSpeaking: boolean) {
+    setState(
+      'voipState',
+      produce(voipState => {
+        let particpant = voipState.find((voip) => voip.userId == userId)
+        if (particpant)
+          particpant.isSpeaking = isSpeaking
+      })
+    );
 
-  removeParticipant(userId: number): void {
+  }
+
+  delete(userId: number): void {
     setState(
       'voipState',
       produce(voipState => {
@@ -742,56 +726,45 @@ export class VoipDomain {
   }
 
 
-
-  resetChannelPlayback(channelId: number) {
-    state.voipState.filter((voip) => {
-      voip.channelId == channelId
-    }).forEach((voip) => {
-      if (voip.playback)
-        voip.playback.resetTimestamps()
-    })
-
-  }
-
-  setVoipContext(ctx: { type: 'channel' | 'dm'; id: number } | undefined) {
+  switchContext(ctx: { type: 'channel' | 'dm'; id: number } | undefined) {
     setState("voipContext", ctx)
   }
 
-  async resumeContext() {
+  async resume() {
     await state.audio.resume()
   }
 
-  setUserVolume(userId: number, volume: number): void {
-    const participant = this.getParticipant(userId);
+  adjustVolume(userId: number, volume: number): void {
+    const participant = this.findById(userId);
     if (participant && participant.playback) {
       participant.playback.setVolume(volume);
     }
   }
 
-  getUserVolume(userId: number): number {
-    const participant = this.getParticipant(userId);
+  getVolume(userId: number): number {
+    const participant = this.findById(userId);
     if (participant && participant.playback) {
       return participant.playback.volume();
     }
     return 100;
   }
 
-  setUserScreenSoundVolume(userId: number, volume: number): void {
-    const participant = this.getParticipant(userId);
+  adjustScreenAudio(userId: number, volume: number): void {
+    const participant = this.findById(userId);
     if (participant && participant.screenSoundPlayback) {
       participant.screenSoundPlayback.setVolume(volume);
     }
   }
 
-  getUserScreenSoundVolume(userId: number): number {
-    const participant = this.getParticipant(userId);
+  getScreenAudioVolume(userId: number): number {
+    const participant = this.findById(userId);
     if (participant && participant.screenSoundPlayback) {
       return participant.screenSoundPlayback.volume();
     }
     return 100;
   }
 
-  removeUserPublishedStreams(userId: number): void {
+  unpublishAll(userId: number): void {
     setState(
       'voipState',
       produce(streams => {
@@ -808,19 +781,19 @@ export class VoipDomain {
 export class FileDomain {
   constructor() { }
 
-  getAllFiles(): File[] {
+  list(): File[] {
     return state.files;
   }
 
-  getFileById(id: number): File | undefined {
+  findByid(id: number): File | undefined {
     return state.files.find(f => f.fileId === id);
   }
 
-  setFiles(files: File[]): void {
+  replaceAll(files: File[]): void {
     setState('files', files);
   }
 
-  addFile(file: File): void {
+  add(file: File): void {
     setState(
       'files',
       produce(files => {
@@ -829,7 +802,7 @@ export class FileDomain {
     );
   }
 
-  addFiles(newFiles: File[]): void {
+  addMany(newFiles: File[]): void {
     setState(
       'files',
       produce(files => {
@@ -843,11 +816,11 @@ export class FileDomain {
 export class ModalDomain {
   constructor() { }
 
-  getModal() {
+  getCurrent() {
     return state.modal;
   }
 
-  setModal(modal: ModalType): void {
+  open(modal: ModalType): void {
     setState('modal', modal);
   }
 }
@@ -887,67 +860,47 @@ export function handleServerEvent(event: ServerEvent): void {
 
   switch (event.type) {
     case 'ChannelUpdated':
-      channelDomain.updateChannel(event.channel.channelId, {
-        channelName: event.channel.channelName,
-        channelType: event.channel.channelType,
-        groupId: event.channel.groupId,
-      });
+      channelDomain.update(event.channel.channelId, event.channel);
       break;
 
     case 'ChannelDeleted':
-      channelDomain.deleteChannel(event.channel_id);
+      channelDomain.delete(event.channel_id);
       break;
 
     case 'GroupUpdated':
-      groupDomain.updateGroup(event.group.groupId, {
-        groupName: event.group.groupName,
-      });
+      groupDomain.update(event.group.groupId, event.group);
       break;
 
     case 'GroupDeleted':
-      groupDomain.deleteGroup(event.group_id);
+      groupDomain.delete(event.group_id);
       break;
 
     case 'RoleUpdated':
-      roleDomain.updateRole(event.role.roleId, {
-        roleName: event.role.roleName,
-      });
+      roleDomain.update(event.role.roleId, event.role);
       break;
 
     case 'RoleDeleted':
-      roleDomain.removeRole(event.role_id);
+      roleDomain.delete(event.role_id);
       break;
 
     case 'UserUpdated':
-      userDomain.updateUser(event.user.userId, {
-        username: event.user.username,
-        roleId: event.user.roleId,
-        avatarFileId: event.user.avatarFileId,
-        status: event.user.status,
-      });
+      userDomain.update(event.user.userId, event.user);
       break;
 
     case 'UserDeleted':
-      userDomain.deleteUser(event.user_id);
+      userDomain.remove(event.user_id);
       break;
 
     case 'GroupRoleRightUpdated':
-      aclDomain.updateRights(event.group_id, event.role_id, event.rights);
+      aclDomain.grant(event.group_id, event.role_id, event.rights);
       break;
 
     case 'VoipParticipantUpdated':
-      voipDomain.updateParticipant(event.user.userId, {
-        channelId: event.user.channelId,
-        recipientId: event.user.recipientId,
-        localDeafen: event.user.localDeafen,
-        localMute: event.user.localMute,
-        publishCamera: event.user.publishCamera,
-        publishScreen: event.user.publishScreen,
-      });
+      voipDomain.update(event.user.userId, event.user);
       break;
 
     case 'VoipParticipantDeleted':
-      voipDomain.removeParticipant(event.user_id);
+      voipDomain.delete(event.user_id);
       break;
 
     case 'MessageCreated':
@@ -962,76 +915,67 @@ export function handleServerEvent(event: ServerEvent): void {
         modifiedAt: event.timestamp,
         createdAt: event.timestamp
       };
-      messageDomain.addMessages([message]);
+      messageDomain.insertMany([message]);
 
       event.files.forEach(fileInfo => {
-        fileDomain.addFile({
-          fileId: fileInfo.fileId,
-          fileName: fileInfo.fileName,
-          fileHash: fileInfo.fileHash,
-          fileUuid: fileInfo.fileUuid,
-          fileType: fileInfo.fileType,
-          fileSize: fileInfo.fileSize,
-          messageId: fileInfo.messageId,
-          createdAt: fileInfo.createdAt,
-        });
+        fileDomain.add(fileInfo);
       });
 
       break;
 
     case 'MessageUpdated':
-      messageDomain.updateMessage(event.message_id, {
+      messageDomain.update(event.message_id, {
         messageText: event.message_text,
       });
       break;
 
     case 'MessageDeleted':
-      messageDomain.deleteMessage(event.message_id);
+      messageDomain.delete(event.message_id);
       break;
 
     case 'GroupReveal':
-      if (!groupDomain.getGroupById(event.group_id)) {
-        groupDomain.addGroup({
+      if (!groupDomain.findById(event.group_id)) {
+        groupDomain.add({
           groupId: event.group_id,
           groupName: event.group_name,
         });
       }
 
       event.channels.forEach(channel => {
-        if (!channelDomain.getChannelById(channel.channelId)) {
-          channelDomain.addChannel(channel);
+        if (!channelDomain.findById(channel.channelId)) {
+          channelDomain.add(channel);
         }
       });
 
       event.voip_participants.forEach(participant => {
-        voipDomain.updateParticipant(participant.userId, participant);
+        voipDomain.update(participant.userId, participant);
       });
       break;
 
     case 'GroupHide':
-      groupDomain.deleteGroup(event.group_id);
+      groupDomain.delete(event.group_id);
 
-      const channelsToRemove = channelDomain.getAllChannels().filter((channel) => channel.groupId == event.group_id);
+      const channelsToRemove = channelDomain.list().filter((channel) => channel.groupId == event.group_id);
       channelsToRemove.forEach(channel => {
-        channelDomain.deleteChannel(channel.channelId);
+        channelDomain.delete(channel.channelId);
       });
 
-      const messagesToRemove = messageDomain.getAllMessages().filter((message) => {
+      const messagesToRemove = messageDomain.list().filter((message) => {
         if (message.channelId === null) return false;
-        const channel = channelDomain.getChannelById(message.channelId);
+        const channel = channelDomain.findById(message.channelId);
         return channel && channel.groupId === event.group_id;
       });
       messagesToRemove.forEach(message => {
-        messageDomain.deleteMessage(message.id);
+        messageDomain.delete(message.id);
       });
 
-      const participantsToRemove = voipDomain.getParticipants().filter((participant) => {
+      const participantsToRemove = voipDomain.list().filter((participant) => {
         if (participant.channelId === null) return false;
-        const channel = channelDomain.getChannelById(participant.channelId);
+        const channel = channelDomain.findById(participant.channelId);
         return channel && channel.groupId === event.group_id;
       });
       participantsToRemove.forEach(participant => {
-        voipDomain.removeParticipant(participant.user.userId);
+        voipDomain.delete(participant.user.userId);
       });
 
       break;
@@ -1043,7 +987,7 @@ export function handleServerEvent(event: ServerEvent): void {
 
 
 
-export const handleConnect = async () => {
+export const getInitialData = async () => {
 
   try {
     const [
@@ -1067,12 +1011,12 @@ export const handleConnect = async () => {
       return;
     }
 
-    groupDomain.setGroups(groupsResult.value)
-    channelDomain.setChannels(channelsResult.value)
-    roleDomain.setRoles(rolesResult.value)
-    userDomain.setUsers(usersResult.value)
-    aclDomain.setRights(groupRightsResult.value)
-    voipDomain.setParticipants(voipStatusResult.value)
+    groupDomain.replaceAll(groupsResult.value)
+    channelDomain.replaceAll(channelsResult.value)
+    roleDomain.replaceAll(rolesResult.value)
+    userDomain.replaceAll(usersResult.value)
+    aclDomain.replaceAll(groupRightsResult.value)
+    voipDomain.replaceAll(voipStatusResult.value)
 
     userDomain.setConnectionStatus("connected")
   } catch (error) {
@@ -1091,48 +1035,55 @@ const certificateHash = {
   algorithm: 'sha-256',
   value: hexToUint8Array(import.meta.env.VITE_CERT_HASH)
 };
-let i = 0
+
 export let connection = new RTCPProtocol(`https://${window.location.hostname}:4443/session`,
   certificateHash,
   (data: any) => {
     let frame = decode(data) as VoipDataMessage
-    if (frame.type === "voice") {
-      let packet = new EncodedAudioChunk({
-        type: frame.key,
-        timestamp: frame.realTimestamp,
-        duration: undefined,
-        data: new Uint8Array(frame.data)
-      })
-      i++
-      voipDomain.pushMediaToParticipant(frame.userId, 'voice', packet, frame.timestamp)
-    } else if (frame.type === 'screen') {
-      let videoPacket = new EncodedVideoChunk({
-        type: frame.key as EncodedVideoChunkType,
-        timestamp: frame.realTimestamp,
-        duration: undefined,
-        data: new Uint8Array(frame.data)
-      })
-      i++
-      voipDomain.pushMediaToParticipant(frame.userId, 'screen', videoPacket, frame.timestamp)
-    } else if (frame.type === 'camera') {
-      let videoPacket = new EncodedVideoChunk({
-        type: frame.key as EncodedVideoChunkType,
-        timestamp: frame.realTimestamp,
-        duration: undefined,
-        data: new Uint8Array(frame.data)
-      })
-      i++
-      voipDomain.pushMediaToParticipant(frame.userId, 'camera', videoPacket, frame.timestamp)
-    } else if (frame.type === "screenSound") {
-      let videoPacket = new EncodedAudioChunk({
-        type: frame.key as EncodedAudioChunkType,
-        timestamp: frame.realTimestamp,
-        duration: undefined,
-        data: new Uint8Array(frame.data)
-      })
-      i++
-      voipDomain.pushMediaToParticipant(frame.userId, 'screenSound', videoPacket, frame.timestamp)
-
+    if (frame.type === "mediaData") {
+      switch (frame.mediaType) {
+        case 'voice': {
+          let packet = new EncodedAudioChunk({
+            type: frame.key,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
+          break
+        }
+        case 'camera': {
+          let videoPacket = new EncodedVideoChunk({
+            type: frame.key as EncodedVideoChunkType,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
+          break
+        }
+        case 'screen': {
+          let videoPacket = new EncodedVideoChunk({
+            type: frame.key as EncodedVideoChunkType,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
+          break
+        }
+        case 'screenSound': {
+          let videoPacket = new EncodedAudioChunk({
+            type: frame.key as EncodedAudioChunkType,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'screenSound', videoPacket, frame.timestamp)
+        }
+      }
+    } else if (frame.type === "speech") {
+      voipDomain.updateSpeakingState(frame.userId, frame.isSpeaking)
     }
   },
   (data) => {
@@ -1149,105 +1100,81 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
 
 export let microphone = new Microphone();
 microphone.onEncodedData((data) => {
-  let user = voipDomain.getCurrentUserParticipant()
+  let user = voipDomain.getCurrentParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
-
   data.copyTo(buffer);
   if (!user) return
-  let voipMessage: VoipDataMessage = {
-    type: "voice",
+  connection.send(encode({
+    type: "mediaData",
     userId: user.userId,
-    data: buffer,
+    mediaType: "voice",
+    data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }
-  let participant = voipDomain.getParticipant(user.userId)
-  if (participant && participant.playback) participant.playback.setSpeaking(200)
+  }))
+})
 
-  connection.send(encode([
-    voipMessage.type,
-    voipMessage.userId,
-    new Uint8Array(voipMessage.data),
-    voipMessage.timestamp,
-    voipMessage.realTimestamp,
-    voipMessage.key
-  ]))
+microphone.onSpeech((speech) => {
+  let user = voipDomain.getCurrentParticipant()
+  if (!user) return
+  connection.send(encode({
+    type: "speech",
+    userId: user.userId,
+    isSpeaking: speech
+  }))
+
 })
 
 export let screenShare = new ScreenShare();
 screenShare.onEncodedVideoData((data) => {
-  let user = voipDomain.getCurrentUserParticipant()
+  let user = voipDomain.getCurrentParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  let voipMessage: VoipDataMessage = {
-    type: "screen",
+  connection.send(encode({
+    type: "mediaData",
     userId: user.userId,
-    data: buffer,
+    mediaType: "screen",
+    data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }
-  connection.send(
-    encode([
-      voipMessage.type,
-      voipMessage.userId,
-      new Uint8Array(voipMessage.data),
-      voipMessage.timestamp,
-      voipMessage.realTimestamp,
-      voipMessage.key
-    ])
-  )
+  }))
 })
 
 screenShare.onEncodedAudioData((data) => {
-  let user = voipDomain.getCurrentUserParticipant()
+  let user = voipDomain.getCurrentParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  let voipMessage: VoipDataMessage = {
-    type: "screenSound",
+  connection.send(encode({
+    type: "mediaData",
     userId: user.userId,
-    data: buffer,
+    mediaType: "screenSound",
+    data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }
-  connection.send(
-    encode([
-      voipMessage.type,
-      voipMessage.userId,
-      new Uint8Array(voipMessage.data),
-      voipMessage.timestamp,
-      voipMessage.realTimestamp,
-      voipMessage.key
-    ])
-  )
+  }))
 })
 
 export let camera = new Camera();
 camera.onEncodedData((data) => {
-  let user = voipDomain.getCurrentUserParticipant()
+  let user = voipDomain.getCurrentParticipant()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  let voipMessage: VoipDataMessage = {
-    type: "camera",
+  connection.send(encode({
+    type: "mediaData",
     userId: user.userId,
-    data: buffer,
+    mediaType: "camera",
+    data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }
-  connection.send(encode([
-    voipMessage.type,
-    voipMessage.userId,
-    new Uint8Array(voipMessage.data),
-    voipMessage.timestamp,
-    voipMessage.realTimestamp,
-    voipMessage.key
-  ]))
+  }))
+
 })
 
 export const outputManager = new OutputManager();

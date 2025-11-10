@@ -43,14 +43,14 @@ const ServerSettingsModal: Component = () => {
 
 
   const filteredUsers = createMemo(() =>
-    userDomain.getAllUsers().filter((user: User) =>
+    userDomain.list().filter((user: User) =>
       user.username.toLowerCase().includes(searchTerm().toLowerCase())
     )
   )
 
 
   const canManageInvites = () => {
-    const user = userDomain.getCurrentUser();
+    const user = userDomain.getCurrent();
     return user && (user.roleId === 0 || user.roleId === 1);
   };
 
@@ -249,7 +249,7 @@ const ServerSettingsModal: Component = () => {
                               addToast(result.error.reason, "error")
                             }
                           }}
-                          options={roleDomain.getAllRoles().map((role) => ({
+                          options={roleDomain.list().map((role) => ({
                             value: role.roleId,
                             label: role.roleName,
                           }))}
@@ -346,7 +346,7 @@ const ServerSettingsModal: Component = () => {
                   <Select
                     value={newInviteRoleId()}
                     onChange={setNewInviteRoleId}
-                    options={roleDomain.getAllRoles().filter((role) => role.roleId != 0).map((role) => ({
+                    options={roleDomain.list().filter((role) => role.roleId != 0).map((role) => ({
                       value: role.roleId.toString(),
                       label: role.roleName,
                     }))}
@@ -423,7 +423,7 @@ const ServerSettingsModal: Component = () => {
                           </TableCell>
                           <TableCell class="text-center">
                             <span class="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
-                              {roleDomain.getRoleById(invite.roleId)?.roleName || 'Unknown'}
+                              {roleDomain.findById(invite.roleId)?.roleName || 'Unknown'}
                             </span>
                           </TableCell>
                           <TableCell class="text-center">
@@ -465,13 +465,13 @@ const ServerSettingsModal: Component = () => {
       <div class="bg-[#36393f] text-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Server Settings</h2>
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
         <Tabs items={tabItems()} />
         <div class="mt-6 flex justify-end space-x-2">
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="secondary">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
             Cancel
           </Button>
         </div>

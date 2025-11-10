@@ -16,7 +16,7 @@ interface ChannelSettingsProps {
 }
 
 const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
-  const user = userDomain.getCurrentUser();
+  const user = userDomain.getCurrent();
   const { addToast } = useToaster();
 
   const [isUpdating, setIsUpdating] = createSignal(false);
@@ -32,11 +32,11 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   createEffect(() => {
     setRoleRights(
       Object.fromEntries(
-        roleDomain.getAllRoles()
+        roleDomain.list()
           .filter((role) => role.roleId > 1)
           .map((role) => [
             role.roleId,
-            aclDomain.getRightsForGroupRole(props.channel.groupId, role.roleId) || 0,
+            aclDomain.getGroupRights(props.channel.groupId, role.roleId) || 0,
           ])
       )
     );
@@ -69,7 +69,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <For each={roleDomain.getAllRoles().filter((role) => role.roleId > 1)}>
+                <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
                   {(role) => (
                     <TableRow>
                       <TableCell>{role.roleName}</TableCell>
@@ -103,7 +103,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
 
     setIsUpdating(true);
 
-    
+
     if (name() !== props.channel.channelName) {
       const updateResult = await fetchApi(`/channel/${props.channel.channelId}`, {
         method: 'PUT',
@@ -122,8 +122,8 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
 
     addToast(`Channel "${name().trim()}" updated successfully!`, "success");
     setIsUpdating(false);
-    
-    modalDomain.setModal({ type: "close", id: 0 });
+
+    modalDomain.open({ type: "close", id: 0 });
   };
 
   const handleDelete = async () => {
@@ -143,7 +143,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
     }
 
     addToast(`Channel "${name()}" deleted successfully!`, "success");
-    modalDomain.setModal({ type: "close", id: 0 });
+    modalDomain.open({ type: "close", id: 0 });
   };
 
   return (
@@ -159,7 +159,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
             {props.channel.channelType} Channel Settings
           </h2>
 
-          <Button onClick={() => { modalDomain.setModal({ type: "close", id: 0 }) }} variant="ghost" size="sm">
+          <Button onClick={() => { modalDomain.open({ type: "close", id: 0 }) }} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -174,7 +174,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
             {isDeleting() ? "Deleting..." : "Delete Channel"}
           </Button>
           <div class="flex space-x-2">
-            <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="secondary">
+            <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
               Cancel
             </Button>
             <Button

@@ -36,7 +36,7 @@ import { match } from "opencord-utils";
 import type { AudioOutputDevice } from "../contexts/OutputProvider";
 
 const UserSettingsModal: Component = () => {
-  const user = userDomain.getCurrentUser();
+  const user = userDomain.getCurrent();
 
 
   const [username, setUsername] = createSignal(user.username);
@@ -236,7 +236,7 @@ const UserSettingsModal: Component = () => {
                     value: option.value,
                     label: option.label
                   }))}
-                  value={userDomain.getCurrentUser().status}
+                  value={userDomain.getCurrent().status}
                   onChange={(value) => handleStatusChange(value as UserStatusType)}
                   class="w-full"
                 />
@@ -244,7 +244,7 @@ const UserSettingsModal: Component = () => {
               <div class="flex items-center space-x-2 text-sm">
                 <Circle
                   size={12}
-                  class={`${getStatusColor(userDomain.getCurrentUser().status)} fill-current`}
+                  class={`${getStatusColor(userDomain.getCurrent().status)} fill-current`}
                 />
                 <span class="text-[#b9bbbe]">
                   Your status is visible to other users
@@ -262,7 +262,7 @@ const UserSettingsModal: Component = () => {
             <div class="flex flex-col items-center space-y-3">
               <div class="relative w-24 h-24">
                 <img
-                  src={`/api/user/${userDomain.getCurrentUser().avatarFileId}/avatar`}
+                  src={`/api/user/${userDomain.getCurrent().avatarFileId}/avatar`}
                   alt="Avatar"
                   class="w-24 h-24 rounded-full object-cover"
                 />
@@ -621,7 +621,7 @@ const UserSettingsModal: Component = () => {
       <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">User Settings</h2>
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -634,7 +634,7 @@ const UserSettingsModal: Component = () => {
 
           }}
             variant="destructive">Logout</Button>
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="secondary">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
             Close
           </Button>
         </div>

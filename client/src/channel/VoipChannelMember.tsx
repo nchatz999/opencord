@@ -49,8 +49,8 @@ const VolumeIcon: Component<{ volume: number }> = (props) => (
 
 export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser; channelId: number }> = (props) => {
 
-  const volume = () => Math.round(voipDomain.getUserVolume(props.participant.user.userId));
-  const isSpeaking = () => props.participant.playback?.getIsSpeaking() || false;
+  const volume = () => Math.round(voipDomain.getVolume(props.participant.user.userId));
+  const isSpeaking = () => props.participant.isSpeaking;
 
   const { addToast } = useToaster();
 
@@ -73,7 +73,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
               min={0}
               max={200}
               onChange={(value) => {
-                voipDomain.setUserVolume(props.participant.user.userId, value)
+                voipDomain.adjustVolume(props.participant.user.userId, value)
               }}
             />
           </div>
@@ -140,7 +140,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
             </Show>
 
             {}
-            <Show when={aclDomain.getRightsForChannelRole(props.channelId, props.participant.user.roleId) <= 2}>
+            <Show when={aclDomain.getChannelRights(props.channelId, props.participant.user.roleId) <= 2}>
               <div class="p-0.5 bg-red-800 rounded-full" title="Server muted">
                 <MicOff size={8} class="text-white" />
               </div>

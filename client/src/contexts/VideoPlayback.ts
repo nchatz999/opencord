@@ -20,7 +20,7 @@ export class VideoPlayback {
   bufferInterval: number | null;
   private frameCount: number = 0;
   private lastFpsTime: number = Date.now();
-  
+
   private getFpsSignal: () => number;
   private setFpsSignal: (value: number) => number;
 
@@ -50,7 +50,7 @@ export class VideoPlayback {
     this.buffer = [];
 
 
-    this.bufferInterval = setInterval(() => {
+    this.bufferInterval = window.setInterval(() => {
       this.processBuffer();
     }, 10);
   }
@@ -128,7 +128,7 @@ export class VideoPlayback {
   cleanup() {
 
     if (this.bufferInterval !== null) {
-      clearInterval(this.bufferInterval);
+      window.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
     }
 

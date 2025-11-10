@@ -117,7 +117,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
 
   const { addToast } = useToaster();
 
-  const isOwner = createMemo(() => userDomain.getCurrentUserId() === props.message.senderId);
+  const isOwner = createMemo(() => userDomain.getCurrentId() === props.message.senderId);
   const youtubeIds = createMemo(() => {
     const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
     const matches = props.message.messageText.matchAll(youtubeRegex);
@@ -175,7 +175,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
 
 
   return (
-    <Show when={userDomain.getUserById(props.message.senderId)}>
+    <Show when={userDomain.findById(props.message.senderId)}>
       {(user) =>
         <div class={`flex p-2 ${isOwner() ? "justify-end" : "justify-start"}`}>
           <div
@@ -224,7 +224,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
                     }`}
                 >
                   <Show when={props.message.messageText}>
-                    <div class="rounded-lg px-4 py-2 bg-[#383a40] hover:bg-opacity-90 transition-colors duration-200">
+                    <div class="rounded-lg px-4 py-2 bg-[#383a40] hover:bg-opacity-90 transition-colors duration-200 max-w-md">
                       <Show
                         when={isEditing()}
                         fallback={
@@ -286,9 +286,9 @@ const MessageComponent: Component<MessageProps> = (props) => {
                     </div>
                   </Show>
 
-                  <Show when={messageDomain.getFilesForMessage(props.message.id).length > 0}>
+                  <Show when={messageDomain.getAttachments(props.message.id).length > 0}>
                     <div class="flex flex-col gap-2 mt-2">
-                      <For each={messageDomain.getFilesForMessage(props.message.id)}>
+                      <For each={messageDomain.getAttachments(props.message.id)}>
                         {(file) => <FileItem file={file} />}
                       </For>
                     </div>
@@ -322,9 +322,9 @@ const MessageComponent: Component<MessageProps> = (props) => {
               </div>
             </div>
           </div>
-        </div>
+        </div >
       }
-    </Show>
+    </Show >
   );
 };
 

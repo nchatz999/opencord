@@ -8,7 +8,7 @@ const ServerSettings: Component = () => {
     <div>
       <button
         onClick={() => {
-          modalDomain.setModal({ type: 'serverSettings', id: 0 })
+          modalDomain.open({ type: 'serverSettings', id: 0 })
         }}
         class="relative flex items-center hover:bg-gray-700 h-10 px-2 w-full font-semibold text-dis-white py-1"
       >

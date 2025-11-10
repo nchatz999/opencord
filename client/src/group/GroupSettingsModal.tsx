@@ -17,7 +17,7 @@ interface GroupSettingsProps {
 
 const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const { addToast } = useToaster()
-  const user = userDomain.getCurrentUser()
+  const user = userDomain.getCurrent()
 
   if (!user) {
     return null
@@ -27,11 +27,11 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
 
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
-      roleDomain.getAllRoles()
+      roleDomain.list()
         .filter((role: any) => role.roleId > 1)
         .map((role: any) => [
           role.roleId,
-          aclDomain.getRightsForGroupRole(props.group.groupId, role.roleId) ?? 0,
+          aclDomain.getGroupRights(props.group.groupId, role.roleId) ?? 0,
         ])
     )
   )
@@ -44,7 +44,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
         <div class="flex flex-col h-96 mt-6">
           <div class="flex-grow overflow-y-auto mb-4 pr-2 custom-scrollbar">
             <ul class="space-y-2">
-              <For each={groupDomain.getChannelsInGroup(props.group.groupId)}>
+              <For each={groupDomain.getChannels(props.group.groupId)}>
                 {(channel: any) => (
                   <li class="flex items-center justify-between bg-[#2f3136] p-2 rounded">
                     <div class="flex items-center">
@@ -84,7 +84,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <For each={roleDomain.getAllRoles().filter((role) => role.roleId > 1)}>
+                <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
                   {(role) => (
                     <TableRow>
                       <TableCell>{role.roleName}</TableCell>
@@ -97,9 +97,9 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
                                 roleRights()[role.roleId] >= (right as number)
                               }
                               disabled={
-                                
+
                                 roleRights()[user.roleId] < 16 ||
-                                
+
                                 (user.roleId > 1 &&
                                   (roleRights()[user.roleId] <=
                                     roleRights()[role.roleId] ||
@@ -132,7 +132,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   ])
 
   const handleSave = async () => {
-    
+
     const groupRightsPayload = Array.from(Object.entries(roleRights())).map(
       ([roleId, right]) => ({
         groupId: props.group.groupId,
@@ -154,7 +154,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
     }
 
     addToast('Group settings saved successfully', 'success')
-    modalDomain.setModal({ type: "close", id: 0 })
+    modalDomain.open({ type: "close", id: 0 })
   }
 
   const handleDelete = async () => {
@@ -174,7 +174,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
     }
 
     addToast(`Group "${name()}" deleted successfully!`, 'success')
-    modalDomain.setModal({ type: "close", id: 0 })
+    modalDomain.open({ type: "close", id: 0 })
   }
 
   return (
@@ -182,7 +182,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Group Settings</h2>
-          <Button onClick={() => modalDomain.setModal({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -202,7 +202,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
             {isDeleting() ? "Deleting..." : "Delete Group"}
           </Button>
           <div class="flex space-x-2">
-            <Button variant="secondary" onClick={() => modalDomain.setModal({ type: "close", id: 0 })}>
+            <Button variant="secondary" onClick={() => modalDomain.open({ type: "close", id: 0 })}>
               Cancel
             </Button>
             <Button onClick={handleSave}>Save Changes</Button>

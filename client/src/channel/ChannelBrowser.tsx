@@ -47,7 +47,7 @@ export const ChannelBrowser: Component<{
       {}
       <For each={props.groups}>
         {(group) => {
-          const groupChannels = () => groupDomain.getChannelsInGroup(group.groupId);
+          const groupChannels = () => groupDomain.getChannels(group.groupId);
           const isCollapsed = () => props.collapsedGroups.has(group.groupId);
 
           return (
@@ -55,8 +55,8 @@ export const ChannelBrowser: Component<{
               <button
                 onClick={() => props.onToggleGroup(group.groupId)}
                 onContextMenu={(e) => {
-                  e.preventDefault(); 
-                  modalDomain.setModal({ type: "groupSettings", id: group.groupId })
+                  e.preventDefault();
+                  modalDomain.open({ type: "groupSettings", id: group.groupId })
                 }}
                 class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-[#949ba4] uppercase hover:text-[#DBDEE1] transition-colors"
               >

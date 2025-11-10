@@ -39,7 +39,7 @@ const LeftPanel: Component = () => {
     if (channel.channelType === ChannelType.VoIP) {
 
       await microphone.start()
-      await voipDomain.resumeContext()
+      await voipDomain.resume()
       const result = await fetchApi(
         `/voip/channel/${channel.channelId}/join/${microphone.getMuted()}/false`,
         {
@@ -50,7 +50,7 @@ const LeftPanel: Component = () => {
         addToast(`Failed to join channel: ${result.error.reason}`, "error");
         return
       }
-      voipDomain.setVoipContext({ type: "channel", id: channel.channelId })
+      voipDomain.switchContext({ type: "channel", id: channel.channelId })
     }
   };
 
@@ -60,11 +60,11 @@ const LeftPanel: Component = () => {
   };
 
   const handleCreateChannel = () => {
-    modalDomain.setModal({ type: "createChannel", id: 0 })
+    modalDomain.open({ type: "createChannel", id: 0 })
   };
 
   const handleCreateGroup = () => {
-    modalDomain.setModal({ type: "createGroup", id: 0 })
+    modalDomain.open({ type: "createGroup", id: 0 })
   };
 
   const tabItems = createMemo(() => [
@@ -75,7 +75,7 @@ const LeftPanel: Component = () => {
       content: (
         <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1e1f22] scrollbar-track-transparent">
           <ChannelBrowser
-            groups={groupDomain.getAllGroups()}
+            groups={groupDomain.list()}
             collapsedGroups={collapsedGroups()}
             onToggleGroup={toggleGroup}
             onChannelClick={handleChannelClick}
@@ -91,7 +91,7 @@ const LeftPanel: Component = () => {
       icon: <UsersIcon size={16} />,
       content: (
         <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1e1f22] scrollbar-track-transparent">
-          <UserBrowser users={userDomain.getAllUsers()} onUserClick={handleUserClick} />
+          <UserBrowser users={userDomain.list()} onUserClick={handleUserClick} />
         </div>
       ),
     },
@@ -103,7 +103,7 @@ const LeftPanel: Component = () => {
       <div class="h-12 px-4 flex items-center justify-between border-b border-[#1e1f22] shadow-sm">
         <h2 class="text-[#DBDEE1] font-semibold">OpenCord</h2>
         <button
-          onClick={() => modalDomain.setModal({ type: "serverSettings", id: 0 })}
+          onClick={() => modalDomain.open({ type: "serverSettings", id: 0 })}
           class="p-1.5 hover:bg-[#383a40] text-[#949ba4] hover:text-[#DBDEE1] rounded transition-all"
           title="Server Settings"
         >

@@ -37,8 +37,6 @@ export class Microphone {
   private setAvailableInputsSignal: (devices: MediaDeviceInfo[]) => MediaDeviceInfo[];
   private getQualitySignal: () => number;
   private setQualitySignal: (value: number) => number;
-  private getIsSpeechSignal: () => boolean;
-  private setIsSpeechSignal: (isSpeech: boolean) => void;
 
   private constraints: MicrophoneConstraints = {
     echoCancellation: true,
@@ -55,7 +53,8 @@ export class Microphone {
     bitrate: 128000,
   };
 
-  private encodedDataCallbacks: Array<(chunk: EncodedAudioChunk) => void> = [];
+  private encodedDataCallback: (chunk: EncodedAudioChunk) => void = () => { };
+  private speechCallback: (isSpeech: boolean) => void = () => { };
 
   constructor(encoderConfig?: EncoderConfig) {
     if (encoderConfig) {
@@ -86,11 +85,6 @@ export class Microphone {
     const [getQuality, setQuality] = createSignal<number>(1.0);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
-
-    const [getIsSpeech, setIsSpeech] = createSignal<boolean>(false);
-    this.getIsSpeechSignal = getIsSpeech;
-    this.setIsSpeechSignal = setIsSpeech;
-
 
 
     this.initializeDeviceList();
@@ -156,7 +150,6 @@ export class Microphone {
   }
 
   setQuality(quality: number): void {
-
     this.setQualitySignal(quality);
     if (this.encoder && this.encoder.state === 'configured') {
       this.encoder.configure({
@@ -166,13 +159,9 @@ export class Microphone {
     }
   }
 
-
   getQuality(): number {
-    return 1.0;
+    return this.getQualitySignal();
   }
-
-
-
 
   setMuted(muted: boolean) {
     this.setMutedSignal(muted)
@@ -182,9 +171,6 @@ export class Microphone {
     return this.getMutedSignal()
   }
 
-  getIsSpeech(): boolean {
-    return this.getIsSpeechSignal()
-  }
 
   isRecording(): boolean {
     return this.getIsRecordingSignal();
@@ -199,15 +185,12 @@ export class Microphone {
   }
 
 
-  onEncodedData(callback: (chunk: EncodedAudioChunk) => void): () => void {
-    this.encodedDataCallbacks.push(callback);
+  onEncodedData(callback: (chunk: EncodedAudioChunk) => void) {
+    this.encodedDataCallback = callback
+  }
 
-    return () => {
-      const index = this.encodedDataCallbacks.indexOf(callback);
-      if (index > -1) {
-        this.encodedDataCallbacks.splice(index, 1);
-      }
-    };
+  onSpeech(callback: (isSpeech: boolean) => void) {
+    this.speechCallback = callback
   }
 
   async start(): Promise<void> {
@@ -217,7 +200,6 @@ export class Microphone {
     }
 
     try {
-
       const mediaConstraints: MediaStreamConstraints = {
         audio: {
           deviceId: this.getDeviceIdSignal() ? { exact: this.getDeviceIdSignal() } : undefined,
@@ -247,10 +229,10 @@ export class Microphone {
       this.gainNode.connect(destination);
 
       vad.addEventListener('speechstart', () => {
-        this.setIsSpeechSignal(true);
+        this.speechCallback(true)
       });
       vad.addEventListener('speechend', () => {
-        this.setIsSpeechSignal(false);
+        this.speechCallback(false)
       })
 
       const audioTrack = destination.stream.getAudioTracks()[0];
@@ -276,7 +258,7 @@ export class Microphone {
   private setupEncoder(): void {
     this.encoder = new AudioEncoder({
       output: (chunk, _metadata) => {
-        this.encodedDataCallbacks.forEach(callback => { if (!this.getMuted()) callback(chunk) });
+        if (!this.getMuted()) this.encodedDataCallback(chunk);
       },
       error: (error) => {
         console.error('Encoder error:', error);
@@ -376,6 +358,6 @@ export class Microphone {
 
   async destroy(): Promise<void> {
     await this.stop();
-    this.encodedDataCallbacks = [];
+    this.encodedDataCallback = () => { };
   }
 }

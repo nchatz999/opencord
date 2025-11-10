@@ -13,14 +13,14 @@ interface RightPanelProps {
 const RightPanel: Component<RightPanelProps> = (props) => {
 
   const handleCreateRole = () => {
-    modalDomain.setModal({ type: "createRole", id: 0 })
+    modalDomain.open({ type: "createRole", id: 0 })
   };
 
   const handleRoleClick = (role: Role) => {
-    
-    if (role.roleId === 0 || role.roleId === 1) return; 
 
-    modalDomain.setModal({ type: "roleSettings", id: role.roleId })
+    if (role.roleId === 0 || role.roleId === 1) return;
+
+    modalDomain.open({ type: "roleSettings", id: role.roleId })
   };
 
   return (
@@ -28,7 +28,7 @@ const RightPanel: Component<RightPanelProps> = (props) => {
       {}
       <div class="h-12 px-4 flex items-center justify-between border-b border-[#1e1f22] shadow-sm shrink-0">
         <h2 class="text-[#DBDEE1] font-semibold text-sm uppercase">Roles</h2>
-        <Show when={userDomain.getCurrentUser().roleId == 0}>
+        <Show when={userDomain.getCurrent().roleId == 0}>
           <Button
             onClick={handleCreateRole}
             variant="ghost"
@@ -44,7 +44,7 @@ const RightPanel: Component<RightPanelProps> = (props) => {
       {}
       <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1e1f22] scrollbar-track-transparent">
         <div class="p-2 space-y-1">
-          <For each={roleDomain.getAllRoles()}>
+          <For each={roleDomain.list()}>
             {(role) => (
               <RoleSection role={role} onClick={() => handleRoleClick(role)} />
             )}

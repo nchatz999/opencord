@@ -1,6 +1,5 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
-
 import { Send, Paperclip, Smile } from "lucide-solid";
 import FilePreview from "./FilePreview";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
@@ -52,10 +51,10 @@ const MessageInput: Component<{
   const { addToast } = useToaster();
 
   const channel = createMemo(() =>
-    props.context.type === "channel" ? channelDomain.getChannelById(props.context.id) : null
+    props.context.type === "channel" ? channelDomain.findById(props.context.id) : null
   );
   const dmUser = createMemo(() =>
-    props.context.type === "dm" ? userDomain.getUserById(props.context.id) : null
+    props.context.type === "dm" ? userDomain.findById(props.context.id) : null
   );
 
   const placeholder = createMemo(() => {
@@ -77,7 +76,7 @@ const MessageInput: Component<{
 
   const handleSubmit = async () => {
     if (!content().trim() && files().length === 0) return;
-    if (!userDomain.getCurrentUser()) return;
+    if (!userDomain.getCurrent()) return;
     if (isSending()) return;
 
     setIsSending(true);

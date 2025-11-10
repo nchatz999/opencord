@@ -37,8 +37,8 @@ const ChatContent: Component = () => {
     const context = ctx();
     if (!context) return [];
     return context.type === "dm"
-      ? messageDomain.getMessagesForDM(context.id)
-      : messageDomain.getMessagesForChannel(context.id);
+      ? messageDomain.findByRecipient(context.id)
+      : messageDomain.findByChannel(context.id);
   };
 
   const latestMessageId = createMemo(() => {
@@ -77,8 +77,8 @@ const ChatContent: Component = () => {
         addToast(`Error: ${result.error.reason}`, "error");
         return;
       }
-      messageDomain.addMessages(result.value.messages);
-      fileDomain.addFiles(result.value.files);
+      messageDomain.insertMany(result.value.messages);
+      fileDomain.addMany(result.value.files);
 
       requestAnimationFrame(() => {
         const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
@@ -135,7 +135,7 @@ const ChatContent: Component = () => {
               <Show
                 when={messages().length > 0}
                 fallback={
-                  <Show when={userDomain.getUserById(context().id)}>
+                  <Show when={userDomain.findById(context().id)}>
                     {(user) => (
                       <div class="flex-1 flex items-center justify-center text-[#949ba4] min-h-[400px]">
                         <div class="text-center">
@@ -162,7 +162,7 @@ const ChatContent: Component = () => {
               <Show
                 when={messages().length > 0}
                 fallback={
-                  <Show when={channelDomain.getChannelById(context().id)}>
+                  <Show when={channelDomain.findById(context().id)}>
                     {(channel) => (
                       <div class="flex-1 flex items-center justify-center text-[#949ba4] min-h-[400px]">
                         <div class="text-center">
