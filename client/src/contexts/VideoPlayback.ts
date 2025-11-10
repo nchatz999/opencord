@@ -1,4 +1,5 @@
 import { createSignal } from "solid-js";
+import { MinHeap } from 'opencord-utils';
 
 interface BufferItem {
   timestamp: number;
@@ -14,7 +15,7 @@ export class VideoPlayback {
   decoder: VideoDecoder;
   hasReceivedKey: boolean = false;
   delay: number;
-  buffer: BufferItem[];
+  buffer: MinHeap<BufferItem>;
   writer: WritableStreamDefaultWriter;
   stream: MediaStream;
   bufferInterval: number | null;
@@ -47,7 +48,7 @@ export class VideoPlayback {
     this.writer = generator.writable.getWriter();
     this.stream = new MediaStream([generator]);
 
-    this.buffer = [];
+    this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
 
     this.bufferInterval = window.setInterval(() => {
@@ -56,30 +57,29 @@ export class VideoPlayback {
   }
 
   pushFrame(frame: EncodedVideoChunk, timestamp: number) {
-
-    const presentationTime = timestamp + this.delay
-    this.buffer.push({ timestamp: presentationTime, frame });
+    const presentationTime = timestamp + this.delay;
+    this.buffer.insert({ timestamp: presentationTime, frame });
   }
 
   processBuffer() {
     if (this.decoder.state !== 'configured') return;
 
     const now = Date.now();
-    this.buffer.sort((a, b) => a.timestamp - b.timestamp);
 
-    while (this.buffer.length > 0 && this.buffer[0].timestamp <= now) {
-      const item = this.buffer.shift();
-      if (item) {
-        try {
-          if (item.frame.type == "key") this.hasReceivedKey = true
-          if (this.hasReceivedKey) {
-            this.decoder.decode(item.frame);
-            this.frameCount++;
-            this.updateFPS();
-          }
-        } catch (error) {
-          console.error('Failed to decode video frame:', error);
+    while (this.buffer.size() != 0) {
+      const nextItem = this.buffer.peek();
+      if (!nextItem || nextItem.timestamp > now) break;
+
+      const item = this.buffer.extractMin()!;
+      try {
+        if (item.frame.type == "key") this.hasReceivedKey = true
+        if (this.hasReceivedKey) {
+          this.decoder.decode(item.frame);
+          this.frameCount++;
+          this.updateFPS();
         }
+      } catch (error) {
+        console.error('Failed to decode video frame:', error);
       }
     }
   }
@@ -104,9 +104,8 @@ export class VideoPlayback {
   }
 
   clearBuffer() {
-    this.buffer = [];
+    this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
     this.resetTimestamps();
-
   }
 
   getStream(): MediaStream {
@@ -119,7 +118,7 @@ export class VideoPlayback {
 
   getStats() {
     return {
-      bufferLength: this.buffer.length,
+      bufferLength: this.buffer.size(),
       decoderState: this.decoder.state,
       fps: this.getFpsSignal(),
     };
