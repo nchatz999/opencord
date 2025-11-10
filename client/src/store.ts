@@ -63,6 +63,7 @@ export interface State {
   currentUser: number | null
 
   voipState: VoipParticipant[]
+  speakingStates: Record<number, boolean>
   audio: AudioContext
   subscribedStreams: number[]
   groupRoleRights: GroupRoleRights[]
@@ -90,6 +91,7 @@ const initialState: State = {
   currentUser: null,
   groupRoleRights: [],
   voipState: [],
+  speakingStates: {},
   audio: createSharedAudioContext(),
   files: [],
   eventLog: [],
@@ -702,10 +704,17 @@ export class VoipDomain {
 
 
   updateSpeakingState(userId: number, isSpeaking: boolean) {
-    const index = state.voipState.findIndex(p => p.userId === userId);
-    if (index !== -1) {
-      setState('voipState', index, 'isSpeaking', isSpeaking);
-    }
+    setState('speakingStates', userId, isSpeaking);
+  }
+
+  getSpeakingState(userId: number): boolean {
+    return state.speakingStates[userId] || false;
+  }
+
+  clearSpeakingState(userId: number): void {
+    setState('speakingStates', produce(states => {
+      delete states[userId];
+    }));
   }
 
 
@@ -720,6 +729,7 @@ export class VoipDomain {
         }
       })
     );
+    this.clearSpeakingState(userId);
   }
 
 
@@ -1191,6 +1201,7 @@ export function resetStore(): void {
     currentUser: null,
     groupRoleRights: [],
     voipState: [],
+    speakingStates: {},
     audio: createSharedAudioContext(),
     files: [],
     eventLog: [],

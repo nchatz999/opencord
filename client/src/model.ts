@@ -103,7 +103,6 @@ export interface VoipParticipant {
   cameraPlayback?: VideoPlayback,
   screenPlayback?: VideoPlayback,
   screenSoundPlayback?: AudioPlayback
-  isSpeaking?: boolean
 }
 
 export interface GroupRoleRights {
@@ -141,7 +140,6 @@ export interface VoipParticipantWithUser {
   cameraPlayback?: VideoPlayback,
   screenPlayback?: VideoPlayback,
   screenSoundPlayback?: AudioPlayback
-  isSpeaking?: boolean
 }
 
 export interface MessageWithFiles {
