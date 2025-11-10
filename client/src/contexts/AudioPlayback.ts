@@ -1,4 +1,5 @@
 import { createSignal, createEffect } from 'solid-js';
+import { MinHeap } from '../../utils/src/index';
 
 interface BufferItem {
   timestamp: number;
@@ -125,7 +126,7 @@ async function ensureWorkletInitialized(context: AudioContext): Promise<void> {
 export class AudioPlayback {
   decoder: AudioDecoder;
   delay: number;
-  buffer: BufferItem[];
+  buffer: MinHeap<BufferItem>;
   context: AudioContext;
   workletNode: AudioWorkletNode | null;
   gainNode: GainNode;
@@ -178,7 +179,7 @@ export class AudioPlayback {
     });
     this.decoder.configure(decoderConfig);
 
-    this.buffer = [];
+    this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
 
     this.initialize();
@@ -234,25 +235,19 @@ export class AudioPlayback {
   }
 
   pushChunk(chunk: EncodedAudioChunk, timestamp: number) {
-
-    const presentationTime = timestamp + this.delay
-
-
-    this.buffer.push({
-      timestamp: presentationTime,
-      chunk,
-    });
+    const presentationTime = timestamp + this.delay;
+    this.buffer.push({ timestamp: presentationTime, chunk });
   }
 
   processBuffer() {
-    const now = Date.now()
-    this.buffer.sort((a, b) => a.timestamp - b.timestamp);
+    const now = Date.now();
 
-    while (this.buffer.length > 0 && this.buffer[0].timestamp <= now) {
-      const item = this.buffer.shift();
-      if (item) {
-        this.decoder.decode(item.chunk);
-      }
+    while (!this.buffer.isEmpty()) {
+      const nextItem = this.buffer.peek();
+      if (!nextItem || nextItem.timestamp > now) break;
+
+      const item = this.buffer.pop()!;
+      this.decoder.decode(item.chunk);
     }
   }
 
@@ -260,8 +255,7 @@ export class AudioPlayback {
   }
 
   clearBuffer() {
-
-    this.buffer = [];
+    this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
     if (this.workletNode) {
       this.workletNode.port.postMessage({ type: "clearBuffer" });
