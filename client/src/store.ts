@@ -700,17 +700,14 @@ export class VoipDomain {
     }
   }
 
-  updateSpeakingState(userId: number, isSpeaking: boolean) {
-    setState(
-      'voipState',
-      produce(voipState => {
-        let particpant = voipState.find((voip) => voip.userId == userId)
-        if (particpant)
-          particpant.isSpeaking = isSpeaking
-      })
-    );
 
+  updateSpeakingState(userId: number, isSpeaking: boolean) {
+    const index = state.voipState.findIndex(p => p.userId === userId);
+    if (index !== -1) {
+      setState('voipState', index, 'isSpeaking', isSpeaking);
+    }
   }
+
 
   delete(userId: number): void {
     setState(
