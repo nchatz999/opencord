@@ -5,17 +5,17 @@ export interface Ok<T, E = Error> {
   readonly value: T;
   readonly error?: never;
 
-  
+
   map<U>(fn: (value: T) => U): Result<U, E>;
   mapError<F>(fn: (error: E) => F): Result<T, F>;
 
-  
+
   flatMap<U>(fn: (value: T) => Result<U, E>): Result<U, E>;
 
-  
+
   match<R>(patterns: { ok: (value: T) => R; err: (error: E) => R }): R;
 
-  
+
   isOk(): this is Ok<T, E>;
   isErr(): this is Err<T, E>;
   unwrap(): T;
@@ -23,7 +23,7 @@ export interface Ok<T, E = Error> {
   unwrapOrElse(fn: (error: E) => T): T;
   expect(message: string): T;
 
-  
+
   mapAsync<U>(fn: (value: T) => Promise<U>): Promise<Result<U, E>>;
   flatMapAsync<U>(
     fn: (value: T) => Promise<Result<U, E>>
@@ -35,17 +35,17 @@ export interface Err<T, E = Error> {
   readonly value?: never;
   readonly error: E;
 
-  
+
   map<U>(fn: (value: T) => U): Result<U, E>;
   mapError<F>(fn: (error: E) => F): Result<T, F>;
 
-  
+
   flatMap<U>(fn: (value: T) => Result<U, E>): Result<U, E>;
 
-  
+
   match<R>(patterns: { ok: (value: T) => R; err: (error: E) => R }): R;
 
-  
+
   isOk(): this is Ok<T, E>;
   isErr(): this is Err<T, E>;
   unwrap(): never;
@@ -53,7 +53,7 @@ export interface Err<T, E = Error> {
   unwrapOrElse(fn: (error: E) => T): T;
   expect(message: string): never;
 
-  
+
   mapAsync<U>(fn: (value: T) => Promise<U>): Promise<Result<U, E>>;
   flatMapAsync<U>(
     fn: (value: T) => Promise<Result<U, E>>
@@ -278,3 +278,100 @@ export type OkType<R> = R extends Result<infer T, any> ? T : never;
 
 export type ErrType<R> = R extends Result<any, infer E> ? E : never;
 
+
+
+const workerCode = `
+  const timers = new Map();
+  let nextId = 1;
+
+  self.onmessage = (e) => {
+    const { type, id, delay, interval } = e.data;
+
+    switch (type) {
+      case 'setTimeout':
+        const timeoutId = setTimeout(() => {
+          self.postMessage({ type: 'timeout', id });
+          timers.delete(id);
+        }, delay);
+        timers.set(id, timeoutId);
+        break;
+
+      case 'setInterval':
+        const intervalId = setInterval(() => {
+          self.postMessage({ type: 'interval', id });
+        }, interval);
+        timers.set(id, intervalId);
+        break;
+
+      case 'clear':
+        const timerId = timers.get(id);
+        if (timerId !== undefined) {
+          clearTimeout(timerId); // works for both timeout and interval
+          clearInterval(timerId);
+          timers.delete(id);
+        }
+        break;
+    }
+  };
+`;
+
+// Main thread implementation
+export class WorkerTimerManager {
+  private worker: Worker;
+  private callbacks: Map<number, Function>;
+  private nextId: number = 1;
+
+  constructor() {
+    // Create worker from inline code
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    this.worker = new Worker(URL.createObjectURL(blob));
+    this.callbacks = new Map();
+
+    // Listen for timer events from worker
+    this.worker.onmessage = (e) => {
+      const { type, id } = e.data;
+      const callback = this.callbacks.get(id);
+
+      if (callback) {
+        callback();
+
+        // Clean up one-time timeouts
+        if (type === 'timeout') {
+          this.callbacks.delete(id);
+        }
+      }
+    };
+  }
+
+  setTimeout(callback: Function, delay: number): number {
+    const id = this.nextId++;
+    this.callbacks.set(id, callback);
+    this.worker.postMessage({ type: 'setTimeout', id, delay });
+    return id;
+  }
+
+  setInterval(callback: Function, interval: number): number {
+    const id = this.nextId++;
+    this.callbacks.set(id, callback);
+    this.worker.postMessage({ type: 'setInterval', id, interval });
+    return id;
+  }
+
+  clearTimeout(id: number): void {
+    this.callbacks.delete(id);
+    this.worker.postMessage({ type: 'clear', id });
+  }
+
+  clearInterval(id: number): void {
+    this.callbacks.delete(id);
+    this.worker.postMessage({ type: 'clear', id });
+  }
+
+  terminate(): void {
+    this.worker.terminate();
+    this.callbacks.clear();
+  }
+}
+
+// Create singleton instance
+export const timerManager = new WorkerTimerManager();
