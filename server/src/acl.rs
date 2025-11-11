@@ -104,20 +104,29 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         assigne_rights: i64,
     ) -> Result<(), DomainError> {
         if assigne_rights < 0 || assigne_rights > 16 {
-            return Err(DomainError::BadRequest(format!("Invalid rights value: {}", assigne_rights)));
+            return Err(DomainError::BadRequest(format!(
+                "Invalid rights value: {}",
+                assigne_rights
+            )));
         }
 
         if (assigne == 0 || assigne == 1) && assigne_rights != 16 {
-            return Err(DomainError::PermissionDenied("Cannot change admin rights".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Cannot change admin rights".to_string(),
+            ));
         }
         if assigner == 0 || assigner == 1 {
             return Ok(());
         }
         if assigne_rights == 16 && assigner > 1 {
-            return Err(DomainError::PermissionDenied("Only an admin can create another admin for group".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Only an admin can create another admin for group".to_string(),
+            ));
         }
         if assigner_rights < 16 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to update ACL".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to update ACL".to_string(),
+            ));
         }
         Ok(())
     }
@@ -139,14 +148,19 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         let mut tx = self.repository.begin().await?;
 
         for acl in acls {
-            let assigner = self.repository.find_user_role(user_id).await?
+            let assigner = self
+                .repository
+                .find_user_role(user_id)
+                .await?
                 .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
             let assigner_rights = self
                 .repository
                 .find_user_group_rights(acl.group_id, user_id)
                 .await?
-                .ok_or(DomainError::PermissionDenied("No access to group".to_string()))?;
+                .ok_or(DomainError::PermissionDenied(
+                    "No access to group".to_string(),
+                ))?;
 
             Self::validate_permission_assignment(
                 assigner,
@@ -474,8 +488,8 @@ use axum::Json;
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
-            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())

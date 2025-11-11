@@ -1,7 +1,3 @@
-
-
-
-
 use crate::user::UserStatusType;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -53,9 +49,6 @@ pub enum DomainError {
     InternalError(#[from] DatabaseError),
 }
 
-
-
-
 pub trait AuthTransaction: Send + Sync {
     async fn create_auth(
         &mut self,
@@ -74,7 +67,11 @@ pub trait AuthTransaction: Send + Sync {
 
     async fn create_user(&mut self, username: &str) -> Result<User, DatabaseError>;
 
-    async fn create_user_with_role(&mut self, username: &str, role_id: i64) -> Result<User, DatabaseError>;
+    async fn create_user_with_role(
+        &mut self,
+        username: &str,
+        role_id: i64,
+    ) -> Result<User, DatabaseError>;
 
     async fn update_password(
         &mut self,
@@ -117,7 +114,6 @@ pub trait AuthTransaction: Send + Sync {
     async fn find_user(&mut self, user_id: i64) -> Result<Option<User>, DatabaseError>;
 }
 
-
 pub trait AuthRepository: Send + Sync + Clone {
     type Transaction: AuthTransaction;
 
@@ -131,7 +127,6 @@ pub trait AuthRepository: Send + Sync + Clone {
 
     async fn find_user_by_username(&self, username: &str) -> Result<Option<User>, DatabaseError>;
 }
-
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
 use crate::model::Event;
@@ -171,44 +166,44 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         password: &str,
         invite_code: &str,
     ) -> Result<User, DomainError> {
-        
-        self.password_validator.validate_password(password)
+        self.password_validator
+            .validate_password(password)
             .map_err(|e| DomainError::BadRequest(format!("Password validation failed: {}", e)))?;
 
-        
-        let password_hash = hash(password, DEFAULT_COST)
-            .map_err(|_| DomainError::InternalError(DatabaseError::Other("Password hashing failed".to_string())))?;
+        let password_hash = hash(password, DEFAULT_COST).map_err(|_| {
+            DomainError::InternalError(DatabaseError::Other("Password hashing failed".to_string()))
+        })?;
 
         let mut tx = self.repository.begin().await?;
 
-        
         let invite = tx
             .find_invite(invite_code)
             .await?
             .ok_or(DomainError::BadRequest("Invalid invite code".to_string()))?;
 
         if invite.available_registrations <= 0 {
-            return Err(DomainError::BadRequest("Invite code has no remaining registrations".to_string()));
+            return Err(DomainError::BadRequest(
+                "Invite code has no remaining registrations".to_string(),
+            ));
         }
 
-        
-        let user = tx.create_user_with_role(username, invite.role_id).await.map_err(|e| match e {
-            DatabaseError::UniqueConstraintViolation { .. } => DomainError::BadRequest(
-                format!("Username {} already exists", username)
-            ),
-            e => DomainError::InternalError(e),
-        })?;
+        let user = tx
+            .create_user_with_role(username, invite.role_id)
+            .await
+            .map_err(|e| match e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    DomainError::BadRequest(format!("Username {} already exists", username))
+                }
+                e => DomainError::InternalError(e),
+            })?;
 
-        
         tx.create_auth(user.user_id, &password_hash).await?;
 
-        
         tx.update_invite_registrations(invite.invite_id, invite.available_registrations - 1)
             .await?;
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::UserUpdated { user: user.clone() };
 
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
@@ -217,41 +212,40 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     }
 
     pub async fn login(&self, username: &str, password: &str) -> Result<Session, DomainError> {
-        
         if let Some(remaining_seconds) = self.lockout_manager.is_locked_out(username) {
-            return Err(DomainError::BadRequest(format!("Account locked for {} seconds", remaining_seconds)));
+            return Err(DomainError::BadRequest(format!(
+                "Account locked for {} seconds",
+                remaining_seconds
+            )));
         }
 
         let mut tx = self.repository.begin().await?;
 
-        
         let user = self
             .repository
             .find_user_by_username(username)
             .await?
             .ok_or_else(|| {
-                
                 self.lockout_manager.record_failed_attempt(username);
                 DomainError::BadRequest("Invalid credentials".to_string())
             })?;
 
-        
         let auth = tx
             .find_auth(user.user_id)
             .await?
             .ok_or(DomainError::BadRequest("Invalid credentials".to_string()))?;
 
-        
-        if !verify(password, &auth.password_hash)
-            .map_err(|_| DomainError::InternalError(DatabaseError::Other("Password verification failed".to_string())))? {
+        if !verify(password, &auth.password_hash).map_err(|_| {
+            DomainError::InternalError(DatabaseError::Other(
+                "Password verification failed".to_string(),
+            ))
+        })? {
             self.lockout_manager.record_failed_attempt(username);
             return Err(DomainError::BadRequest("Invalid credentials".to_string()));
         }
 
-        
         self.lockout_manager.record_successful_login(username);
 
-        
         let session_token = Uuid::new_v4().to_string();
         let expires_at = Some(OffsetDateTime::now_utc() + Duration::days(30));
 
@@ -270,32 +264,40 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         current_password: &str,
         new_password: &str,
     ) -> Result<(), DomainError> {
-        
-        self.password_validator.validate_password(new_password)
+        self.password_validator
+            .validate_password(new_password)
             .map_err(|e| DomainError::BadRequest(format!("Password validation failed: {}", e)))?;
 
         let mut tx = self.repository.begin().await?;
 
-        
         let auth = tx
             .find_auth(user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "User {} not found",
+                user_id
+            )))?;
 
-        
-        if !verify(current_password, &auth.password_hash)
-            .map_err(|_| DomainError::InternalError(DatabaseError::Other("Password verification failed".to_string())))? {
-            return Err(DomainError::BadRequest("Invalid current password".to_string()));
+        if !verify(current_password, &auth.password_hash).map_err(|_| {
+            DomainError::InternalError(DatabaseError::Other(
+                "Password verification failed".to_string(),
+            ))
+        })? {
+            return Err(DomainError::BadRequest(
+                "Invalid current password".to_string(),
+            ));
         }
 
-        
-        let new_password_hash = hash(new_password, DEFAULT_COST)
-            .map_err(|_| DomainError::InternalError(DatabaseError::Other("Password hashing failed".to_string())))?;
+        let new_password_hash = hash(new_password, DEFAULT_COST).map_err(|_| {
+            DomainError::InternalError(DatabaseError::Other("Password hashing failed".to_string()))
+        })?;
 
-        
         tx.update_password(user_id, &new_password_hash)
             .await?
-            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "User {} not found",
+                user_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -307,7 +309,10 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         tx.remove_user_session(session_token, user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Session {} not found", session_token)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Session {} not found",
+                session_token
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -333,26 +338,32 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     ) -> Result<Invite, DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        
         let user = tx
             .find_user(user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "User {} not found",
+                user_id
+            )))?;
 
         if user.role_id != 0 && user.role_id != 1 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to create invite".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to create invite".to_string(),
+            ));
         }
 
         let invite = tx
             .create_invite(code, available_registrations, role_id)
             .await
-            .map_err(|e| match e {
-                DatabaseError::UniqueConstraintViolation { .. } => DomainError::BadRequest("Invite code already exists".to_string()),
+            .map_err(|e| match &e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    DomainError::BadRequest("Invite code already exists".to_string())
+                }
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
                     "role_id" => DomainError::BadRequest(format!("Role {} not found", role_id)),
                     _ => DomainError::InternalError(e),
                 },
-                e => DomainError::InternalError(e),
+                _ => DomainError::InternalError(e),
             })?;
 
         self.repository.commit(tx).await?;
@@ -363,19 +374,26 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     pub async fn delete_invite(&self, user_id: i64, invite_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        
         let user = tx
             .find_user(user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "User {} not found",
+                user_id
+            )))?;
 
         if user.role_id != 0 && user.role_id != 1 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to delete invite".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to delete invite".to_string(),
+            ));
         }
 
         tx.delete_invite(invite_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Invite {} not found", invite_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Invite {} not found",
+                invite_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -385,14 +403,18 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     pub async fn get_all_invites(&self, user_id: i64) -> Result<Vec<Invite>, DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        
         let user = tx
             .find_user(user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "User {} not found",
+                user_id
+            )))?;
 
         if user.role_id != 0 && user.role_id != 1 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to view invites".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to view invites".to_string(),
+            ));
         }
 
         let invites = tx.find_all_invites().await?;
@@ -403,11 +425,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     }
 }
 
-
-
-
 use crate::db::Postgre;
-
 
 pub struct PgAuthTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -502,7 +520,11 @@ impl AuthTransaction for PgAuthTransaction {
         Ok(result)
     }
 
-    async fn create_user_with_role(&mut self, username: &str, role_id: i64) -> Result<User, DatabaseError> {
+    async fn create_user_with_role(
+        &mut self,
+        username: &str,
+        role_id: i64,
+    ) -> Result<User, DatabaseError> {
         let result = sqlx::query_as!(
             User,
             r#"INSERT INTO users (username, avatar_file_id, role_id)
@@ -812,10 +834,6 @@ impl AuthRepository for Postgre {
     }
 }
 
-
-
-
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RegisterRequest {
     pub username: String,
@@ -865,18 +883,14 @@ pub struct DeleteInviteRequest {
     pub invite_id: i64,
 }
 
-
-
-
-
 use crate::error::ApiError;
 use axum::http::StatusCode;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
-            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
@@ -884,7 +898,6 @@ impl From<DomainError> for ApiError {
         }
     }
 }
-
 
 use crate::managers::{DefaultLockoutManager, DefaultPasswordValidator};
 use crate::middleware::{authorize, AuthorizeService};
@@ -904,12 +917,10 @@ pub fn auth_routes(
     >,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
-    
     let public_routes = OpenApiRouter::new()
         .routes(routes!(register_handler))
         .routes(routes!(login_handler));
 
-    
     let protected_routes = OpenApiRouter::new()
         .routes(routes!(change_password_handler))
         .routes(routes!(logout_handler))
@@ -923,8 +934,6 @@ pub fn auth_routes(
         .merge(protected_routes)
         .with_state(auth_service)
 }
-
-
 
 #[utoipa::path(
     post,
@@ -1110,7 +1119,12 @@ async fn create_invite_handler(
     Json(payload): Json<CreateInviteRequest>,
 ) -> Result<Json<Invite>, ApiError> {
     let invite = service
-        .create_invite(user_id, &payload.code, payload.available_registrations, payload.role_id)
+        .create_invite(
+            user_id,
+            &payload.code,
+            payload.available_registrations,
+            payload.role_id,
+        )
         .await
         .map_err(ApiError::from)?;
 
