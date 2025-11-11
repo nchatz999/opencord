@@ -1,7 +1,3 @@
-
-
-
-
 use crate::model::Event;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -21,7 +17,6 @@ pub struct VoipParticipant {
     pub created_at: OffsetDateTime,
 }
 
-
 use crate::{error::DatabaseError, middleware::AuthorizeService};
 
 #[derive(Debug, thiserror::Error)]
@@ -35,9 +30,6 @@ pub enum DomainError {
     #[error("Internal error")]
     InternalError(#[from] DatabaseError),
 }
-
-
-
 
 pub trait VoipTransaction: Send + Sync {
     async fn create_channel_voip_participant(
@@ -106,7 +98,6 @@ pub trait VoipRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-
 use crate::managers::{NotifierManager, RecipientType};
 
 #[derive(Clone)]
@@ -142,30 +133,30 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         local_mute: bool,
         local_deafen: bool,
     ) -> Result<(), DomainError> {
-        
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
+            .ok_or(DomainError::PermissionDenied(
+                "No access to channel".to_string(),
+            ))?;
 
         if rights < 2 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to join voice channel".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to join voice channel".to_string(),
+            ));
         }
 
         let mut tx = self.repository.begin().await?;
 
-        
         let _ = tx.remove_participant(user_id).await;
 
-        
         let participant = tx
             .create_channel_voip_participant(user_id, channel_id, local_mute, local_deafen)
             .await?;
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantUpdated { user: participant };
         let _ = self
             .notifier
@@ -188,28 +179,27 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         local_mute: bool,
         local_deafen: bool,
     ) -> Result<(), DomainError> {
-        
         let recipient_role = self.repository.find_user_role(recipient_user_id).await?;
 
         if recipient_role.is_none() {
-            return Err(DomainError::BadRequest(format!("User {} not found", recipient_user_id)));
+            return Err(DomainError::BadRequest(format!(
+                "User {} not found",
+                recipient_user_id
+            )));
         }
 
         let mut tx = self.repository.begin().await?;
 
-        
         let _ = tx.remove_participant(user_id).await;
 
-        
         let participant = tx
             .create_private_voip_participant(user_id, recipient_user_id, local_mute, local_deafen)
             .await?;
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantUpdated { user: participant };
-        
+
         let _ = self
             .notifier
             .notify(event.clone(), RecipientType::User { user_id })
@@ -236,7 +226,6 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantDeleted { user_id };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
@@ -253,7 +242,6 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
@@ -270,7 +258,6 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
@@ -287,7 +274,6 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
@@ -304,7 +290,6 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
@@ -312,11 +297,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     }
 }
 
-
-
-
 use crate::db::Postgre;
-
 
 pub struct PgVoipTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -531,9 +512,6 @@ impl VoipRepository for Postgre {
     }
 }
 
-
-
-
 use crate::error::ApiError;
 use crate::managers::DefaultNotifierManager;
 use crate::middleware::authorize;
@@ -541,7 +519,6 @@ use axum::extract::{Extension, Path, State};
 use axum::middleware::from_fn_with_state;
 use axum::Json;
 use utoipa_axum::{router::OpenApiRouter, routes};
-
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -567,15 +544,11 @@ pub struct SetPublishCameraRequest {
     pub publish: bool,
 }
 
-
-
-
-
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
-            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
@@ -583,7 +556,6 @@ impl From<DomainError> for ApiError {
         }
     }
 }
-
 
 pub fn voip_routes(
     voip_service: VoipService<Postgre, DefaultNotifierManager>,
@@ -601,8 +573,6 @@ pub fn voip_routes(
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(voip_service)
 }
-
-
 
 #[utoipa::path(
     get,
@@ -691,10 +661,7 @@ async fn leave_voip_handler(
     State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
     Extension(user_id): Extension<i64>,
 ) -> Result<(), ApiError> {
-    service
-        .leave_voip(user_id)
-        .await
-        .map_err(ApiError::from)?;
+    service.leave_voip(user_id).await.map_err(ApiError::from)?;
     Ok(())
 }
 
