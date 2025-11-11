@@ -60,7 +60,10 @@ pub trait VoipTransaction: Send + Sync {
         deafen: bool,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
-    async fn remove_participant(&mut self, user_id: i64) -> Result<Option<VoipParticipant>, DatabaseError>;
+    async fn remove_participant(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
     async fn set_publish_screen(
         &mut self,
@@ -220,9 +223,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn leave_voip(&self, user_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let participant = tx.remove_participant(user_id)
+        let participant = tx
+            .remove_participant(user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Participant {} not found",
+                user_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -238,7 +245,10 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         let participant = tx
             .local_mute(user_id, mute)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Participant {} not found",
+                user_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -251,10 +261,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn set_local_deafen(&self, user_id: i64, deafen: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let participant = tx
-            .local_deafen(user_id, deafen)
-            .await?
-            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+        let participant =
+            tx.local_deafen(user_id, deafen)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Participant {} not found",
+                    user_id
+                )))?;
 
         self.repository.commit(tx).await?;
 
@@ -267,10 +280,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn set_publish_screen(&self, user_id: i64, publish: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let participant = tx
-            .set_publish_screen(user_id, publish)
-            .await?
-            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+        let participant =
+            tx.set_publish_screen(user_id, publish)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Participant {} not found",
+                    user_id
+                )))?;
 
         self.repository.commit(tx).await?;
 
@@ -283,10 +299,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn set_publish_camera(&self, user_id: i64, publish: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let participant = tx
-            .set_publish_camera(user_id, publish)
-            .await?
-            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+        let participant =
+            tx.set_publish_camera(user_id, publish)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Participant {} not found",
+                    user_id
+                )))?;
 
         self.repository.commit(tx).await?;
 
@@ -388,7 +407,10 @@ impl VoipTransaction for PgVoipTransaction {
         Ok(participant)
     }
 
-    async fn remove_participant(&mut self, user_id: i64) -> Result<Option<VoipParticipant>, DatabaseError> {
+    async fn remove_participant(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let participant = sqlx::query_as!(
             VoipParticipant,
             r#"DELETE FROM voip_participants
