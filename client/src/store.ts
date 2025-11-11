@@ -29,7 +29,6 @@ export type AppState =
   | { type: 'authenticated' }
   | { type: 'connectionError' }
 
-export type ConnectionStatus = "connected" | "disconnected";
 
 export type ModalType =
   | { type: 'groupSettings'; id: number }
@@ -52,7 +51,6 @@ export interface EventLogEntry {
 export interface State {
   appState: AppState
   modal: ModalType
-  status: ConnectionStatus
   sessionId: string | null
   roles: Role[]
   users: User[]
@@ -80,7 +78,6 @@ export interface State {
 const initialState: State = {
   appState: { type: 'loading' },
   modal: { type: 'close', id: 0 },
-  status: "disconnected",
   sessionId: null,
   activeContext: 'channel',
   roles: [],
@@ -139,16 +136,8 @@ export class UserDomain {
     return state.users;
   }
 
-  getCurrentId(): number | null {
-    return state.currentUser;
-  }
-
   getAppState(): AppState {
     return state.appState
-  }
-
-  getConnectionStatus(): ConnectionStatus {
-    return state.status
   }
 
   getUserColorStatusById(id: number) {
@@ -189,11 +178,6 @@ export class UserDomain {
 
   setAppState(appState: AppState) {
     setState('appState', appState);
-  }
-
-
-  setConnectionStatus(value: ConnectionStatus) {
-    setState('status', value)
   }
 
   setCurrentUser(userId: number | null): void {
@@ -1023,8 +1007,6 @@ export const getInitialData = async () => {
     userDomain.replaceAll(usersResult.value)
     aclDomain.replaceAll(groupRightsResult.value)
     voipDomain.replaceAll(voipStatusResult.value)
-
-    userDomain.setConnectionStatus("connected")
   } catch (error) {
     userDomain.setAppState({ type: 'unauthenticated' });
   }

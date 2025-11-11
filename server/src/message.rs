@@ -1,7 +1,3 @@
-
-
-
-
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
@@ -88,9 +84,6 @@ pub enum MessageError {
     FileError(#[from] FileError),
 }
 
-
-
-
 pub trait MessageTransaction: Send + Sync {
     async fn create_channel_message(
         &mut self,
@@ -133,7 +126,6 @@ pub trait MessageTransaction: Send + Sync {
     ) -> Result<Option<Message>, DatabaseError>;
 }
 
-
 pub trait MessageRepository: Send + Sync + Clone {
     type Transaction: MessageTransaction;
 
@@ -169,7 +161,6 @@ pub trait MessageRepository: Send + Sync + Clone {
     async fn find_message_by_id(&self, message_id: i64) -> Result<Option<Message>, DatabaseError>;
 }
 
-
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
 use crate::model::Event;
 use tracing::{error, warn};
@@ -200,7 +191,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
     ) -> Result<(Message, Vec<File>), MessageError> {
-        
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, sender_id)
@@ -211,10 +201,8 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             return Err(MessageError::PermissionDenied);
         }
 
-        
         let mut db_tx = self.repository.begin().await?;
 
-        
         let message = db_tx
             .create_channel_message(
                 sender_id,
@@ -233,13 +221,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 _ => MessageError::DatabaseError(e),
             })?;
 
-        
         let file_attachments = self.process_files(&mut db_tx, message.id, files).await?;
 
-        
         self.repository.commit(db_tx).await?;
 
-        
         let event = Event::MessageCreated {
             message_id: message.id,
             sender_id: message.sender_id,
@@ -272,17 +257,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
     ) -> Result<(Message, Vec<File>), MessageError> {
-        
         let recipient_role = self.repository.find_user_role(recipient_id).await?;
 
         if recipient_role.is_none() {
             return Err(MessageError::RecipientNotFound { recipient_id });
         }
 
-        
         let mut db_tx = self.repository.begin().await?;
 
-        
         let message = db_tx
             .create_dm_message(
                 sender_id,
@@ -301,13 +283,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 _ => MessageError::DatabaseError(e),
             })?;
 
-        
         let file_attachments = self.process_files(&mut db_tx, message.id, files).await?;
 
-        
         self.repository.commit(db_tx).await?;
 
-        
         let event = Event::MessageCreated {
             message_id: message.id,
             sender_id: message.sender_id,
@@ -318,13 +297,11 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             files: file_attachments.clone(),
         };
 
-        
         let _ = self
             .notifier
             .notify(event.clone(), RecipientType::User { user_id: sender_id })
             .await;
         if sender_id != recipient_id {
-            
             let _ = self
                 .notifier
                 .notify(
@@ -345,11 +322,9 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         message_id: i64,
         files: Vec<NewFileAttachment>,
     ) -> Result<Vec<File>, MessageError> {
-        
         let mut file_tx = self.file_manager.begin()?;
         let mut file_attachments = Vec::new();
 
-        
         for f in &files {
             let file_data = general_purpose::STANDARD
                 .decode(&f.data)
@@ -358,7 +333,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             let file_hash = format!("{:x}", Sha256::digest(&file_data));
             let file_size = file_data.len() as i64;
 
-            
             let file_attachment = db_tx
                 .create_file(
                     message_id,
@@ -369,7 +343,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 )
                 .await?;
 
-            
             if let Err(e) = file_tx.stage_upload(file_attachment.file_id, &file_data) {
                 return Err(MessageError::FileError(e));
             }
@@ -377,7 +350,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             file_attachments.push(file_attachment);
         }
 
-        
         if let Err(e) = file_tx.commit() {
             return Err(MessageError::FileError(e));
         }
@@ -422,7 +394,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         timestamp: OffsetDateTime,
         limit: i64,
     ) -> Result<MessagesWithFilesResponse, MessageError> {
-        
         if let Some(channel_id) = channel_id {
             let mut repo = self.repository.clone();
             let rights = repo
@@ -457,16 +428,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .await?
             .ok_or(MessageError::MessageNotFound { message_id })?;
 
-        
         self.repository.commit(tx).await?;
 
-        
         let event = Event::MessageUpdated {
             message_id: message.id,
             message_text: new_text.clone(),
         };
 
-        
         if let Some(channel_id) = message.channel_id {
             let _ = self
                 .notifier
@@ -480,7 +448,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 .await;
         }
         if let Some(recipient_id) = message.recipient_id {
-            
             let _ = self
                 .notifier
                 .notify(event.clone(), RecipientType::User { user_id })
@@ -506,28 +473,22 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
     ) -> Result<Message, MessageError> {
         let mut tx = self.repository.begin().await?;
 
-        
         let files = tx.delete_message_files(message_id).await?;
 
-        
         let message = tx
             .delete_message(message_id, user_id)
             .await?
             .ok_or(MessageError::MessageNotFound { message_id })?;
 
-        
         if message.sender_id != user_id {
             if let Some(channel_id) = message.channel_id {
-                
                 let mut repo = self.repository.clone();
                 let rights = repo
                     .find_user_channel_rights(channel_id, user_id)
                     .await?
                     .unwrap_or(0);
 
-                
                 if rights >= 8 {
-                    
                     let user_role = repo
                         .find_user_role(user_id)
                         .await?
@@ -537,7 +498,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                         .await?
                         .ok_or(MessageError::PermissionDenied)?;
 
-                    
                     if sender_role < 2 && user_role != 1 {
                         return Err(MessageError::PermissionDenied);
                     }
@@ -545,18 +505,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             }
         }
 
-        
         self.repository.commit(tx).await?;
 
-        
         for file in &files {
             if let Err(e) = self.file_manager.delete_file(file.file_id) {
                 warn!("Failed to delete file {} from storage: {}", file.file_id, e);
-                
             }
         }
 
-        
         let event = Event::MessageDeleted { message_id };
 
         if let Some(channel_id) = message.channel_id {
@@ -572,7 +528,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 .await;
         }
         if let Some(recipient_id) = message.recipient_id {
-            
             let _ = self
                 .notifier
                 .notify(event.clone(), RecipientType::User { user_id })
@@ -596,14 +551,12 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         user_id: i64,
         file_id: i64,
     ) -> Result<(FileAttachment, Vec<u8>), MessageError> {
-        
         let file = self
             .repository
             .find_file_by_id(file_id, user_id)
             .await?
             .ok_or(MessageError::FileNotFound { file_id })?;
 
-        
         let message = self
             .repository
             .find_message_by_id(file.message_id)
@@ -612,9 +565,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 message_id: file.message_id,
             })?;
 
-        
         if let Some(channel_id) = message.channel_id {
-            
             let mut repo = self.repository.clone();
             let rights = repo
                 .find_user_channel_rights(channel_id, user_id)
@@ -625,7 +576,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 return Err(MessageError::PermissionDenied);
             }
         } else if let Some(recipient_id) = message.recipient_id {
-            
             if message.sender_id != user_id && recipient_id != user_id {
                 return Err(MessageError::PermissionDenied);
             }
@@ -642,12 +592,8 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
     }
 }
 
-
-
-
 use crate::db::Postgre;
 use sha2::{Digest, Sha256};
-
 
 pub struct PgMessageTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -727,7 +673,6 @@ impl MessageTransaction for PgMessageTransaction {
         message_id: i64,
         user_id: i64,
     ) -> Result<Option<Message>, DatabaseError> {
-        
         let deleted_message = sqlx::query_as!(
             Message,
             r#"DELETE FROM messages
@@ -810,9 +755,7 @@ impl MessageRepository for Postgre {
         timestamp: OffsetDateTime,
         limit: i64,
     ) -> Result<MessagesWithFilesResponse, DatabaseError> {
-        
         let messages = if let Some(channel_id) = channel_id {
-            
             sqlx::query_as!(
                 Message,
                 r#"SELECT
@@ -836,7 +779,6 @@ impl MessageRepository for Postgre {
             .fetch_all(&self.pool)
             .await?
         } else if let Some(other_user_id) = other_user_id {
-            
             sqlx::query_as!(
                 Message,
                 r#"SELECT
@@ -868,7 +810,6 @@ impl MessageRepository for Postgre {
             Vec::new()
         };
 
-        
         let message_ids: Vec<i64> = messages.iter().map(|m| m.id).collect();
         let files = if message_ids.is_empty() {
             Vec::new()
@@ -958,10 +899,6 @@ impl MessageRepository for Postgre {
     }
 }
 
-
-
-
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct NewMessage {
     pub sender_id: i64,
@@ -989,7 +926,7 @@ pub struct FileAttachment {
 pub struct NewFileAttachment {
     pub file_name: String,
     pub content_type: String,
-    pub data: String, 
+    pub data: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -997,7 +934,7 @@ pub struct NewFileAttachment {
 pub struct NewFile {
     pub file_name: String,
     pub content_type: String,
-    pub data: String, 
+    pub data: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -1020,7 +957,7 @@ pub enum MessageTypePath {
 pub struct FileUpload {
     pub file_name: String,
     pub content_type: String,
-    pub data: String, 
+    pub data: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -1038,20 +975,15 @@ pub struct MessageQuery {
 #[derive(Serialize, ToSchema, Debug)]
 pub struct MessagesWithFilesResponse {
     pub messages: Vec<Message>,
-    pub files: Vec<File>, 
+    pub files: Vec<File>,
     #[serde(with = "time::serde::iso8601")]
     pub timestamp: OffsetDateTime,
 }
-
-
-
-
 
 use crate::error::ApiError;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
 use tracing::debug;
-
 
 type AppMessageService = MessageService<Postgre, LocalFileManager, DefaultNotifierManager>;
 
@@ -1094,7 +1026,6 @@ impl From<MessageError> for ApiError {
     }
 }
 
-
 use axum::{
     extract::{Extension, Path, Query, State},
     middleware::from_fn_with_state,
@@ -1115,8 +1046,6 @@ pub fn message_routes(
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(message_service)
 }
-
-
 
 #[utoipa::path(
     post,

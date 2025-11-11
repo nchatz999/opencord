@@ -117,7 +117,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
 
   const { addToast } = useToaster();
 
-  const isOwner = createMemo(() => userDomain.getCurrentId() === props.message.senderId);
+  const isOwner = createMemo(() => userDomain.getCurrent().userId === props.message.senderId);
   const youtubeIds = createMemo(() => {
     const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
     const matches = props.message.messageText.matchAll(youtubeRegex);

@@ -37,7 +37,7 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
   };
 
   const isUserCallingMe = () => {
-    const currentUserId = userDomain.getCurrentId();
+    const currentUserId = userDomain.getCurrent().userId;
     if (!currentUserId) return false;
 
     const userParticipant = voipDomain.findById(props.user.userId);
