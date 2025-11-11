@@ -65,8 +65,8 @@ pub enum MessageError {
     #[error("Reply message not found: {reply_message_id}")]
     ReplyMessageNotFound { reply_message_id: i64 },
 
-    #[error("Permission denied")]
-    PermissionDenied,
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
     #[error("File decode failed")]
     FileDecodeFailed,
@@ -216,10 +216,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .repository
             .find_user_channel_rights(channel_id, sender_id)
             .await?
-            .ok_or(MessageError::PermissionDenied)?;
+            .ok_or(MessageError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 4 {
-            return Err(MessageError::PermissionDenied);
+            return Err(MessageError::PermissionDenied("Insufficient permissions to send messages".to_string()));
         }
 
         let mut db_tx = self.repository.begin().await?;
@@ -389,10 +389,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(MessageError::PermissionDenied)?;
+            .ok_or(MessageError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 2 {
-            return Err(MessageError::PermissionDenied);
+            return Err(MessageError::PermissionDenied("Insufficient permissions to read messages".to_string()));
         }
 
         let result = self
@@ -431,10 +431,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(MessageError::PermissionDenied)?;
+            .ok_or(MessageError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 2 {
-            return Err(MessageError::PermissionDenied);
+            return Err(MessageError::PermissionDenied("Insufficient permissions to read files".to_string()));
         }
 
         let result = self
@@ -539,14 +539,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                     let user_role = repo
                         .find_user_role(user_id)
                         .await?
-                        .ok_or(MessageError::PermissionDenied)?;
+                        .ok_or(MessageError::PermissionDenied("User not found".to_string()))?;
                     let sender_role = repo
                         .find_user_role(message.sender_id)
                         .await?
-                        .ok_or(MessageError::PermissionDenied)?;
+                        .ok_or(MessageError::PermissionDenied("Sender not found".to_string()))?;
 
                     if sender_role < 2 && user_role != 1 {
-                        return Err(MessageError::PermissionDenied);
+                        return Err(MessageError::PermissionDenied("Cannot delete messages from higher role users".to_string()));
                     }
                 }
             }
@@ -617,17 +617,17 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             let rights = repo
                 .find_user_channel_rights(channel_id, user_id)
                 .await?
-                .ok_or(MessageError::PermissionDenied)?;
+                .ok_or(MessageError::PermissionDenied("No access to channel".to_string()))?;
 
             if rights < 2 {
-                return Err(MessageError::PermissionDenied);
+                return Err(MessageError::PermissionDenied("Insufficient permissions to access files".to_string()));
             }
         } else if let Some(recipient_id) = message.recipient_id {
             if message.sender_id != user_id && recipient_id != user_id {
                 return Err(MessageError::PermissionDenied);
             }
         } else {
-            return Err(MessageError::PermissionDenied);
+            return Err(MessageError::PermissionDenied("Invalid message type".to_string()));
         }
 
         let raw_data = self.file_manager.get_file(file_id).map_err(|e| match e {
@@ -1113,8 +1113,8 @@ impl From<MessageError> for ApiError {
                     reply_message_id
                 ))
             }
-            MessageError::PermissionDenied => {
-                ApiError::UnprocessableEntity("Permission denied".to_string())
+            MessageError::PermissionDenied(msg) => {
+                ApiError::UnprocessableEntity(msg)
             }
             MessageError::FileDecodeFailed => {
                 ApiError::UnprocessableEntity("File decode failed".to_string())
