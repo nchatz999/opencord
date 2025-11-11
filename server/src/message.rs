@@ -165,6 +165,21 @@ pub trait MessageRepository: Send + Sync + Clone {
     async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 
     async fn find_message_by_id(&self, message_id: i64) -> Result<Option<Message>, DatabaseError>;
+
+    async fn find_channel_files(
+        &self,
+        channel_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<Vec<File>, DatabaseError>;
+
+    async fn find_dm_files(
+        &self,
+        user_id: i64,
+        other_user_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<Vec<File>, DatabaseError>;
 }
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
@@ -947,6 +962,88 @@ impl MessageRepository for Postgre {
         .await?;
 
         Ok(result)
+    }
+
+    async fn find_channel_files(
+        &self,
+        channel_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<Vec<File>, DatabaseError> {
+        let files = sqlx::query_as!(
+            File,
+            r#"WITH limited_messages AS (
+                SELECT id as message_id
+                FROM messages
+                WHERE channel_id = $1
+                AND created_at < $2
+                ORDER BY created_at DESC
+                LIMIT $3
+            )
+            SELECT
+                f.file_id,
+                f.file_uuid,
+                f.message_id,
+                f.file_name,
+                f.file_type,
+                f.file_size,
+                f.file_hash,
+                f.created_at
+            FROM files f
+            WHERE f.message_id IN (SELECT message_id FROM limited_messages)
+            ORDER BY f.message_id, f.file_id"#,
+            channel_id,
+            timestamp,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(files)
+    }
+
+    async fn find_dm_files(
+        &self,
+        user_id: i64,
+        other_user_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<Vec<File>, DatabaseError> {
+        let files = sqlx::query_as!(
+            File,
+            r#"WITH limited_messages AS (
+                SELECT id as message_id
+                FROM messages
+                WHERE recipient_id IS NOT NULL
+                AND created_at < $1
+                AND (
+                    (sender_id = $2 AND recipient_id = $3)
+                    OR (sender_id = $3 AND recipient_id = $2)
+                )
+                ORDER BY created_at DESC
+                LIMIT $4
+            )
+            SELECT
+                f.file_id,
+                f.file_uuid,
+                f.message_id,
+                f.file_name,
+                f.file_type,
+                f.file_size,
+                f.file_hash,
+                f.created_at
+            FROM files f
+            WHERE f.message_id IN (SELECT message_id FROM limited_messages)
+            ORDER BY f.message_id, f.file_id"#,
+            timestamp,
+            user_id,
+            other_user_id,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(files)
     }
 }
 
