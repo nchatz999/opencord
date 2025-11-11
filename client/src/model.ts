@@ -127,6 +127,8 @@ export type VoipDataMessage =
     key: "key" | "delta"
   }
 
+
+//composites
 export interface VoipParticipantWithUser {
   user: User;
   channelId: number | null;

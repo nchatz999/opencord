@@ -200,7 +200,6 @@ export class UserDomain {
     setState('currentUser', userId);
   }
 
-
   update(id: number, updates: Partial<User>): void {
     setState(
       'users',

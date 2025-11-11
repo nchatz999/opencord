@@ -56,7 +56,7 @@ export class ScreenShare {
     audio: true, // Default to true to include audio
   };
 
-  private videoEncoderConfig: VideoEncoderConfig = {
+  private videoEncoderConfig = {
     codec: 'vp8',
     width: 1920,
     height: 1080,
@@ -65,7 +65,7 @@ export class ScreenShare {
     keyFrameIntervalCount: 30,
   };
 
-  private audioEncoderConfig: AudioEncoderConfig = {
+  private audioEncoderConfig = {
     codec: 'opus',
     sampleRate: 48000,
     numberOfChannels: 1,
@@ -75,19 +75,13 @@ export class ScreenShare {
   private encodedVideoDataCallback: (chunk: EncodedVideoChunk) => void = () => { };
   private encodedAudioDataCallback: (chunk: EncodedAudioChunk) => void = () => { };
 
-  constructor(videoEncoderConfig?: VideoEncoderConfig, audioEncoderConfig?: AudioEncoderConfig) {
-    if (videoEncoderConfig) {
-      this.videoEncoderConfig = { ...this.videoEncoderConfig, ...videoEncoderConfig };
-    }
-    if (audioEncoderConfig) {
-      this.audioEncoderConfig = { ...this.audioEncoderConfig, ...audioEncoderConfig };
-    }
+  constructor() {
 
     const [getIsRecording, setIsRecording] = createSignal<boolean>(false);
     this.getIsRecordingSignal = getIsRecording;
     this.setIsRecordingSignal = setIsRecording;
 
-    const [getQuality, setQuality] = createSignal<number>(1.0);
+    const [getQuality, setQuality] = createSignal<number>(this.videoEncoderConfig.bitrate);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
   }
@@ -110,6 +104,7 @@ export class ScreenShare {
   isRecording(): boolean {
     return this.getIsRecordingSignal();
   }
+
   setConstraints(constraints: Partial<ScreenShareConstraints>): void {
     this.constraints = { ...this.constraints, ...constraints };
   }
@@ -136,7 +131,7 @@ export class ScreenShare {
     }
 
     try {
-      const mediaConstraints: DisplayMediaStreamConstraints = {
+      const mediaConstraints = {
         video: {
           width: this.constraints.width,
           height: this.constraints.height,
@@ -198,7 +193,7 @@ export class ScreenShare {
       },
     });
 
-    this.videoEncoder.configure(config as VideoEncoderConfig);
+    this.videoEncoder.configure(config);
   }
 
   private async processVideoStream(): Promise<void> {
@@ -237,7 +232,7 @@ export class ScreenShare {
       },
     });
 
-    const config: AudioEncoderConfig = {
+    const config = {
       codec: this.audioEncoderConfig.codec!,
       sampleRate: this.audioEncoderConfig.sampleRate!,
       numberOfChannels: this.audioEncoderConfig.numberOfChannels!,
@@ -260,7 +255,25 @@ export class ScreenShare {
 
         if (value) {
           if (this.audioEncoder && this.audioEncoder.state === 'configured') {
-            this.audioEncoder.encode(value);
+            if (value.numberOfChannels === 2 && this.audioEncoderConfig.numberOfChannels === 1) {
+              const buffer = new ArrayBuffer(value.numberOfFrames * 4);
+
+              value.copyTo(buffer, { planeIndex: 0 });
+
+              const monoData = new AudioData({
+                format: value.format,
+                sampleRate: value.sampleRate,
+                numberOfFrames: value.numberOfFrames,
+                numberOfChannels: 1,
+                timestamp: value.timestamp,
+                data: buffer,
+              });
+
+              this.audioEncoder.encode(monoData);
+            } else {
+              this.audioEncoder.encode(value)
+            }
+
           }
           value.close();
         }

@@ -30,7 +30,7 @@ export class Camera {
   private getQualitySignal: () => number;
   private setQualitySignal: (value: number) => number;
 
-  private constraints: CameraConstraints = {
+  private constraints = {
     width: 1280,
     height: 720,
     frameRate: 30,
@@ -38,7 +38,7 @@ export class Camera {
     aspectRatio: 16 / 9,
   };
 
-  private encoderConfig: VideoEncoderConfig = {
+  private encoderConfig = {
     codec: 'vp8',
     width: 1280,
     height: 720,
@@ -48,10 +48,7 @@ export class Camera {
 
   private encodedDataCallback: (chunk: EncodedVideoChunk) => void = () => { };
 
-  constructor(encoderConfig?: VideoEncoderConfig) {
-    if (encoderConfig) {
-      this.encoderConfig = { ...this.encoderConfig, ...encoderConfig };
-    }
+  constructor() {
 
 
     const [getIsRecording, setIsRecording] = createSignal<boolean>(false);
@@ -59,15 +56,13 @@ export class Camera {
     this.setIsRecordingSignal = setIsRecording;
 
 
-    const [getQuality, setQuality] = createSignal<number>(1.0);
+    const [getQuality, setQuality] = createSignal<number>(this.encoderConfig.bitrate);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
 
   }
 
-
   setQuality(quality: number): void {
-
     this.setQualitySignal(quality);
     if (this.encoder && this.encoder.state === 'configured') {
       this.encoder.configure({
@@ -76,7 +71,6 @@ export class Camera {
       });
     }
   }
-
 
   getQuality(): number {
     return this.getQualitySignal();
@@ -91,9 +85,6 @@ export class Camera {
     this.constraints = { ...this.constraints, ...constraints };
   }
 
-  getConstraints(): CameraConstraints {
-    return { ...this.constraints };
-  }
 
   getStream(): MediaStream | null {
     return this.stream;
@@ -111,7 +102,6 @@ export class Camera {
     }
 
     try {
-
       const mediaConstraints: MediaStreamConstraints = {
         video: {
           width: { ideal: this.constraints.width },
@@ -120,12 +110,9 @@ export class Camera {
           facingMode: this.constraints.facingMode,
           aspectRatio: this.constraints.aspectRatio,
         },
-        audio: false,
       };
 
       this.stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-
-
       const videoTrack = this.stream.getVideoTracks()[0];
 
 
@@ -156,13 +143,6 @@ export class Camera {
   }
 
   private setupEncoder(): void {
-    const quality = this.getQualitySignal();
-    const config: VideoEncoderConfig = {
-      ...this.encoderConfig,
-      width: Math.floor(this.encoderConfig.width! * quality),
-      height: Math.floor(this.encoderConfig.height! * quality),
-      bitrate: Math.floor(this.encoderConfig.bitrate! * quality),
-    };
 
     this.encoder = new VideoEncoder({
       output: (chunk, _metadata) => {
@@ -173,7 +153,7 @@ export class Camera {
       },
     });
 
-    this.encoder.configure(config);
+    this.encoder.configure({ ...this.encoderConfig, bitrate: this.getQuality() });
   }
 
   private async processVideoStream(): Promise<void> {
@@ -252,6 +232,6 @@ export class Camera {
 
   async destroy(): Promise<void> {
     await this.stop();
-    this.encodedDataCallbacks = [];
+    this.encodedDataCallback = () => { };
   }
 }

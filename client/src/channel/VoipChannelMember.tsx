@@ -50,10 +50,9 @@ const VolumeIcon: Component<{ volume: number }> = (props) => (
 export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser; channelId: number }> = (props) => {
 
   const volume = () => Math.round(voipDomain.getVolume(props.participant.user.userId));
-  const isSpeaking = () => props.participant.isSpeaking;
+  const isSpeaking = () => voipDomain.getSpeakingState(props.participant.user.userId);
 
   const { addToast } = useToaster();
-
   const contextMenuItems = (): ContextMenuItem[] => {
 
 

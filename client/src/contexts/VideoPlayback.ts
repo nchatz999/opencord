@@ -6,7 +6,6 @@ interface BufferItem {
   frame: EncodedVideoChunk;
 }
 
-
 const DEFAULT_DECODER_CONFIG: VideoDecoderConfig = {
   codec: 'vp8',
 };
@@ -47,7 +46,6 @@ export class VideoPlayback {
     const generator = new MediaStreamTrackGenerator({ kind: "video" });
     this.writer = generator.writable.getWriter();
     this.stream = new MediaStream([generator]);
-
     this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
 
@@ -116,21 +114,12 @@ export class VideoPlayback {
     return this.getFpsSignal;
   }
 
-  getStats() {
-    return {
-      bufferLength: this.buffer.size(),
-      decoderState: this.decoder.state,
-      fps: this.getFpsSignal(),
-    };
-  }
-
   cleanup() {
 
     if (this.bufferInterval !== null) {
       window.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
     }
-
 
     this.clearBuffer();
 
@@ -143,7 +132,6 @@ export class VideoPlayback {
         console.error('Error closing video writer:', error);
       }
     }
-
 
     if (this.decoder.state !== 'closed') {
       try {

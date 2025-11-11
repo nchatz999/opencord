@@ -44,12 +44,7 @@ const UserSettingsModal: Component = () => {
   const [_avatarPreview, setAvatarPreview] = createSignal<string | null>(null);
   let fileInputRef: HTMLInputElement | undefined;
 
-  const [inputVolume, setInputVolume] = createSignal("50");
   const [outputVolume, setOutputVolume] = createSignal("50");
-
-  const [cameraQuality, setCameraQuality] = createSignal(camera.getQuality() * 100);
-  const [screenQuality, setScreenQuality] = createSignal(screenShare.getQuality() * 100);
-  const [audioQuality, setAudioQuality] = createSignal(microphone.getQuality() * 100);
 
   const [currentPassword, setCurrentPassword] = createSignal("");
   const [newPassword, setNewPassword] = createSignal("");
@@ -80,10 +75,8 @@ const UserSettingsModal: Component = () => {
         method: 'PUT',
         body: { manualStatus: newStatus }
       });
-
       if (!result.ok)
         addToast(result.error.reason, "error")
-
     } catch (error) {
       console.error('Error updating status:', error);
     }
@@ -459,15 +452,14 @@ const UserSettingsModal: Component = () => {
             <div class="space-y-6">
               <div>
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">
-                  Camera Quality: {Math.round(cameraQuality())}%
+                  Camera Quality: {camera.getQuality()} bps
                 </label>
                 <Slider
-                  value={cameraQuality()}
-                  min={10}
-                  max={100}
+                  value={camera.getQuality()}
+                  min={500000}
+                  max={8000000}
                   onChange={(value) => {
-                    setCameraQuality(value);
-                    camera.setQuality(value / 100);
+                    camera.setQuality(value);
                   }}
                 />
                 <p class="text-xs text-[#b9bbbe] mt-1">
@@ -477,15 +469,14 @@ const UserSettingsModal: Component = () => {
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">
-                  Screen Share Quality: {Math.round(screenQuality())}%
+                  Screen Share Quality: {screenShare.getQuality()} bps
                 </label>
                 <Slider
-                  value={screenQuality()}
-                  min={10}
-                  max={100}
+                  value={screenShare.getQuality()}
+                  min={500000}
+                  max={8000000}
                   onChange={(value) => {
-                    setScreenQuality(value);
-                    screenShare.setQuality(value / 100);
+                    screenShare.setQuality(value);
                   }}
                 />
                 <p class="text-xs text-[#b9bbbe] mt-1">
@@ -495,15 +486,14 @@ const UserSettingsModal: Component = () => {
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-[#dcddde]">
-                  Audio Quality: {Math.round(audioQuality())}%
+                  Audio Quality: {microphone.getQuality()} bps
                 </label>
                 <Slider
-                  value={audioQuality()}
-                  min={10}
-                  max={100}
+                  value={microphone.getQuality()}
+                  min={64000}
+                  max={320000}
                   onChange={(value) => {
-                    setAudioQuality(value);
-                    microphone.setQuality(value / 100);
+                    microphone.setQuality(value);
                   }}
                 />
                 <p class="text-xs text-[#b9bbbe] mt-1">

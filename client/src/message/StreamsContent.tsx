@@ -168,7 +168,6 @@ const StreamsContent: Component = () => {
                       </div>
                     </Show>
 
-                    {}
                     <Show when={participant.publishScreen}>
                       <ContextMenu
                         items={createVolumeMenuItems(participant.user.userId)}
@@ -198,7 +197,6 @@ const StreamsContent: Component = () => {
                         />
 
 
-                        {}
                         <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                           <div class="flex items-center gap-1 bg-black bg-opacity-50 rounded-full px-2 py-1">
                             <span class="text-white text-xs font-medium truncate max-w-[100px]">

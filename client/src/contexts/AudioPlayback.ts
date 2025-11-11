@@ -1,5 +1,5 @@
 import { createSignal, createEffect } from 'solid-js';
-import { MinHeap } from '../../utils/src/index';
+import { MinHeap } from 'opencord-utils';
 
 interface BufferItem {
   timestamp: number;
@@ -191,16 +191,12 @@ export class AudioPlayback {
       if (this.context.state === "suspended") {
         await this.context.resume();
       }
-
-
       await ensureWorkletInitialized(this.context);
-
 
       this.workletNode = new AudioWorkletNode(
         this.context,
         "audio-buffer-processor"
       );
-
 
       this.workletNode.connect(this.gainNode);
 
@@ -236,17 +232,16 @@ export class AudioPlayback {
 
   pushChunk(chunk: EncodedAudioChunk, timestamp: number) {
     const presentationTime = timestamp + this.delay;
-    this.buffer.push({ timestamp: presentationTime, chunk });
+    this.buffer.insert({ timestamp: presentationTime, chunk });
   }
 
   processBuffer() {
     const now = Date.now();
 
-    while (!this.buffer.isEmpty()) {
+    while (this.buffer.size() != 0) {
       const nextItem = this.buffer.peek();
       if (!nextItem || nextItem.timestamp > now) break;
-
-      const item = this.buffer.pop()!;
+      const item = this.buffer.extractMin()!;
       this.decoder.decode(item.chunk);
     }
   }
@@ -262,8 +257,6 @@ export class AudioPlayback {
     }
 
     this.resetTimestamps();
-
-    console.log("Buffer cleared");
   }
 
 

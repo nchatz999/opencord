@@ -229,7 +229,8 @@ export class Microphone {
       this.gainNode.connect(destination);
 
       vad.addEventListener('speechstart', () => {
-        this.speechCallback(true)
+        if (!this.getMuted())
+          this.speechCallback(true)
       });
       vad.addEventListener('speechend', () => {
         this.speechCallback(false)
@@ -282,9 +283,7 @@ export class Microphone {
           if (this.encoder && this.encoder.state === 'configured') {
             if (value.numberOfChannels === 2 && this.encoderConfig.numberOfChannels === 1) {
               const buffer = new ArrayBuffer(value.numberOfFrames * 4);
-
               value.copyTo(buffer, { planeIndex: 0 });
-
               const monoData = new AudioData({
                 format: value.format,
                 sampleRate: value.sampleRate,

@@ -296,7 +296,7 @@ export class RingBuffer<T> {
     } else {
       this.size++;
     }
-    
+
     this.buffer[this.tail] = item;
     this.tail = (this.tail + 1) % this.capacity;
     return true;
@@ -306,7 +306,7 @@ export class RingBuffer<T> {
     if (this.size === 0) {
       return undefined;
     }
-    
+
     this.tail = (this.tail - 1 + this.capacity) % this.capacity;
     const item = this.buffer[this.tail];
     this.size--;
@@ -317,7 +317,7 @@ export class RingBuffer<T> {
     if (this.size === 0) {
       return undefined;
     }
-    
+
     const item = this.buffer[this.head];
     this.head = (this.head + 1) % this.capacity;
     this.size--;
@@ -479,3 +479,66 @@ export class WorkerTimerManager {
 
 // Create singleton instance
 export const timerManager = new WorkerTimerManager();
+
+
+export class MinHeap<T> {
+  private heap: T[] = [];
+  private comparator: (a: T, b: T) => number; // Returns negative if a < b, 0 if equal, positive if a > b
+
+  constructor(comparator: (a: T, b: T) => number) {
+    this.comparator = comparator;
+  }
+
+  insert(val: T): void {
+    this.heap.push(val);
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  peek(): T | null {
+    return this.heap.length > 0 ? this.heap[0] : null;
+  }
+
+  extractMin(): T | null {
+    if (this.heap.length === 0) return null;
+    if (this.heap.length === 1) return this.heap.pop()!;
+
+    const min = this.heap[0];
+    this.heap[0] = this.heap.pop()!;
+    this.bubbleDown(0);
+    return min;
+  }
+
+  size(): number {
+    return this.heap.length;
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.comparator(this.heap[parentIndex], this.heap[index]) <= 0) break;
+
+      [this.heap[parentIndex], this.heap[index]] = [this.heap[index], this.heap[parentIndex]];
+      index = parentIndex;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    const lastIndex = this.heap.length - 1;
+    while (true) {
+      const leftChildIndex = 2 * index + 1;
+      const rightChildIndex = 2 * index + 2;
+      let smallestIndex = index;
+
+      if (leftChildIndex <= lastIndex && this.comparator(this.heap[leftChildIndex], this.heap[smallestIndex]) < 0) {
+        smallestIndex = leftChildIndex;
+      }
+      if (rightChildIndex <= lastIndex && this.comparator(this.heap[rightChildIndex], this.heap[smallestIndex]) < 0) {
+        smallestIndex = rightChildIndex;
+      }
+
+      if (smallestIndex === index) break;
+      [this.heap[index], this.heap[smallestIndex]] = [this.heap[smallestIndex], this.heap[index]];
+      index = smallestIndex;
+    }
+  }
+}
