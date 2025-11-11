@@ -1231,6 +1231,8 @@ pub fn message_routes(
         .routes(routes!(create_message_handler))
         .routes(routes!(get_channel_messages_handler))
         .routes(routes!(get_dm_messages_handler))
+        .routes(routes!(get_channel_files_handler))
+        .routes(routes!(get_dm_files_handler))
         .routes(routes!(edit_message_handler))
         .routes(routes!(delete_message_handler))
         .routes(routes!(get_file_handler))
@@ -1487,4 +1489,80 @@ async fn get_file_handler(
     );
 
     Ok((headers, file.1))
+}
+
+#[utoipa::path(
+   get,
+   tag = "message",
+   path = "/channel/{channel_id}/files",
+   params(
+       ("channel_id", Path, description = "The ID of the channel to get files from"),
+       ("limit", Query, description = "Number of messages to retrieve files from (default: 50)"),
+       ("timestamp", Query, description = "Get files from messages before this timestamp")
+   ),
+   responses(
+       (status = 200, description = "Successfully retrieved channel files", body = Vec<File>),
+       (status = 403, description = "Permission denied", body = ApiError),
+       (status = 500, description = "Internal Server Error", body = ApiError),
+   ),
+   security(
+       ("api_key" = [])
+   )
+)]
+#[axum::debug_handler]
+async fn get_channel_files_handler(
+    State(service): State<AppMessageService>,
+    Extension(user_id): Extension<i64>,
+    Path(channel_id): Path<i64>,
+    Query(query): Query<MessageQuery>,
+) -> Result<Json<Vec<File>>, ApiError> {
+    let limit = query.limit.unwrap_or(50);
+
+    let response = service
+        .get_channel_files(user_id, channel_id, query.timestamp, limit)
+        .await
+        .map_err(|e| {
+            debug!("get_channel_files failed: {}", e);
+            ApiError::from(e)
+        })?;
+
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+   get,
+   tag = "message",
+   path = "/dm/{user_id}/files",
+   params(
+       ("user_id", Path, description = "The ID of the user to get DM files with"),
+       ("limit", Query, description = "Number of messages to retrieve files from (default: 50)"),
+       ("timestamp", Query, description = "Get files from messages before this timestamp")
+   ),
+   responses(
+       (status = 200, description = "Successfully retrieved DM files", body = Vec<File>),
+       (status = 403, description = "Permission denied", body = ApiError),
+       (status = 500, description = "Internal Server Error", body = ApiError),
+   ),
+   security(
+       ("api_key" = [])
+   )
+)]
+#[axum::debug_handler]
+async fn get_dm_files_handler(
+    State(service): State<AppMessageService>,
+    Extension(user_id): Extension<i64>,
+    Path(other_user_id): Path<i64>,
+    Query(query): Query<MessageQuery>,
+) -> Result<Json<Vec<File>>, ApiError> {
+    let limit = query.limit.unwrap_or(50);
+
+    let response = service
+        .get_dm_files(user_id, other_user_id, query.timestamp, limit)
+        .await
+        .map_err(|e| {
+            debug!("get_dm_files failed: {}", e);
+            ApiError::from(e)
+        })?;
+
+    Ok(Json(response))
 }
