@@ -66,7 +66,11 @@ const ChatContent: Component = () => {
     else
       createdAt = new Date().toISOString()
     try {
-      const result = await fetchApi<{ messages: Message[], files: File[], timestamp: string }>(`/message/${context.type}/${context.id}/messages`, {
+      const messagesEndpoint = context.type === "dm" 
+        ? `/message/dm/${context.id}/messages`
+        : `/message/channel/${context.id}/messages`;
+      
+      const result = await fetchApi<{ messages: Message[], files: File[], timestamp: string }>(messagesEndpoint, {
         method: "GET",
         query: {
           limit: MESSAGES_LIMIT,
@@ -79,6 +83,21 @@ const ChatContent: Component = () => {
       }
       messageDomain.insertMany(result.value.messages);
       fileDomain.addMany(result.value.files);
+
+      const filesEndpoint = context.type === "dm"
+        ? `/message/dm/${context.id}/files`
+        : `/message/channel/${context.id}/files`;
+
+      const filesResult = await fetchApi<File[]>(filesEndpoint, {
+        method: "GET",
+        query: {
+          limit: MESSAGES_LIMIT,
+          timestamp: createdAt
+        }
+      });
+      if (filesResult.ok) {
+        fileDomain.addMany(filesResult.value);
+      }
 
       requestAnimationFrame(() => {
         const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
