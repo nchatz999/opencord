@@ -12,7 +12,6 @@ import {
   PhoneOff,
   Settings,
   Wifi,
-  WifiOff,
   Circle,
 } from 'lucide-solid'
 import { microphone, screenShare, camera, modalDomain, userDomain, voipDomain } from '../store'
@@ -93,23 +92,13 @@ const UserPanel: Component = () => {
 
 
     const statusConfig = createMemo(() => {
-      if (userDomain.getConnectionStatus() == "connected") {
-        return {
-          color: 'text-green-500',
-          icon: Wifi,
-          label: 'Connected',
-          pulseColor: 'bg-green-500',
-          showPulse: false,
-        }
-      } else {
-        return {
-          color: 'text-red-500',
-          icon: WifiOff,
-          label: 'Connection Error',
-          pulseColor: 'bg-red-500',
-          showPulse: false,
-        }
-      };
+      return {
+        color: 'text-green-500',
+        icon: Wifi,
+        label: 'Connected',
+        pulseColor: 'bg-green-500',
+        showPulse: false,
+      }
     })
 
     return (

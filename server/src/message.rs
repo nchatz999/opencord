@@ -643,7 +643,9 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             }
         } else if let Some(recipient_id) = message.recipient_id {
             if message.sender_id != user_id && recipient_id != user_id {
-                return Err(MessageError::PermissionDenied("No access to this direct message".to_string()));
+                return Err(MessageError::PermissionDenied(
+                    "No access to this direct message".to_string(),
+                ));
             }
         } else {
             return Err(MessageError::PermissionDenied(
