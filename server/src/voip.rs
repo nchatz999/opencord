@@ -25,15 +25,15 @@ pub struct VoipParticipant {
 use crate::{error::DatabaseError, middleware::AuthorizeService};
 
 #[derive(Debug, thiserror::Error)]
-pub enum VoipError {
-    #[error("Participant not found: {user_id}")]
-    ParticipantNotFound { user_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
-    #[error("Permission denied")]
-    PermissionDenied,
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 }
 
 
@@ -126,7 +126,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn get_voip_participants(
         &self,
         requesting_user_id: i64,
-    ) -> Result<Vec<VoipParticipant>, VoipError> {
+    ) -> Result<Vec<VoipParticipant>, DomainError> {
         let participants = self
             .repository
             .find_voip_participants(requesting_user_id)
@@ -141,16 +141,16 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         channel_id: i64,
         local_mute: bool,
         local_deafen: bool,
-    ) -> Result<(), VoipError> {
+    ) -> Result<(), DomainError> {
         
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(VoipError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 2 {
-            return Err(VoipError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to join voice channel".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
@@ -187,12 +187,12 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         recipient_user_id: i64,
         local_mute: bool,
         local_deafen: bool,
-    ) -> Result<(), VoipError> {
+    ) -> Result<(), DomainError> {
         
         let recipient_role = self.repository.find_user_role(recipient_user_id).await?;
 
         if recipient_role.is_none() {
-            return Err(VoipError::PermissionDenied);
+            return Err(DomainError::BadRequest(format!("User {} not found", recipient_user_id)));
         }
 
         let mut tx = self.repository.begin().await?;
@@ -227,12 +227,12 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         Ok(())
     }
 
-    pub async fn leave_voip(&self, user_id: i64) -> Result<(), VoipError> {
+    pub async fn leave_voip(&self, user_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         tx.remove_participant(user_id)
             .await
-            .map_err(|_| VoipError::ParticipantNotFound { user_id })?;
+            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -243,13 +243,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         Ok(())
     }
 
-    pub async fn set_local_mute(&self, user_id: i64, mute: bool) -> Result<(), VoipError> {
+    pub async fn set_local_mute(&self, user_id: i64, mute: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant = tx
             .local_mute(user_id, mute)
             .await
-            .map_err(|_| VoipError::ParticipantNotFound { user_id })?;
+            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -260,13 +260,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         Ok(())
     }
 
-    pub async fn set_local_deafen(&self, user_id: i64, deafen: bool) -> Result<(), VoipError> {
+    pub async fn set_local_deafen(&self, user_id: i64, deafen: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant = tx
             .local_deafen(user_id, deafen)
             .await
-            .map_err(|_| VoipError::ParticipantNotFound { user_id })?;
+            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -277,13 +277,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         Ok(())
     }
 
-    pub async fn set_publish_screen(&self, user_id: i64, publish: bool) -> Result<(), VoipError> {
+    pub async fn set_publish_screen(&self, user_id: i64, publish: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant = tx
             .set_publish_screen(user_id, publish)
             .await
-            .map_err(|_| VoipError::ParticipantNotFound { user_id })?;
+            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -294,13 +294,13 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         Ok(())
     }
 
-    pub async fn set_publish_camera(&self, user_id: i64, publish: bool) -> Result<(), VoipError> {
+    pub async fn set_publish_camera(&self, user_id: i64, publish: bool) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant = tx
             .set_publish_camera(user_id, publish)
             .await
-            .map_err(|_| VoipError::ParticipantNotFound { user_id })?;
+            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -571,16 +571,15 @@ pub struct SetPublishCameraRequest {
 
 
 
-impl From<VoipError> for ApiError {
-    fn from(err: VoipError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            VoipError::ParticipantNotFound { user_id } => {
-                ApiError::UnprocessableEntity(format!("Participant {} not found", user_id))
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
+                ApiError::InternalServerError("Internal server error".to_string())
             }
-            VoipError::PermissionDenied => {
-                ApiError::UnprocessableEntity("Permission denied".to_string())
-            }
-            VoipError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
         }
     }
 }
@@ -619,7 +618,10 @@ async fn get_voip_participants_handler(
     State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
     Extension(user_id): Extension<i64>,
 ) -> Result<Json<Vec<VoipParticipant>>, ApiError> {
-    let participants = service.get_voip_participants(user_id).await?;
+    let participants = service
+        .get_voip_participants(user_id)
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(participants))
 }
 
@@ -644,7 +646,8 @@ async fn join_channel_voip_handler(
 ) -> Result<(), ApiError> {
     service
         .join_channel_voip(user_id, channel_id, local_mute, local_deafen)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -668,7 +671,8 @@ async fn join_private_voip_handler(
 ) -> Result<(), ApiError> {
     service
         .join_private_voip(user_id, recipient_user_id, local_mute, local_deafen)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -687,7 +691,10 @@ async fn leave_voip_handler(
     State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
     Extension(user_id): Extension<i64>,
 ) -> Result<(), ApiError> {
-    service.leave_voip(user_id).await?;
+    service
+        .leave_voip(user_id)
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -708,7 +715,10 @@ async fn set_local_mute_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<SetMuteRequest>,
 ) -> Result<(), ApiError> {
-    service.set_local_mute(user_id, payload.mute).await?;
+    service
+        .set_local_mute(user_id, payload.mute)
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -729,7 +739,10 @@ async fn set_local_deafen_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<SetDeafenRequest>,
 ) -> Result<(), ApiError> {
-    service.set_local_deafen(user_id, payload.deafen).await?;
+    service
+        .set_local_deafen(user_id, payload.deafen)
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -750,7 +763,10 @@ async fn set_publish_screen_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<SetPublishScreenRequest>,
 ) -> Result<(), ApiError> {
-    service.set_publish_screen(user_id, payload.publish).await?;
+    service
+        .set_publish_screen(user_id, payload.publish)
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -771,6 +787,9 @@ async fn set_publish_camera_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<SetPublishCameraRequest>,
 ) -> Result<(), ApiError> {
-    service.set_publish_camera(user_id, payload.publish).await?;
+    service
+        .set_publish_camera(user_id, payload.publish)
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
