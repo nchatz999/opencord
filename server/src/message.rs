@@ -49,39 +49,18 @@ use uuid::Uuid;
 use crate::error::DatabaseError;
 
 #[derive(Debug, thiserror::Error)]
-pub enum MessageError {
-    #[error("Message not found: {message_id}")]
-    MessageNotFound { message_id: i64 },
-
-    #[error("File not found: {file_id}")]
-    FileNotFound { file_id: i64 },
-
-    #[error("Channel not found: {channel_id}")]
-    ChannelNotFound { channel_id: i64 },
-
-    #[error("Recipient not found: {recipient_id}")]
-    RecipientNotFound { recipient_id: i64 },
-
-    #[error("Reply message not found: {reply_message_id}")]
-    ReplyMessageNotFound { reply_message_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
 
-    #[error("File decode failed")]
-    FileDecodeFailed,
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 
-    #[error("Attachment too large: {size}MB (max {max}MB)")]
-    AttachmentTooLarge { size: f64, max: f64 },
-
-    #[error("Internal server error")]
-    ServerError,
-
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
-
-    #[error(transparent)]
-    FileError(#[from] FileError),
+    #[error("File manager error")]
+    FileManagerError(#[from] FileError),
 }
 
 pub trait MessageTransaction: Send + Sync {
@@ -211,19 +190,15 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         message_text: Option<String>,
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
-    ) -> Result<(Message, Vec<File>), MessageError> {
+    ) -> Result<(Message, Vec<File>), DomainError> {
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, sender_id)
             .await?
-            .ok_or(MessageError::PermissionDenied(
-                "No access to channel".to_string(),
-            ))?;
+            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 4 {
-            return Err(MessageError::PermissionDenied(
-                "Insufficient permissions to send messages".to_string(),
-            ));
+            return Err(DomainError::PermissionDenied("Insufficient permissions to send messages".to_string()));
         }
 
         let mut db_tx = self.repository.begin().await?;
@@ -238,13 +213,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "reply_to_message_id" => MessageError::ReplyMessageNotFound {
-                        reply_message_id: reply_to_message_id.unwrap_or(-1),
-                    },
-                    "channel_id" => MessageError::ChannelNotFound { channel_id },
-                    _ => MessageError::DatabaseError(e),
+                    "reply_to_message_id" => DomainError::BadRequest(
+                        format!("Reply message {} not found", reply_to_message_id.unwrap_or(-1))
+                    ),
+                    "channel_id" => DomainError::BadRequest(format!("Channel {} not found", channel_id)),
+                    _ => DomainError::InternalError(e),
                 },
-                _ => MessageError::DatabaseError(e),
+                _ => DomainError::InternalError(e),
             })?;
 
         let file_attachments = self.process_files(&mut db_tx, message.id, files).await?;
@@ -282,11 +257,11 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         message_text: Option<String>,
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
-    ) -> Result<(Message, Vec<File>), MessageError> {
+    ) -> Result<(Message, Vec<File>), DomainError> {
         let recipient_role = self.repository.find_user_role(recipient_id).await?;
 
         if recipient_role.is_none() {
-            return Err(MessageError::RecipientNotFound { recipient_id });
+            return Err(DomainError::BadRequest(format!("Recipient {} not found", recipient_id)));
         }
 
         let mut db_tx = self.repository.begin().await?;
@@ -301,13 +276,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "reply_to_message_id" => MessageError::ReplyMessageNotFound {
-                        reply_message_id: reply_to_message_id.unwrap_or(-1),
-                    },
-                    "recipient_id" => MessageError::RecipientNotFound { recipient_id },
-                    _ => MessageError::DatabaseError(e),
+                    "reply_to_message_id" => DomainError::BadRequest(
+                        format!("Reply message {} not found", reply_to_message_id.unwrap_or(-1))
+                    ),
+                    "recipient_id" => DomainError::BadRequest(format!("Recipient {} not found", recipient_id)),
+                    _ => DomainError::InternalError(e),
                 },
-                _ => MessageError::DatabaseError(e),
+                _ => DomainError::InternalError(e),
             })?;
 
         let file_attachments = self.process_files(&mut db_tx, message.id, files).await?;
@@ -348,14 +323,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         db_tx: &mut <R as MessageRepository>::Transaction,
         message_id: i64,
         files: Vec<NewFileAttachment>,
-    ) -> Result<Vec<File>, MessageError> {
+    ) -> Result<Vec<File>, DomainError> {
         let mut file_tx = self.file_manager.begin()?;
         let mut file_attachments = Vec::new();
 
         for f in &files {
             let file_data = general_purpose::STANDARD
                 .decode(&f.data)
-                .map_err(|_| MessageError::FileDecodeFailed)?;
+                .map_err(|_| DomainError::BadRequest("Invalid file data encoding".to_string()))?;
 
             let file_hash = format!("{:x}", Sha256::digest(&file_data));
             let file_size = file_data.len() as i64;
@@ -370,16 +345,12 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 )
                 .await?;
 
-            if let Err(e) = file_tx.stage_upload(file_attachment.file_id, &file_data) {
-                return Err(MessageError::FileError(e));
-            }
+            file_tx.stage_upload(file_attachment.file_id, &file_data)?;
 
             file_attachments.push(file_attachment);
         }
 
-        if let Err(e) = file_tx.commit() {
-            return Err(MessageError::FileError(e));
-        }
+        file_tx.commit()?;
 
         Ok(file_attachments)
     }
@@ -390,26 +361,21 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<Vec<Message>, MessageError> {
+    ) -> Result<Vec<Message>, DomainError> {
         let mut repo = self.repository.clone();
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(MessageError::PermissionDenied(
-                "No access to channel".to_string(),
-            ))?;
+            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 2 {
-            return Err(MessageError::PermissionDenied(
-                "Insufficient permissions to read messages".to_string(),
-            ));
+            return Err(DomainError::PermissionDenied("Insufficient permissions to read messages".to_string()));
         }
 
         let result = self
             .repository
             .find_channel_messages_with_pagination(channel_id, timestamp, limit)
-            .await
-            .map_err(MessageError::from)?;
+            .await?;
 
         Ok(result)
     }
@@ -420,12 +386,11 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         other_user_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<Vec<Message>, MessageError> {
+    ) -> Result<Vec<Message>, DomainError> {
         let result = self
             .repository
             .find_dm_messages_with_pagination(user_id, other_user_id, timestamp, limit)
-            .await
-            .map_err(MessageError::from)?;
+            .await?;
 
         Ok(result)
     }
@@ -436,26 +401,21 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<Vec<File>, MessageError> {
+    ) -> Result<Vec<File>, DomainError> {
         let mut repo = self.repository.clone();
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(MessageError::PermissionDenied(
-                "No access to channel".to_string(),
-            ))?;
+            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
 
         if rights < 2 {
-            return Err(MessageError::PermissionDenied(
-                "Insufficient permissions to read files".to_string(),
-            ));
+            return Err(DomainError::PermissionDenied("Insufficient permissions to read files".to_string()));
         }
 
         let result = self
             .repository
             .find_channel_files(channel_id, timestamp, limit)
-            .await
-            .map_err(MessageError::from)?;
+            .await?;
 
         Ok(result)
     }
@@ -466,12 +426,11 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         other_user_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<Vec<File>, MessageError> {
+    ) -> Result<Vec<File>, DomainError> {
         let result = self
             .repository
             .find_dm_files(user_id, other_user_id, timestamp, limit)
-            .await
-            .map_err(MessageError::from)?;
+            .await?;
 
         Ok(result)
     }
@@ -481,13 +440,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         user_id: i64,
         message_id: i64,
         new_text: String,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<Message, DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let message = tx
             .edit_message(message_id, &new_text, user_id)
             .await?
-            .ok_or(MessageError::MessageNotFound { message_id })?;
+            .ok_or(DomainError::BadRequest(format!("Message {} not found or not owned by user", message_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -531,7 +490,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         &self,
         user_id: i64,
         message_id: i64,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<Message, DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let files = tx.delete_message_files(message_id).await?;
@@ -539,7 +498,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let message = tx
             .delete_message(message_id, user_id)
             .await?
-            .ok_or(MessageError::MessageNotFound { message_id })?;
+            .ok_or(DomainError::BadRequest(format!("Message {} not found", message_id)))?;
 
         if message.sender_id != user_id {
             if let Some(channel_id) = message.channel_id {
@@ -553,13 +512,12 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                     let user_role = repo
                         .find_user_role(user_id)
                         .await?
-                        .ok_or(MessageError::PermissionDenied("User not found".to_string()))?;
-                    let sender_role = repo.find_user_role(message.sender_id).await?.ok_or(
-                        MessageError::PermissionDenied("Sender not found".to_string()),
-                    )?;
+                        .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
+                    let sender_role = repo.find_user_role(message.sender_id).await?
+                        .ok_or(DomainError::PermissionDenied("Sender not found".to_string()))?;
 
                     if sender_role < 2 && user_role != 1 {
-                        return Err(MessageError::PermissionDenied(
+                        return Err(DomainError::PermissionDenied(
                             "Cannot delete messages from higher role users".to_string(),
                         ));
                     }
@@ -612,50 +570,40 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         &self,
         user_id: i64,
         file_id: i64,
-    ) -> Result<(FileAttachment, Vec<u8>), MessageError> {
+    ) -> Result<(FileAttachment, Vec<u8>), DomainError> {
         let file = self
             .repository
             .find_file_by_id(file_id, user_id)
             .await?
-            .ok_or(MessageError::FileNotFound { file_id })?;
+            .ok_or(DomainError::BadRequest(format!("File {} not found", file_id)))?;
 
         let message = self
             .repository
             .find_message_by_id(file.message_id)
             .await?
-            .ok_or(MessageError::MessageNotFound {
-                message_id: file.message_id,
-            })?;
+            .ok_or(DomainError::BadRequest(format!("Message {} not found", file.message_id)))?;
 
         if let Some(channel_id) = message.channel_id {
             let mut repo = self.repository.clone();
             let rights = repo
                 .find_user_channel_rights(channel_id, user_id)
                 .await?
-                .ok_or(MessageError::PermissionDenied(
-                    "No access to channel".to_string(),
-                ))?;
+                .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
 
             if rights < 2 {
-                return Err(MessageError::PermissionDenied(
-                    "Insufficient permissions to access files".to_string(),
-                ));
+                return Err(DomainError::PermissionDenied("Insufficient permissions to access files".to_string()));
             }
         } else if let Some(recipient_id) = message.recipient_id {
             if message.sender_id != user_id && recipient_id != user_id {
-                return Err(MessageError::PermissionDenied(
-                    "No access to this direct message".to_string(),
-                ));
+                return Err(DomainError::PermissionDenied("No access to this direct message".to_string()));
             }
         } else {
-            return Err(MessageError::PermissionDenied(
-                "Invalid message type".to_string(),
-            ));
+            return Err(DomainError::PermissionDenied("Invalid message type".to_string()));
         }
 
         let raw_data = self.file_manager.get_file(file_id).map_err(|e| match e {
-            FileError::NotFound(_) => MessageError::FileNotFound { file_id },
-            _ => MessageError::ServerError,
+            FileError::NotFound(_) => DomainError::BadRequest(format!("File {} not found", file_id)),
+            _ => DomainError::FileManagerError(e),
         })?;
 
         Ok((file, raw_data))
@@ -1115,39 +1063,19 @@ use tracing::debug;
 
 type AppMessageService = MessageService<Postgre, LocalFileManager, DefaultNotifierManager>;
 
-impl From<MessageError> for ApiError {
-    fn from(err: MessageError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            MessageError::MessageNotFound { message_id } => {
-                ApiError::UnprocessableEntity(format!("Message {} not found", message_id))
-            }
-            MessageError::FileNotFound { file_id } => {
-                ApiError::UnprocessableEntity(format!("File {} not found", file_id))
-            }
-            MessageError::ChannelNotFound { channel_id } => {
-                ApiError::UnprocessableEntity(format!("Channel {} not found", channel_id))
-            }
-            MessageError::RecipientNotFound { recipient_id } => {
-                ApiError::UnprocessableEntity(format!("Recipient {} not found", recipient_id))
-            }
-            MessageError::ReplyMessageNotFound { reply_message_id } => {
-                ApiError::UnprocessableEntity(format!(
-                    "Reply message {} not found",
-                    reply_message_id
-                ))
-            }
-            MessageError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
-            MessageError::FileDecodeFailed => {
-                ApiError::UnprocessableEntity("File decode failed".to_string())
-            }
-            MessageError::AttachmentTooLarge { size, max } => ApiError::UnprocessableEntity(
-                format!("Attachment too large: {}MB (max {}MB)", size, max),
-            ),
-            MessageError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
-            MessageError::ServerError => {
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
-            MessageError::FileError(e) => ApiError::InternalServerError(e.to_string()),
+            DomainError::FileManagerError(file_err) => {
+                tracing::error!("File manager error: {}", file_err);
+                ApiError::InternalServerError("File system error".to_string())
+            }
         }
     }
 }
@@ -1219,7 +1147,8 @@ async fn create_channel_message_handler(
             payload.reply_to_message_id,
             files,
         )
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::CREATED)
 }
@@ -1266,7 +1195,8 @@ async fn create_dm_message_handler(
             payload.reply_to_message_id,
             files,
         )
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::CREATED)
 }
@@ -1300,7 +1230,8 @@ async fn get_channel_messages_handler(
 
     let response = service
         .get_channel_messages(user_id, channel_id, query.timestamp, limit)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(Json(response))
 }
@@ -1334,7 +1265,8 @@ async fn get_dm_messages_handler(
 
     let response = service
         .get_dm_messages(user_id, other_user_id, query.timestamp, limit)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(Json(response))
 }
@@ -1366,7 +1298,8 @@ async fn edit_message_handler(
 ) -> Result<StatusCode, ApiError> {
     service
         .edit_message(user_id, message_id, payload.message_text)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1394,7 +1327,10 @@ async fn delete_message_handler(
     Extension(user_id): Extension<i64>,
     Path(message_id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    service.delete_message(user_id, message_id).await?;
+    service
+        .delete_message(user_id, message_id)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1422,10 +1358,10 @@ async fn get_file_handler(
     Extension(user_id): Extension<i64>,
     Path(file_id): Path<i64>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let file = service.get_file(user_id, file_id).await.map_err(|e| {
-        debug!("get_file failed: {}", e);
-        ApiError::from(e)
-    })?;
+    let file = service
+        .get_file(user_id, file_id)
+        .await
+        .map_err(ApiError::from)?;
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -1475,7 +1411,8 @@ async fn get_channel_files_handler(
 
     let response = service
         .get_channel_files(user_id, channel_id, query.timestamp, limit)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(Json(response))
 }
@@ -1509,7 +1446,8 @@ async fn get_dm_files_handler(
 
     let response = service
         .get_dm_files(user_id, other_user_id, query.timestamp, limit)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(Json(response))
 }
