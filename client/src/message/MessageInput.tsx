@@ -76,10 +76,6 @@ const MessageInput: Component<{
   });
 
   const handleSubmit = async () => {
-    if (!content().trim() && files().length === 0) return;
-    if (!userDomain.getCurrent()) return;
-    if (isSending()) return;
-
     setIsSending(true);
 
     try {
@@ -95,10 +91,8 @@ const MessageInput: Component<{
         messageText: content().trim() || undefined,
         files: fileUploads,
       };
-      const endpoint = props.context.type === "dm" 
-        ? `/message/dm/${props.context.id}/messages`
-        : `/message/channel/${props.context.id}/messages`;
-      
+      const endpoint = `/message/${props.context.type}/${props.context.id}/messages`
+
       const result = await fetchApi(endpoint, {
         method: "POST",
         body: messageData,
