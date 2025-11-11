@@ -156,7 +156,14 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let participant = tx
             .create_channel_voip_participant(user_id, channel_id, local_mute, local_deafen)
-            .await?;
+            .await
+            .map_err(|e| match &e {
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "channel_id" => DomainError::BadRequest(format!("Channel {} not found", channel_id)),
+                    _ => DomainError::InternalError(e),
+                },
+                _ => DomainError::InternalError(e),
+            })?;
 
         self.repository.commit(tx).await?;
 
@@ -197,7 +204,14 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let participant = tx
             .create_private_voip_participant(user_id, recipient_user_id, local_mute, local_deafen)
-            .await?;
+            .await
+            .map_err(|e| match &e {
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "recipient_id" => DomainError::BadRequest(format!("User {} not found", recipient_user_id)),
+                    _ => DomainError::InternalError(e),
+                },
+                _ => DomainError::InternalError(e),
+            })?;
 
         self.repository.commit(tx).await?;
 
