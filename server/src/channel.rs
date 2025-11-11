@@ -35,27 +35,15 @@ pub struct Channel {
 
 
 #[derive(Debug, thiserror::Error)]
-pub enum ChannelError {
-    #[error("Channel not found: {channel_id}")]
-    ChannelNotFound { channel_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
-    #[error("Group not found: {group_id}")]
-    GroupNotFound { group_id: i64 },
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
-    #[error("Channel name '{name}' is already taken")]
-    NameTaken { name: String },
-
-    #[error("Channel name '{name}' is invalid")]
-    InvalidName { name: String },
-
-    #[error("Permission denied")]
-    PermissionDenied,
-
-    #[error("Internal server error")]
-    ServerError,
-
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 }
 
 
@@ -144,13 +132,12 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_id: i64,
         user_id: i64,
         minimum_rights_level: i64,
-    ) -> Result<bool, ChannelError> {
+    ) -> Result<bool, DomainError> {
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, user_id)
-            .await
-            .map_err(|_| ChannelError::ServerError)?
-            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Channel {} not found", channel_id)))?;
 
         Ok(rights >= minimum_rights_level)
     }
@@ -161,26 +148,26 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_type: ChannelType,
         group_id: i64,
         user_id: i64,
-    ) -> Result<Channel, ChannelError> {
+    ) -> Result<Channel, DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let role_id = tx
             .find_user_role(user_id)
             .await?
-            .ok_or(ChannelError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 && role_id != 1 {
-            return Err(ChannelError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to create channel".to_string()));
         }
 
         
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
-            return Err(ChannelError::InvalidName { name });
+            return Err(DomainError::BadRequest("Channel name cannot be empty".to_string()));
         }
         if trimmed_name.len() > 100 {
-            return Err(ChannelError::InvalidName { name });
+            return Err(DomainError::BadRequest("Channel name too long".to_string()));
         }
 
         
@@ -189,11 +176,13 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             .await
             .map_err(|e| match e {
                 DatabaseError::UniqueConstraintViolation { .. } => {
-                    return ChannelError::NameTaken {
-                        name: trimmed_name.to_string(),
-                    }
+                    DomainError::BadRequest(format!("Channel name '{}' is already taken", trimmed_name))
                 }
-                other => ChannelError::DatabaseError(other),
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "group_id" => DomainError::BadRequest(format!("Group {} not found", group_id)),
+                    _ => DomainError::InternalError(e),
+                },
+                other => DomainError::InternalError(other),
             })?;
 
         self.repository.commit(tx).await?;
@@ -221,21 +210,21 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         &self,
         channel_id: i64,
         user_id: i64,
-    ) -> Result<Channel, ChannelError> {
+    ) -> Result<Channel, DomainError> {
         if !self.verify_user_permission(channel_id, user_id, 1).await? {
-            return Err(ChannelError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("No access to channel".to_string()));
         }
 
         let channel_data = self
             .repository
             .find_by_id(channel_id)
             .await?
-            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+            .ok_or(DomainError::BadRequest(format!("Channel {} not found", channel_id)))?;
 
         Ok(channel_data)
     }
 
-    pub async fn list_user_channels(&self, user_id: i64) -> Result<Vec<Channel>, ChannelError> {
+    pub async fn list_user_channels(&self, user_id: i64) -> Result<Vec<Channel>, DomainError> {
         let channels = self.repository.list_by_user_role(user_id).await?;
 
         Ok(channels)
@@ -246,33 +235,39 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_id: i64,
         new_name: String,
         user_id: i64,
-    ) -> Result<(), ChannelError> {
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let role_id = tx
             .find_user_role(user_id)
             .await?
-            .ok_or(ChannelError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 && role_id != 1 {
-            return Err(ChannelError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to update channel".to_string()));
         }
 
         
         let trimmed_name = new_name.trim();
         if trimmed_name.is_empty() {
-            return Err(ChannelError::InvalidName { name: new_name });
+            return Err(DomainError::BadRequest("Channel name cannot be empty".to_string()));
         }
         if trimmed_name.len() > 100 {
-            return Err(ChannelError::InvalidName { name: new_name });
+            return Err(DomainError::BadRequest("Channel name too long".to_string()));
         }
 
         
         let updated_channel = tx
             .update_name(channel_id, trimmed_name)
-            .await?
-            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+            .await
+            .map_err(|e| match e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    DomainError::BadRequest(format!("Channel name '{}' is already taken", trimmed_name))
+                }
+                other => DomainError::InternalError(other),
+            })?
+            .ok_or(DomainError::BadRequest(format!("Channel {} not found", channel_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -299,17 +294,17 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_id: i64,
         new_group_id: i64,
         user_id: i64,
-    ) -> Result<(), ChannelError> {
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let role_id = tx
             .find_user_role(user_id)
             .await?
-            .ok_or(ChannelError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 && role_id != 1 {
-            return Err(ChannelError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to update channel".to_string()));
         }
 
         
@@ -317,12 +312,13 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             .update_group(channel_id, new_group_id)
             .await
             .map_err(|e| match e {
-                DatabaseError::ForeignKeyViolation { .. } => ChannelError::GroupNotFound {
-                    group_id: new_group_id,
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "group_id" => DomainError::BadRequest(format!("Group {} not found", new_group_id)),
+                    _ => DomainError::InternalError(e),
                 },
-                other => ChannelError::DatabaseError(other),
+                other => DomainError::InternalError(other),
             })?
-            .ok_or(ChannelError::ChannelNotFound { channel_id })?;
+            .ok_or(DomainError::BadRequest(format!("Channel {} not found", channel_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -348,25 +344,23 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         &self,
         channel_id: i64,
         user_id: i64,
-    ) -> Result<Option<Channel>, ChannelError> {
+    ) -> Result<Option<Channel>, DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let role_id = tx
             .find_user_role(user_id)
             .await?
-            .ok_or(ChannelError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 {
-            return Err(ChannelError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to delete channel".to_string()));
         }
 
         let deleted = tx
             .delete(channel_id)
             .await?
-            .ok_or(ChannelError::ChannelNotFound {
-                channel_id: channel_id,
-            })?;
+            .ok_or(DomainError::BadRequest(format!("Channel {} not found", channel_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -652,27 +646,13 @@ pub struct RevealChannelData {
 use axum::http::StatusCode;
 use axum::Json;
 
-impl From<ChannelError> for ApiError {
-    fn from(err: ChannelError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            ChannelError::ChannelNotFound { channel_id } => {
-                ApiError::UnprocessableEntity(format!("Channel {} not found", channel_id))
-            }
-            ChannelError::GroupNotFound { group_id } => {
-                ApiError::UnprocessableEntity(format!("Group {} not found", group_id))
-            }
-            ChannelError::NameTaken { name } => {
-                ApiError::UnprocessableEntity(format!("Channel name '{}' is already taken", name))
-            }
-            ChannelError::InvalidName { name } => {
-                ApiError::UnprocessableEntity(format!("Invalid channel name: '{}'", name))
-            }
-            ChannelError::PermissionDenied => {
-                ApiError::UnprocessableEntity("Permission denied".to_string())
-            }
-            ChannelError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
-            ChannelError::ServerError => {
-                
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
         }
@@ -721,7 +701,10 @@ async fn list_channels_handler(
     State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
     Extension(user): Extension<i64>,
 ) -> Result<Json<Vec<Channel>>, ApiError> {
-    let channels = service.list_user_channels(user).await?;
+    let channels = service
+        .list_user_channels(user)
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(channels))
 }
 
@@ -748,7 +731,10 @@ async fn get_channel_by_id_handler(
     Extension(user): Extension<i64>,
     Path(id): Path<i64>,
 ) -> Result<Json<Channel>, ApiError> {
-    let channel_data = service.get_channel(id, user).await?;
+    let channel_data = service
+        .get_channel(id, user)
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(channel_data))
 }
 
@@ -778,7 +764,8 @@ async fn create_channel_handler(
             payload.group_id, 
             user,
         )
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok((
         StatusCode::CREATED,
@@ -811,7 +798,10 @@ async fn delete_channel_handler(
     Extension(user): Extension<i64>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    service.delete_channel(id, user).await?;
+    service
+        .delete_channel(id, user)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -844,7 +834,8 @@ async fn update_channel_name_handler(
 ) -> Result<StatusCode, ApiError> {
     service
         .update_channel_name(id, payload.name.clone(), user)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -876,7 +867,8 @@ async fn update_channel_group_handler(
 ) -> Result<StatusCode, ApiError> {
     service
         .update_channel_group(id, payload.group_id, user)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
