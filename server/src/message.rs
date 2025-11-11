@@ -378,7 +378,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         Ok(file_attachments)
     }
 
-
     pub async fn get_channel_messages(
         &self,
         user_id: i64,
@@ -1199,11 +1198,7 @@ async fn create_channel_message_handler(
             payload.reply_to_message_id,
             files,
         )
-        .await
-        .map_err(|e| {
-            debug!("create_channel_message failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -1250,11 +1245,7 @@ async fn create_dm_message_handler(
             payload.reply_to_message_id,
             files,
         )
-        .await
-        .map_err(|e| {
-            debug!("create_dm_message failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -1288,11 +1279,7 @@ async fn get_channel_messages_handler(
 
     let response = service
         .get_channel_messages(user_id, channel_id, query.timestamp, limit)
-        .await
-        .map_err(|e| {
-            debug!("get_channel_messages failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(Json(response))
 }
@@ -1326,11 +1313,7 @@ async fn get_dm_messages_handler(
 
     let response = service
         .get_dm_messages(user_id, other_user_id, query.timestamp, limit)
-        .await
-        .map_err(|e| {
-            debug!("get_dm_messages failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(Json(response))
 }
@@ -1362,11 +1345,7 @@ async fn edit_message_handler(
 ) -> Result<StatusCode, ApiError> {
     service
         .edit_message(user_id, message_id, payload.message_text)
-        .await
-        .map_err(|e| {
-            debug!("edit_message failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1394,13 +1373,7 @@ async fn delete_message_handler(
     Extension(user_id): Extension<i64>,
     Path(message_id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    service
-        .delete_message(user_id, message_id)
-        .await
-        .map_err(|e| {
-            debug!("delete_message failed: {}", e);
-            ApiError::from(e)
-        })?;
+    service.delete_message(user_id, message_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1481,11 +1454,7 @@ async fn get_channel_files_handler(
 
     let response = service
         .get_channel_files(user_id, channel_id, query.timestamp, limit)
-        .await
-        .map_err(|e| {
-            debug!("get_channel_files failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(Json(response))
 }
@@ -1519,11 +1488,7 @@ async fn get_dm_files_handler(
 
     let response = service
         .get_dm_files(user_id, other_user_id, query.timestamp, limit)
-        .await
-        .map_err(|e| {
-            debug!("get_dm_files failed: {}", e);
-            ApiError::from(e)
-        })?;
+        .await?;
 
     Ok(Json(response))
 }
