@@ -488,8 +488,8 @@ use axum::Json;
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
-            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
