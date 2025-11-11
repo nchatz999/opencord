@@ -55,24 +55,21 @@ use crate::middleware::{authorize, AuthorizeService};
 use crate::{error::DatabaseError, managers::FileManager};
 
 #[derive(Debug, thiserror::Error)]
-pub enum UserError {
-    #[error("User not found: {user_id}")]
-    UserNotFound { user_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
-    #[error("Avatar not found: {avatar_id}")]
-    AvatarNotFound { avatar_id: i64 },
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
-    #[error("Role not found: {role_id}")]
-    RoleNotFound { role_id: i64 },
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 
-    #[error("Permission denied")]
-    PermissionDenied,
+    #[error("File manager error")]
+    FileManagerError(#[from] FileError),
 
-    #[error("Internal server error")]
-    ServerError,
-
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    #[error("File decode failed")]
+    FileDecodeError,
 }
 
 
@@ -152,30 +149,31 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         user_id: i64,
         new_role_id: i64,
         requester_user_id: i64,
-    ) -> Result<User, UserError> {
+    ) -> Result<User, DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let role_id = self
             .repository
             .find_user_role(requester_user_id)
             .await?
-            .ok_or(UserError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 {
-            return Err(UserError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to update user role".to_string()));
         }
 
         let updated_user = tx
             .update_user_role(user_id, new_role_id)
             .await
             .map_err(|e| match e {
-                DatabaseError::ForeignKeyViolation { .. } => UserError::RoleNotFound {
-                    role_id: new_role_id,
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "role_id" => DomainError::BadRequest(format!("Role {} not found", new_role_id)),
+                    _ => DomainError::InternalError(e),
                 },
-                other => UserError::DatabaseError(other),
+                other => DomainError::InternalError(other),
             })?
-            .ok_or(UserError::UserNotFound { user_id })?;
+            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -193,16 +191,16 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         user_id: i64,
         requester_id: i64,
         avatar_data: NewAvatarRequest,
-    ) -> Result<User, UserError> {
+    ) -> Result<User, DomainError> {
         
         if user_id != requester_id {
-            return Err(UserError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Can only update own avatar".to_string()));
         }
 
         
         let file_data = general_purpose::STANDARD
             .decode(&avatar_data.data)
-            .map_err(|_| UserError::ServerError)?;
+            .map_err(|_| DomainError::FileDecodeError)?;
 
         
         let file_uuid = Uuid::new_v4().to_string();
@@ -225,14 +223,13 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let updated_user = tx
             .update_user_avatar(user_id, avatar_file.file_id)
             .await?
-            .ok_or(UserError::UserNotFound { user_id })?;
+            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
         
         self.file_manager
-            .upload_file(avatar_file.file_id, &file_data)
-            .map_err(|_| UserError::ServerError)?;
+            .upload_file(avatar_file.file_id, &file_data)?;
 
         
         let event = Event::UserUpdated {
@@ -246,18 +243,18 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
     pub async fn get_avatar_by_id(
         &self,
         avatar_id: i64,
-    ) -> Result<(AvatarFile, Vec<u8>), UserError> {
+    ) -> Result<(AvatarFile, Vec<u8>), DomainError> {
         
         let avatar_file = self
             .repository
             .find_avatar_file(avatar_id)
             .await?
-            .ok_or(UserError::AvatarNotFound { avatar_id })?;
+            .ok_or(DomainError::BadRequest(format!("Avatar {} not found", avatar_id)))?;
 
         
         let file_data = self.file_manager.get_file(avatar_id).map_err(|e| match e {
-            FileError::NotFound(_) => UserError::AvatarNotFound { avatar_id },
-            _ => UserError::ServerError,
+            FileError::NotFound(_) => DomainError::BadRequest(format!("Avatar {} not found", avatar_id)),
+            _ => DomainError::FileManagerError(e),
         })?;
 
         Ok((avatar_file, file_data))
@@ -268,10 +265,10 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         user_id: i64,
         requester_user_id: i64,
         manual_status: UserStatusType,
-    ) -> Result<(), UserError> {
+    ) -> Result<(), DomainError> {
         
         if user_id != requester_user_id {
-            return Err(UserError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Can only update own status".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
@@ -279,7 +276,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let updated_user = tx
             .update_manual_user_status(user_id, manual_status)
             .await?
-            .ok_or(UserError::UserNotFound { user_id })?;
+            .ok_or(DomainError::BadRequest(format!("User {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -292,7 +289,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         Ok(())
     }
 
-    pub async fn get_all_users(&self) -> Result<Vec<User>, UserError> {
+    pub async fn get_all_users(&self) -> Result<Vec<User>, DomainError> {
         let users = self.repository.find_all_users().await?;
         Ok(users)
     }
@@ -561,24 +558,21 @@ pub struct AllUsersResponse {
 
 use crate::error::ApiError;
 
-impl From<UserError> for ApiError {
-    fn from(err: UserError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            UserError::UserNotFound { user_id } => {
-                ApiError::UnprocessableEntity(format!("User {} not found", user_id))
-            }
-            UserError::AvatarNotFound { avatar_id } => {
-                ApiError::UnprocessableEntity(format!("Avatar {} not found", avatar_id))
-            }
-            UserError::RoleNotFound { role_id } => {
-                ApiError::UnprocessableEntity(format!("Role {} not found", role_id))
-            }
-            UserError::PermissionDenied => {
-                ApiError::UnprocessableEntity("Permission denied".to_string())
-            }
-            UserError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
-            UserError::ServerError => {
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
+            }
+            DomainError::FileManagerError(file_err) => {
+                tracing::error!("File manager error: {}", file_err);
+                ApiError::InternalServerError("File system error".to_string())
+            }
+            DomainError::FileDecodeError => {
+                ApiError::BadRequest("Invalid file data encoding".to_string())
             }
         }
     }
@@ -633,7 +627,8 @@ async fn update_user_role_handler(
 ) -> Result<Json<User>, ApiError> {
     let updated_user = service
         .update_user_role(target_user_id, payload.role_id, user_id)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(updated_user))
 }
 
@@ -660,7 +655,8 @@ async fn update_user_avatar_handler(
 ) -> Result<Json<User>, ApiError> {
     let updated_user = service
         .update_user_avatar(user_id, user_id, payload)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(updated_user))
 }
 
@@ -683,7 +679,10 @@ async fn get_user_avatar_handler(
     Extension(_user): Extension<i64>,
     Path(avatar_id): Path<i64>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let (avatar_file, file_data) = service.get_avatar_by_id(avatar_id).await?;
+    let (avatar_file, file_data) = service
+        .get_avatar_by_id(avatar_id)
+        .await
+        .map_err(ApiError::from)?;
     let headers = [
         ("Content-Type", avatar_file.file_type),
         (
@@ -720,7 +719,8 @@ async fn update_manual_user_status_handler(
 ) -> Result<(), ApiError> {
     service
         .update_manual_user_status(user_id, requester_user_id, payload.manual_status)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -739,6 +739,9 @@ async fn get_all_users_handler(
     State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager>>,
     Extension(_user_id): Extension<i64>,
 ) -> Result<Json<Vec<User>>, ApiError> {
-    let users = service.get_all_users().await?;
+    let users = service
+        .get_all_users()
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(users))
 }
