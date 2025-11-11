@@ -61,47 +61,52 @@ const ChatContent: Component = () => {
     const previousScrollHeight = container.scrollHeight;
     const firstMessage = msgs[0];
 
+    try {
+      let createdAt;
+      if (firstMessage)
+        createdAt = firstMessage.createdAt
+      else
+        createdAt = new Date().toISOString()
+      const messagesEndpoint = context.type === "dm"
+        ? `/message/dm/${context.id}/messages`
+        : `/message/channel/${context.id}/messages`;
 
-    let createdAt;
-    if (firstMessage)
-      createdAt = firstMessage.createdAt
-    else
-      createdAt = new Date().toISOString()
-    const messagesEndpoint = context.type === "dm"
-      ? `/message/dm/${context.id}/messages`
-      : `/message/channel/${context.id}/messages`;
-
-    const result = await fetchApi<Message[]>(messagesEndpoint, {
-      method: "GET",
-      query: {
-        limit: MESSAGES_LIMIT,
-        timestamp: createdAt
+      const result = await fetchApi<Message[]>(messagesEndpoint, {
+        method: "GET",
+        query: {
+          limit: MESSAGES_LIMIT,
+          timestamp: createdAt
+        }
+      });
+      if (!result.ok) {
+        addToast(`Error: ${result.error.reason}`, "error");
+        return;
       }
-    });
-    if (!result.ok) {
-      addToast(`Error: ${result.error.reason}`, "error");
-      return;
-    }
-    messageDomain.insertMany(result.value);
-    const filesEndpoint = context.type === "dm"
-      ? `/message/dm/${context.id}/files`
-      : `/message/channel/${context.id}/files`;
+      messageDomain.insertMany(result.value);
+      const filesEndpoint = context.type === "dm"
+        ? `/message/dm/${context.id}/files`
+        : `/message/channel/${context.id}/files`;
 
-    const filesResult = await fetchApi<File[]>(filesEndpoint, {
-      method: "GET",
-      query: {
-        limit: MESSAGES_LIMIT,
-        timestamp: createdAt
+      const filesResult = await fetchApi<File[]>(filesEndpoint, {
+        method: "GET",
+        query: {
+          limit: MESSAGES_LIMIT,
+          timestamp: createdAt
+        }
+      });
+      if (filesResult.ok) {
+        fileDomain.addMany(filesResult.value);
       }
-    });
-    if (filesResult.ok) {
-      fileDomain.addMany(filesResult.value);
-    }
 
-    requestAnimationFrame(() => {
-      const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
-      container.scrollTop += scrollHeightDiff;
-    });
+      requestAnimationFrame(() => {
+        const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
+        container.scrollTop += scrollHeightDiff;
+      });
+    } catch (error) {
+      console.error("Error loading messages:", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
 
