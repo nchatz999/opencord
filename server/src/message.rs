@@ -378,34 +378,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         Ok(file_attachments)
     }
 
-    pub async fn create_message(
-        &mut self,
-        new_message: NewMessage,
-        files: Vec<NewFileAttachment>,
-    ) -> Result<(Message, Vec<File>), MessageError> {
-        match new_message.message_type {
-            MessageType::Channel { channel_id } => {
-                self.create_channel_message(
-                    new_message.sender_id,
-                    channel_id,
-                    new_message.message_text,
-                    new_message.reply_to_message_id,
-                    files,
-                )
-                .await
-            }
-            MessageType::Direct { recipient_id } => {
-                self.create_dm_message(
-                    new_message.sender_id,
-                    recipient_id,
-                    new_message.message_text,
-                    new_message.reply_to_message_id,
-                    files,
-                )
-                .await
-            }
-        }
-    }
 
     pub async fn get_channel_messages(
         &self,
@@ -1172,7 +1144,8 @@ pub fn message_routes(
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
-        .routes(routes!(create_message_handler))
+        .routes(routes!(create_channel_message_handler))
+        .routes(routes!(create_dm_message_handler))
         .routes(routes!(get_channel_messages_handler))
         .routes(routes!(get_dm_messages_handler))
         .routes(routes!(get_channel_files_handler))
@@ -1187,10 +1160,9 @@ pub fn message_routes(
 #[utoipa::path(
     post,
     tag = "message",
-    path = "/create/{type}/{id}",
+    path = "/channel/{channel_id}/messages",
     params(
-        ("type", Path, description = "Type of conversation (dm or channel)"),
-        ("id", Path, description = "The ID of the dm or channel to send message to"),
+        ("channel_id", Path, description = "The ID of the channel to send message to"),
     ),
     request_body = CreateMessageRequest,
     responses(
@@ -1203,24 +1175,12 @@ pub fn message_routes(
     security(("api_key" = []))
 )]
 #[axum::debug_handler]
-async fn create_message_handler(
+async fn create_channel_message_handler(
     State(mut service): State<AppMessageService>,
     Extension(user_id): Extension<i64>,
-    Path((message_type, id)): Path<(MessageTypePath, i64)>,
+    Path(channel_id): Path<i64>,
     Json(payload): Json<CreateMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
-    println!("asfl");
-    let message_type_enum = match message_type {
-        MessageTypePath::Dm => MessageType::Direct { recipient_id: id },
-        MessageTypePath::Channel => MessageType::Channel { channel_id: id },
-    };
-    let new_message = NewMessage {
-        sender_id: user_id,
-        message_text: payload.message_text,
-        message_type: message_type_enum,
-        reply_to_message_id: payload.reply_to_message_id,
-    };
-
     let files: Vec<NewFileAttachment> = payload
         .files
         .into_iter()
@@ -1232,10 +1192,67 @@ async fn create_message_handler(
         .collect();
 
     service
-        .create_message(new_message, files)
+        .create_channel_message(
+            user_id,
+            channel_id,
+            payload.message_text,
+            payload.reply_to_message_id,
+            files,
+        )
         .await
         .map_err(|e| {
-            debug!("create_message failed: {}", e);
+            debug!("create_channel_message failed: {}", e);
+            ApiError::from(e)
+        })?;
+
+    Ok(StatusCode::CREATED)
+}
+
+#[utoipa::path(
+    post,
+    tag = "message",
+    path = "/dm/{user_id}/messages",
+    params(
+        ("user_id", Path, description = "The ID of the user to send DM to"),
+    ),
+    request_body = CreateMessageRequest,
+    responses(
+        (status = 201, description = "Message created successfully"),
+        (status = 400, description = "Bad request", body = ApiError),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 413, description = "File too large", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+#[axum::debug_handler]
+async fn create_dm_message_handler(
+    State(mut service): State<AppMessageService>,
+    Extension(user_id): Extension<i64>,
+    Path(recipient_id): Path<i64>,
+    Json(payload): Json<CreateMessageRequest>,
+) -> Result<StatusCode, ApiError> {
+    let files: Vec<NewFileAttachment> = payload
+        .files
+        .into_iter()
+        .map(|f| NewFileAttachment {
+            file_name: f.file_name,
+            content_type: f.content_type,
+            data: f.data,
+        })
+        .collect();
+
+    service
+        .create_dm_message(
+            user_id,
+            recipient_id,
+            payload.message_text,
+            payload.reply_to_message_id,
+            files,
+        )
+        .await
+        .map_err(|e| {
+            debug!("create_dm_message failed: {}", e);
             ApiError::from(e)
         })?;
 
