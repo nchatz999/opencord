@@ -6,6 +6,7 @@ import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import { useToaster } from "../components/Toaster";
 import { channelDomain, userDomain } from "../store";
 import { fetchApi, toBase64 } from "../utils";
+import Button from "../components/Button";
 
 const MessageInput: Component<{
   context: { type: "channel" | "dm"; id: number };
@@ -94,8 +95,7 @@ const MessageInput: Component<{
         messageText: content().trim() || undefined,
         files: fileUploads,
       };
-
-      const result = await fetchApi(`/message/${props.context.type}/${props.context.id}/messages`, {
+      const result = await fetchApi(`/message/create/${props.context.type}/${props.context.id}`, {
         method: "POST",
         body: messageData,
       });
@@ -192,13 +192,13 @@ const MessageInput: Component<{
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <button
+          <Button
+            variant="ghost"
             onClick={() => fileInputRef?.click()}
-            class="p-2 text-[#949ba4] hover:text-[#DBDEE1] transition-colors hover:bg-[#2e3035] rounded"
             title="Attach files"
           >
             <Paperclip size={20} />
-          </button>
+          </Button>
 
           <div class="flex-1 min-w-0 relative">
             <ContentEditable
@@ -214,37 +214,24 @@ const MessageInput: Component<{
             />
           </div>
 
-          <button
-            class="p-2 text-[#949ba4] hover:text-[#DBDEE1] transition-colors hover:bg-[#2e3035] rounded"
+          <Button
+            variant="ghost"
             title="Add emoji"
             disabled
           >
             <Smile size={20} />
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="ghost"
             onClick={handleSubmit}
             disabled={
-              (!content().trim() && files().length === 0) || isSending()
+              content().trim().length == 0
             }
-            class={`
-              p-2 rounded transition-colors
-              ${(content().trim() || files().length > 0) && !isSending()
-                ? "text-[#DBDEE1] hover:bg-[#00A8FC] hover:text-white"
-                : "text-[#6c7177] cursor-not-allowed"
-              }
-            `}
             title={isSending() ? "Sending..." : "Send message"}
           >
-            <Show
-              when={!isSending()}
-              fallback={
-                <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
-              }
-            >
-              <Send size={20} />
-            </Show>
-          </button>
+            <Send size={20} />
+          </Button>
 
           <input
             ref={fileInputRef}
