@@ -23,27 +23,15 @@ pub struct GroupRoleRights {
 
 
 #[derive(Debug, thiserror::Error)]
-pub enum GroupError {
-    #[error("Group not found: {group_id}")]
-    GroupNotFound { group_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
-    #[error("Group name '{name}' is already taken")]
-    NameTaken { name: String },
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
-    #[error("Group name '{name}' is invalid")]
-    InvalidName { name: String },
-
-    #[error("Permission denied")]
-    PermissionDenied,
-
-    #[error("Cannot delete group - it contains channels")]
-    HasChannels,
-
-    #[error("Internal server error")]
-    ServerError,
-
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 }
 
 
@@ -108,35 +96,34 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         group_id: i64,
         user_id: i64,
         minimum_rights_level: i64,
-    ) -> Result<bool, GroupError> {
+    ) -> Result<bool, DomainError> {
         let rights = self
             .repository
             .find_user_group_rights(group_id, user_id)
-            .await
-            .map_err(|_| GroupError::ServerError)?
-            .ok_or(GroupError::GroupNotFound { group_id })?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
         Ok(rights >= minimum_rights_level)
     }
 
-    pub async fn create_group(&self, name: String, user_id: i64) -> Result<Group, GroupError> {
+    pub async fn create_group(&self, name: String, user_id: i64) -> Result<Group, DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
             .await?
-            .ok_or(GroupError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 && role_id != 1 {
-            return Err(GroupError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to create group".to_string()));
         }
 
         
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
-            return Err(GroupError::InvalidName { name });
+            return Err(DomainError::BadRequest("Group name cannot be empty".to_string()));
         }
         if trimmed_name.len() > 100 {
-            return Err(GroupError::InvalidName { name });
+            return Err(DomainError::BadRequest("Group name too long".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
@@ -144,11 +131,9 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         
         let group = tx.create(trimmed_name).await.map_err(|e| match e {
             DatabaseError::UniqueConstraintViolation { .. } => {
-                return GroupError::NameTaken {
-                    name: trimmed_name.to_string(),
-                }
+                DomainError::BadRequest(format!("Group name '{}' is already taken", trimmed_name))
             }
-            other => GroupError::DatabaseError(other),
+            other => DomainError::InternalError(other),
         })?;
 
         self.repository.commit(tx).await?;
@@ -171,21 +156,20 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         Ok(group)
     }
 
-    pub async fn get_group(&self, group_id: i64, user_id: i64) -> Result<Group, GroupError> {
+    pub async fn get_group(&self, group_id: i64, user_id: i64) -> Result<Group, DomainError> {
         if !self.verify_user_permission(group_id, user_id, 1).await? {
-            return Err(GroupError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("No access to group".to_string()));
         }
         let group_data = self
             .repository
             .find_by_id(group_id)
-            .await
-            .map_err(|_| GroupError::ServerError)?
-            .ok_or(GroupError::GroupNotFound { group_id })?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
 
         Ok(group_data)
     }
 
-    pub async fn list_user_groups(&self, user_id: i64) -> Result<Vec<Group>, GroupError> {
+    pub async fn list_user_groups(&self, user_id: i64) -> Result<Vec<Group>, DomainError> {
         let groups = self.repository.list_by_user_role(user_id).await?;
 
         Ok(groups)
@@ -196,25 +180,25 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         group_id: i64,
         new_name: String,
         user_id: i64,
-    ) -> Result<(), GroupError> {
+    ) -> Result<(), DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
             .await?
-            .ok_or(GroupError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 && role_id != 1 {
-            return Err(GroupError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to update group".to_string()));
         }
 
         
         let trimmed_name = new_name.trim();
         if trimmed_name.is_empty() {
-            return Err(GroupError::InvalidName { name: new_name });
+            return Err(DomainError::BadRequest("Group name cannot be empty".to_string()));
         }
         if trimmed_name.len() > 100 {
-            return Err(GroupError::InvalidName { name: new_name });
+            return Err(DomainError::BadRequest("Group name too long".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
@@ -222,8 +206,14 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         
         let updated_group = tx
             .update_name(group_id, trimmed_name)
-            .await?
-            .ok_or(GroupError::GroupNotFound { group_id })?;
+            .await
+            .map_err(|e| match e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    DomainError::BadRequest(format!("Group name '{}' is already taken", trimmed_name))
+                }
+                other => DomainError::InternalError(other),
+            })?
+            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -249,24 +239,30 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         &self,
         group_id: i64,
         user_id: i64,
-    ) -> Result<Option<Group>, GroupError> {
+    ) -> Result<Option<Group>, DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
             .await?
-            .ok_or(GroupError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         
         if role_id != 0 {
-            return Err(GroupError::PermissionDenied);
+            return Err(DomainError::PermissionDenied("Insufficient permissions to delete group".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
 
         let deleted = tx
             .delete(group_id)
-            .await?
-            .ok_or(GroupError::GroupNotFound { group_id })?;
+            .await
+            .map_err(|e| match e {
+                DatabaseError::ForeignKeyViolation { .. } => {
+                    DomainError::BadRequest("Cannot delete group - it contains channels".to_string())
+                }
+                other => DomainError::InternalError(other),
+            })?
+            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -434,26 +430,13 @@ pub struct UpdateGroupRequest {
 use axum::http::StatusCode;
 use axum::Json;
 
-impl From<GroupError> for ApiError {
-    fn from(err: GroupError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            GroupError::GroupNotFound { group_id } => {
-                ApiError::UnprocessableEntity(format!("Group {} not found", group_id))
-            }
-            GroupError::NameTaken { name } => {
-                ApiError::UnprocessableEntity(format!("Group name '{}' is already taken", name))
-            }
-            GroupError::InvalidName { name } => {
-                ApiError::UnprocessableEntity(format!("Invalid group name: '{}'", name))
-            }
-            GroupError::PermissionDenied => {
-                ApiError::UnprocessableEntity("Permission denied".to_string())
-            }
-            GroupError::HasChannels => {
-                ApiError::UnprocessableEntity("Cannot delete group with channels".to_string())
-            }
-            GroupError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
-            GroupError::ServerError => {
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
         }
@@ -502,7 +485,10 @@ async fn list_groups_handler(
     State(service): State<GroupService<Postgre, DefaultNotifierManager>>,
     Extension(user_id): Extension<i64>,
 ) -> Result<Json<Vec<Group>>, ApiError> {
-    let groups = service.list_user_groups(user_id).await?;
+    let groups = service
+        .list_user_groups(user_id)
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(groups))
 }
 
@@ -529,7 +515,10 @@ async fn get_group_by_id_handler(
     Extension(user_id): Extension<i64>,
     Path(id): Path<i64>,
 ) -> Result<Json<Group>, ApiError> {
-    let group_data = service.get_group(id, user_id).await?;
+    let group_data = service
+        .get_group(id, user_id)
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(group_data))
 }
 
@@ -552,7 +541,10 @@ async fn create_group_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateGroupRequest>,
 ) -> Result<(StatusCode, Json<CreateGroupResponse>), ApiError> {
-    let group = service.create_group(payload.name, user_id).await?;
+    let group = service
+        .create_group(payload.name, user_id)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok((
         StatusCode::CREATED,
@@ -585,7 +577,10 @@ async fn delete_group_handler(
     Extension(user_id): Extension<i64>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    service.delete_group(id, user_id).await?;
+    service
+        .delete_group(id, user_id)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -618,7 +613,8 @@ async fn update_group_name_handler(
 ) -> Result<StatusCode, ApiError> {
     service
         .update_group_name(id, payload.name.clone(), user_id)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
