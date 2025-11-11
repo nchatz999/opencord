@@ -1187,7 +1187,7 @@ pub fn message_routes(
 #[utoipa::path(
     post,
     tag = "message",
-    path = "/{type}/{id}/messages",
+    path = "/create/{type}/{id}",
     params(
         ("type", Path, description = "Type of conversation (dm or channel)"),
         ("id", Path, description = "The ID of the dm or channel to send message to"),
