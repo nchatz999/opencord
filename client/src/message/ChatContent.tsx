@@ -60,52 +60,48 @@ const ChatContent: Component = () => {
     const container = messagesContainerRef!;
     const previousScrollHeight = container.scrollHeight;
     const firstMessage = msgs[0];
+
+
     let createdAt;
     if (firstMessage)
       createdAt = firstMessage.createdAt
     else
       createdAt = new Date().toISOString()
-    try {
-      const messagesEndpoint = context.type === "dm" 
-        ? `/message/dm/${context.id}/messages`
-        : `/message/channel/${context.id}/messages`;
-      
-      const result = await fetchApi<{ messages: Message[], files: File[], timestamp: string }>(messagesEndpoint, {
-        method: "GET",
-        query: {
-          limit: MESSAGES_LIMIT,
-          timestamp: createdAt
-        }
-      });
-      if (!result.ok) {
-        addToast(`Error: ${result.error.reason}`, "error");
-        return;
+    const messagesEndpoint = context.type === "dm"
+      ? `/message/dm/${context.id}/messages`
+      : `/message/channel/${context.id}/messages`;
+
+    const result = await fetchApi<{ messages: Message[], files: File[], timestamp: string }>(messagesEndpoint, {
+      method: "GET",
+      query: {
+        limit: MESSAGES_LIMIT,
+        timestamp: createdAt
       }
-      messageDomain.insertMany(result.value.messages);
-      fileDomain.addMany(result.value.files);
-
-      const filesEndpoint = context.type === "dm"
-        ? `/message/dm/${context.id}/files`
-        : `/message/channel/${context.id}/files`;
-
-      const filesResult = await fetchApi<File[]>(filesEndpoint, {
-        method: "GET",
-        query: {
-          limit: MESSAGES_LIMIT,
-          timestamp: createdAt
-        }
-      });
-      if (filesResult.ok) {
-        fileDomain.addMany(filesResult.value);
-      }
-
-      requestAnimationFrame(() => {
-        const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
-        container.scrollTop += scrollHeightDiff;
-      });
-    } finally {
-      setIsLoadingMore(false);
+    });
+    if (!result.ok) {
+      addToast(`Error: ${result.error.reason}`, "error");
+      return;
     }
+    messageDomain.insertMany(result.value.messages);
+    const filesEndpoint = context.type === "dm"
+      ? `/message/dm/${context.id}/files`
+      : `/message/channel/${context.id}/files`;
+
+    const filesResult = await fetchApi<File[]>(filesEndpoint, {
+      method: "GET",
+      query: {
+        limit: MESSAGES_LIMIT,
+        timestamp: createdAt
+      }
+    });
+    if (filesResult.ok) {
+      fileDomain.addMany(filesResult.value);
+    }
+
+    requestAnimationFrame(() => {
+      const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
+      container.scrollTop += scrollHeightDiff;
+    });
   };
 
 
