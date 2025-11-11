@@ -95,7 +95,11 @@ const MessageInput: Component<{
         messageText: content().trim() || undefined,
         files: fileUploads,
       };
-      const result = await fetchApi(`/message/create/${props.context.type}/${props.context.id}`, {
+      const endpoint = props.context.type === "dm" 
+        ? `/message/dm/${props.context.id}/messages`
+        : `/message/channel/${props.context.id}/messages`;
+      
+      const result = await fetchApi(endpoint, {
         method: "POST",
         body: messageData,
       });
