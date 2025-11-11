@@ -52,27 +52,27 @@ pub trait VoipTransaction: Send + Sync {
         &mut self,
         user_id: i64,
         mute: bool,
-    ) -> Result<VoipParticipant, DatabaseError>;
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
     async fn local_deafen(
         &mut self,
         user_id: i64,
         deafen: bool,
-    ) -> Result<VoipParticipant, DatabaseError>;
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
-    async fn remove_participant(&mut self, user_id: i64) -> Result<VoipParticipant, DatabaseError>;
+    async fn remove_participant(&mut self, user_id: i64) -> Result<Option<VoipParticipant>, DatabaseError>;
 
     async fn set_publish_screen(
         &mut self,
         user_id: i64,
         publish: bool,
-    ) -> Result<VoipParticipant, DatabaseError>;
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
     async fn set_publish_camera(
         &mut self,
         user_id: i64,
         publish: bool,
-    ) -> Result<VoipParticipant, DatabaseError>;
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
 
 pub trait VoipRepository: Send + Sync + Clone {
@@ -220,9 +220,9 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn leave_voip(&self, user_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        tx.remove_participant(user_id)
-            .await
-            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+        let participant = tx.remove_participant(user_id)
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -237,8 +237,8 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let participant = tx
             .local_mute(user_id, mute)
-            .await
-            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -253,8 +253,8 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let participant = tx
             .local_deafen(user_id, deafen)
-            .await
-            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -269,8 +269,8 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let participant = tx
             .set_publish_screen(user_id, publish)
-            .await
-            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -285,8 +285,8 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let participant = tx
             .set_publish_camera(user_id, publish)
-            .await
-            .map_err(|_| DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!("Participant {} not found", user_id)))?;
 
         self.repository.commit(tx).await?;
 
@@ -353,7 +353,7 @@ impl VoipTransaction for PgVoipTransaction {
         &mut self,
         user_id: i64,
         mute: bool,
-    ) -> Result<VoipParticipant, DatabaseError> {
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let participant = sqlx::query_as!(
             VoipParticipant,
             r#"UPDATE voip_participants
@@ -363,7 +363,7 @@ impl VoipTransaction for PgVoipTransaction {
             mute,
             user_id
         )
-        .fetch_one(&mut *self.transaction)
+        .fetch_optional(&mut *self.transaction)
         .await?;
         Ok(participant)
     }
@@ -372,7 +372,7 @@ impl VoipTransaction for PgVoipTransaction {
         &mut self,
         user_id: i64,
         deafen: bool,
-    ) -> Result<VoipParticipant, DatabaseError> {
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let participant = sqlx::query_as!(
             VoipParticipant,
             r#"UPDATE voip_participants
@@ -382,13 +382,13 @@ impl VoipTransaction for PgVoipTransaction {
             deafen,
             user_id
         )
-        .fetch_one(&mut *self.transaction)
+        .fetch_optional(&mut *self.transaction)
         .await?;
 
         Ok(participant)
     }
 
-    async fn remove_participant(&mut self, user_id: i64) -> Result<VoipParticipant, DatabaseError> {
+    async fn remove_participant(&mut self, user_id: i64) -> Result<Option<VoipParticipant>, DatabaseError> {
         let participant = sqlx::query_as!(
             VoipParticipant,
             r#"DELETE FROM voip_participants
@@ -396,7 +396,7 @@ impl VoipTransaction for PgVoipTransaction {
                RETURNING user_id, channel_id, recipient_id, local_deafen, local_mute, publish_screen, publish_camera, created_at"#,
             user_id
         )
-        .fetch_one(&mut *self.transaction)
+        .fetch_optional(&mut *self.transaction)
         .await?;
 
         Ok(participant)
@@ -406,7 +406,7 @@ impl VoipTransaction for PgVoipTransaction {
         &mut self,
         user_id: i64,
         publish: bool,
-    ) -> Result<VoipParticipant, DatabaseError> {
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let participant = sqlx::query_as!(
             VoipParticipant,
             r#"UPDATE voip_participants
@@ -416,7 +416,7 @@ impl VoipTransaction for PgVoipTransaction {
             user_id,
             publish
         )
-        .fetch_one(&mut *self.transaction)
+        .fetch_optional(&mut *self.transaction)
         .await?;
 
         Ok(participant)
@@ -426,7 +426,7 @@ impl VoipTransaction for PgVoipTransaction {
         &mut self,
         user_id: i64,
         publish: bool,
-    ) -> Result<VoipParticipant, DatabaseError> {
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
         let participant = sqlx::query_as!(
             VoipParticipant,
             r#"UPDATE voip_participants
@@ -436,7 +436,7 @@ impl VoipTransaction for PgVoipTransaction {
             user_id,
             publish
         )
-        .fetch_one(&mut *self.transaction)
+        .fetch_optional(&mut *self.transaction)
         .await?;
 
         Ok(participant)
