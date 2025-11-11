@@ -169,7 +169,7 @@ const MessageInput: Component<{
       <div class="p-4 bg-[#313338]">
 
         <Show when={files().length > 0}>
-          <div class="mb-3 flex flex-wrap gap-2">
+          <div class="mb-3 flex flex-wrap gap-2 p-3 bg-[#1e1f22] rounded-lg border border-[#383a40]">
             <For each={files()}>
               {(file, _index) => (
                 <FilePreview
