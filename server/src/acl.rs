@@ -6,21 +6,15 @@ use crate::channel::{Channel, ChannelType};
 use crate::group::{Group, GroupRoleRights};
 
 #[derive(Debug, thiserror::Error)]
-pub enum AclError {
-    #[error("Group not found: {group_id}")]
-    GroupNotFound { group_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
-    #[error("Role not found: {role_id}")]
-    RoleNotFound { role_id: i64 },
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
-    #[error("Permission denied {reason}")]
-    PermissionDenied { reason: String },
-
-    #[error("Invalid rights value: {rights}")]
-    InvalidRights { rights: i64 },
-
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 }
 
 use crate::error::{ApiError, DatabaseError};
@@ -108,30 +102,22 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         assigner_rights: i64,
         assigne: i64,
         assigne_rights: i64,
-    ) -> Result<(), AclError> {
+    ) -> Result<(), DomainError> {
         if assigne_rights < 0 || assigne_rights > 16 {
-            return Err(AclError::InvalidRights {
-                rights: assigne_rights,
-            });
+            return Err(DomainError::BadRequest(format!("Invalid rights value: {}", assigne_rights)));
         }
 
         if (assigne == 0 || assigne == 1) && assigne_rights != 16 {
-            return Err(AclError::PermissionDenied {
-                reason: "Cant change admins rights".to_string(),
-            });
+            return Err(DomainError::PermissionDenied("Cannot change admin rights".to_string()));
         }
         if assigner == 0 || assigner == 1 {
             return Ok(());
         }
         if assigne_rights == 16 && assigner > 1 {
-            return Err(AclError::PermissionDenied {
-                reason: "Only an admin can create another admin for group".to_string(),
-            });
+            return Err(DomainError::PermissionDenied("Only an admin can create another admin for group".to_string()));
         }
         if assigner_rights < 16 {
-            return Err(AclError::PermissionDenied {
-                reason: "Only can update acl".to_string(),
-            });
+            return Err(DomainError::PermissionDenied("Insufficient permissions to update ACL".to_string()));
         }
         Ok(())
     }
@@ -139,7 +125,7 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
     pub async fn get_all_accessible_group_role_rights(
         &self,
         user_id: i64,
-    ) -> Result<Vec<GroupRoleRights>, AclError> {
+    ) -> Result<Vec<GroupRoleRights>, DomainError> {
         let rights = self.repository.find_group_role_rights(user_id).await?;
 
         Ok(rights)
@@ -149,23 +135,18 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         &self,
         acls: Vec<GroupRoleRights>,
         user_id: i64,
-    ) -> Result<(), AclError> {
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         for acl in acls {
-            let assigner = self.repository.find_user_role(user_id).await?.ok_or(
-                AclError::PermissionDenied {
-                    reason: "User doesnt exist".to_string(),
-                },
-            )?;
+            let assigner = self.repository.find_user_role(user_id).await?
+                .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
             let assigner_rights = self
                 .repository
                 .find_user_group_rights(acl.group_id, user_id)
                 .await?
-                .ok_or(AclError::PermissionDenied {
-                    reason: "User doesnt exist".to_string(),
-                })?;
+                .ok_or(DomainError::PermissionDenied("No access to group".to_string()))?;
 
             Self::validate_permission_assignment(
                 assigner,
@@ -179,16 +160,12 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 .await
                 .map_err(|e| match e {
                     DatabaseError::ForeignKeyViolation { column, .. } if column == "group_id" => {
-                        AclError::GroupNotFound {
-                            group_id: acl.group_id,
-                        }
+                        DomainError::BadRequest(format!("Group {} not found", acl.group_id))
                     }
                     DatabaseError::ForeignKeyViolation { column, .. } if column == "role_id" => {
-                        AclError::RoleNotFound {
-                            role_id: acl.role_id,
-                        }
+                        DomainError::BadRequest(format!("Role {} not found", acl.role_id))
                     }
-                    other => AclError::DatabaseError(other),
+                    other => DomainError::InternalError(other),
                 })?
                 .unwrap_or(0);
 
@@ -494,20 +471,15 @@ pub struct SetGroupRoleRightsRequest {
 use axum::http::StatusCode;
 use axum::Json;
 
-impl From<AclError> for ApiError {
-    fn from(err: AclError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            AclError::GroupNotFound { group_id } => {
-                ApiError::UnprocessableEntity(format!("Group {} not found", group_id))
+            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
+            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
+                ApiError::InternalServerError("Internal server error".to_string())
             }
-            AclError::RoleNotFound { role_id } => {
-                ApiError::UnprocessableEntity(format!("Role {} not found", role_id))
-            }
-            AclError::PermissionDenied { reason } => ApiError::UnprocessableEntity(reason),
-            AclError::InvalidRights { rights } => {
-                ApiError::UnprocessableEntity(format!("Invalid rights value: {}", rights))
-            }
-            AclError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
         }
     }
 }
@@ -550,7 +522,8 @@ async fn get_all_group_role_rights_handler(
 ) -> Result<Json<Vec<GroupRoleRights>>, ApiError> {
     let rights = service
         .get_all_accessible_group_role_rights(user_id)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
     Ok(Json(rights))
 }
 
@@ -575,8 +548,10 @@ async fn set_group_role_rights_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<Vec<GroupRoleRights>>,
 ) -> Result<StatusCode, ApiError> {
-    println!("asf");
-    service.set_group_role_rights(payload, user_id).await?;
+    service
+        .set_group_role_rights(payload, user_id)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
