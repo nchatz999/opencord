@@ -71,7 +71,7 @@ const ChatContent: Component = () => {
       ? `/message/dm/${context.id}/messages`
       : `/message/channel/${context.id}/messages`;
 
-    const result = await fetchApi<{ messages: Message[], files: File[], timestamp: string }>(messagesEndpoint, {
+    const result = await fetchApi<Message[]>(messagesEndpoint, {
       method: "GET",
       query: {
         limit: MESSAGES_LIMIT,
@@ -82,7 +82,7 @@ const ChatContent: Component = () => {
       addToast(`Error: ${result.error.reason}`, "error");
       return;
     }
-    messageDomain.insertMany(result.value.messages);
+    messageDomain.insertMany(result.value);
     const filesEndpoint = context.type === "dm"
       ? `/message/dm/${context.id}/files`
       : `/message/channel/${context.id}/files`;

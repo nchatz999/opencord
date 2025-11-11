@@ -140,7 +140,7 @@ pub trait MessageRepository: Send + Sync + Clone {
         channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<MessagesWithFilesResponse, DatabaseError>;
+    ) -> Result<Vec<Message>, DatabaseError>;
 
     async fn find_dm_messages_with_pagination(
         &self,
@@ -148,7 +148,7 @@ pub trait MessageRepository: Send + Sync + Clone {
         other_user_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<MessagesWithFilesResponse, DatabaseError>;
+    ) -> Result<Vec<Message>, DatabaseError>;
 
     async fn find_file_by_id(
         &self,
@@ -413,7 +413,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<MessagesWithFilesResponse, MessageError> {
+    ) -> Result<Vec<Message>, MessageError> {
         let mut repo = self.repository.clone();
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
@@ -439,7 +439,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         other_user_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<MessagesWithFilesResponse, MessageError> {
+    ) -> Result<Vec<Message>, MessageError> {
         let result = self
             .repository
             .find_dm_messages_with_pagination(user_id, other_user_id, timestamp, limit)
@@ -828,7 +828,7 @@ impl MessageRepository for Postgre {
         channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<MessagesWithFilesResponse, DatabaseError> {
+    ) -> Result<Vec<Message>, DatabaseError> {
         let messages = sqlx::query_as!(
             Message,
             r#"SELECT
@@ -852,35 +852,7 @@ impl MessageRepository for Postgre {
         .fetch_all(&self.pool)
         .await?;
 
-        let message_ids: Vec<i64> = messages.iter().map(|m| m.id).collect();
-        let files = if message_ids.is_empty() {
-            Vec::new()
-        } else {
-            sqlx::query_as!(
-                File,
-                r#"SELECT
-                    file_id,
-                    file_uuid,
-                    message_id,
-                    file_name,
-                    file_type,
-                    file_size,
-                    file_hash,
-                    created_at
-                   FROM files
-                   WHERE message_id = ANY($1)
-                   ORDER BY created_at ASC, file_id ASC"#,
-                &message_ids
-            )
-            .fetch_all(&self.pool)
-            .await?
-        };
-
-        Ok(MessagesWithFilesResponse {
-            messages,
-            files,
-            timestamp,
-        })
+        Ok(messages)
     }
 
     async fn find_dm_messages_with_pagination(
@@ -889,7 +861,7 @@ impl MessageRepository for Postgre {
         other_user_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
-    ) -> Result<MessagesWithFilesResponse, DatabaseError> {
+    ) -> Result<Vec<Message>, DatabaseError> {
         let messages = sqlx::query_as!(
             Message,
             r#"SELECT
@@ -918,35 +890,7 @@ impl MessageRepository for Postgre {
         .fetch_all(&self.pool)
         .await?;
 
-        let message_ids: Vec<i64> = messages.iter().map(|m| m.id).collect();
-        let files = if message_ids.is_empty() {
-            Vec::new()
-        } else {
-            sqlx::query_as!(
-                File,
-                r#"SELECT
-                    file_id,
-                    file_uuid,
-                    message_id,
-                    file_name,
-                    file_type,
-                    file_size,
-                    file_hash,
-                    created_at
-                   FROM files
-                   WHERE message_id = ANY($1)
-                   ORDER BY created_at ASC, file_id ASC"#,
-                &message_ids
-            )
-            .fetch_all(&self.pool)
-            .await?
-        };
-
-        Ok(MessagesWithFilesResponse {
-            messages,
-            files,
-            timestamp,
-        })
+        Ok(messages)
     }
 
     async fn find_file_by_id(
@@ -1308,7 +1252,7 @@ async fn create_message_handler(
        ("timestamp", Query, description = "Get messages before this timestamp")
    ),
    responses(
-       (status = 200, description = "Successfully retrieved channel messages", body = MessagesWithFilesResponse),
+       (status = 200, description = "Successfully retrieved channel messages", body = Vec<Message>),
        (status = 403, description = "Permission denied", body = ApiError),
        (status = 500, description = "Internal Server Error", body = ApiError),
    ),
@@ -1322,7 +1266,7 @@ async fn get_channel_messages_handler(
     Extension(user_id): Extension<i64>,
     Path(channel_id): Path<i64>,
     Query(query): Query<MessageQuery>,
-) -> Result<Json<MessagesWithFilesResponse>, ApiError> {
+) -> Result<Json<Vec<Message>>, ApiError> {
     let limit = query.limit.unwrap_or(50);
 
     let response = service
@@ -1346,7 +1290,7 @@ async fn get_channel_messages_handler(
        ("timestamp", Query, description = "Get messages before this timestamp")
    ),
    responses(
-       (status = 200, description = "Successfully retrieved DM messages", body = MessagesWithFilesResponse),
+       (status = 200, description = "Successfully retrieved DM messages", body = Vec<Message>),
        (status = 403, description = "Permission denied", body = ApiError),
        (status = 500, description = "Internal Server Error", body = ApiError),
    ),
@@ -1360,7 +1304,7 @@ async fn get_dm_messages_handler(
     Extension(user_id): Extension<i64>,
     Path(other_user_id): Path<i64>,
     Query(query): Query<MessageQuery>,
-) -> Result<Json<MessagesWithFilesResponse>, ApiError> {
+) -> Result<Json<Vec<Message>>, ApiError> {
     let limit = query.limit.unwrap_or(50);
 
     let response = service
