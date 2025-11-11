@@ -449,6 +449,48 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         Ok(result)
     }
 
+    pub async fn get_channel_files(
+        &self,
+        user_id: i64,
+        channel_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<Vec<File>, MessageError> {
+        let mut repo = self.repository.clone();
+        let rights = repo
+            .find_user_channel_rights(channel_id, user_id)
+            .await?
+            .ok_or(MessageError::PermissionDenied)?;
+
+        if rights < 2 {
+            return Err(MessageError::PermissionDenied);
+        }
+
+        let result = self
+            .repository
+            .find_channel_files(channel_id, timestamp, limit)
+            .await
+            .map_err(MessageError::from)?;
+
+        Ok(result)
+    }
+
+    pub async fn get_dm_files(
+        &self,
+        user_id: i64,
+        other_user_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<Vec<File>, MessageError> {
+        let result = self
+            .repository
+            .find_dm_files(user_id, other_user_id, timestamp, limit)
+            .await
+            .map_err(MessageError::from)?;
+
+        Ok(result)
+    }
+
     pub async fn edit_message(
         &self,
         user_id: i64,
