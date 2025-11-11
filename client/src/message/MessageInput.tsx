@@ -184,7 +184,7 @@ const MessageInput: Component<{
         </Show>
 
         <div
-          class={`relative flex items-end gap-3 py-3 px-1 bg-[#383a40] rounded-lg transition-colors ${isDragging()
+          class={`relative flex items-center gap-3 py-3 px-1 bg-[#383a40] rounded-lg transition-colors ${isDragging()
             ? "bg-[#404249] border-2 border-dashed border-[#00A8FC]"
             : ""
             }`}
@@ -200,7 +200,7 @@ const MessageInput: Component<{
             <Paperclip size={20} />
           </Button>
 
-          <div class="flex-1 min-w-0 relative">
+          <div class="flex-1 min-w-0 relative flex items-center">
             <ContentEditable
               ref={textareaRef}
               contentEditable
@@ -209,7 +209,7 @@ const MessageInput: Component<{
               onTextContent={handleInput}
               onKeyDown={handleKeyDown}
               data-placeholder={placeholder()}
-              class="w-full bg-transparent text-[#DBDEE1] placeholder-[#6c7177] resize-none outline-none max-h-[120px] min-h-[24px] empty:before:content-[attr(data-placeholder)] empty:before:text-[#6c7177] overflow-y-auto whitespace-pre-wrap break-words p-1"
+              class="w-full bg-transparent text-[#DBDEE1] placeholder-[#6c7177] resize-none outline-none max-h-[120px] min-h-[24px] empty:before:content-[attr(data-placeholder)] empty:before:text-[#6c7177] overflow-y-auto whitespace-pre-wrap break-words p-2 flex items-center"
               render={(content) => formatContent(content())}
             />
           </div>
