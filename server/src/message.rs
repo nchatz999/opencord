@@ -135,11 +135,17 @@ pub trait MessageRepository: Send + Sync + Clone {
 
     async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
 
-    async fn find_messages_with_pagination(
+    async fn find_channel_messages_with_pagination(
         &self,
-        channel_id: Option<i64>,
+        channel_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<MessagesWithFilesResponse, DatabaseError>;
+
+    async fn find_dm_messages_with_pagination(
+        &self,
         user_id: i64,
-        other_user_id: Option<i64>,
+        other_user_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
     ) -> Result<MessagesWithFilesResponse, DatabaseError>;
@@ -386,29 +392,42 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         }
     }
 
-    pub async fn get_messages(
+    pub async fn get_channel_messages(
         &self,
         user_id: i64,
-        channel_id: Option<i64>,
-        other_user_id: Option<i64>,
+        channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
     ) -> Result<MessagesWithFilesResponse, MessageError> {
-        if let Some(channel_id) = channel_id {
-            let mut repo = self.repository.clone();
-            let rights = repo
-                .find_user_channel_rights(channel_id, user_id)
-                .await?
-                .ok_or(MessageError::PermissionDenied)?;
+        let mut repo = self.repository.clone();
+        let rights = repo
+            .find_user_channel_rights(channel_id, user_id)
+            .await?
+            .ok_or(MessageError::PermissionDenied)?;
 
-            if rights < 2 {
-                return Err(MessageError::PermissionDenied);
-            }
+        if rights < 2 {
+            return Err(MessageError::PermissionDenied);
         }
 
         let result = self
             .repository
-            .find_messages_with_pagination(channel_id, user_id, other_user_id, timestamp, limit)
+            .find_channel_messages_with_pagination(channel_id, timestamp, limit)
+            .await
+            .map_err(MessageError::from)?;
+
+        Ok(result)
+    }
+
+    pub async fn get_dm_messages(
+        &self,
+        user_id: i64,
+        other_user_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<MessagesWithFilesResponse, MessageError> {
+        let result = self
+            .repository
+            .find_dm_messages_with_pagination(user_id, other_user_id, timestamp, limit)
             .await
             .map_err(MessageError::from)?;
 
@@ -747,68 +766,100 @@ impl MessageRepository for Postgre {
         Ok(())
     }
 
-    async fn find_messages_with_pagination(
+    async fn find_channel_messages_with_pagination(
         &self,
-        channel_id: Option<i64>,
-        user_id: i64,
-        other_user_id: Option<i64>,
+        channel_id: i64,
         timestamp: OffsetDateTime,
         limit: i64,
     ) -> Result<MessagesWithFilesResponse, DatabaseError> {
-        let messages = if let Some(channel_id) = channel_id {
-            sqlx::query_as!(
-                Message,
-                r#"SELECT
-                    id,
-                    sender_id,
-                    channel_id,
-                    recipient_id,
-                    message_text,
-                    created_at,
-                    modified_at,
-                    reply_to_message_id
-                FROM messages
-                WHERE channel_id = $1
-                AND created_at < $2
-                ORDER BY created_at DESC
-                LIMIT $3"#,
+        let messages = sqlx::query_as!(
+            Message,
+            r#"SELECT
+                id,
+                sender_id,
                 channel_id,
-                timestamp,
-                limit
-            )
-            .fetch_all(&self.pool)
-            .await?
-        } else if let Some(other_user_id) = other_user_id {
-            sqlx::query_as!(
-                Message,
-                r#"SELECT
-                    id,
-                    sender_id,
-                    channel_id,
-                    recipient_id,
-                    message_text,
-                    created_at,
-                    modified_at,
-                    reply_to_message_id
-                FROM messages
-                WHERE recipient_id IS NOT NULL
-                AND created_at < $1
-                AND (
-                    (sender_id = $2 AND recipient_id = $3)
-                    OR (sender_id = $3 AND recipient_id = $2)
-                )
-                ORDER BY created_at DESC
-                LIMIT $4"#,
-                timestamp,
-                user_id,
-                other_user_id,
-                limit
-            )
-            .fetch_all(&self.pool)
-            .await?
-        } else {
+                recipient_id,
+                message_text,
+                created_at,
+                modified_at,
+                reply_to_message_id
+            FROM messages
+            WHERE channel_id = $1
+            AND created_at < $2
+            ORDER BY created_at DESC
+            LIMIT $3"#,
+            channel_id,
+            timestamp,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let message_ids: Vec<i64> = messages.iter().map(|m| m.id).collect();
+        let files = if message_ids.is_empty() {
             Vec::new()
+        } else {
+            sqlx::query_as!(
+                File,
+                r#"SELECT
+                    file_id,
+                    file_uuid,
+                    message_id,
+                    file_name,
+                    file_type,
+                    file_size,
+                    file_hash,
+                    created_at
+                   FROM files
+                   WHERE message_id = ANY($1)
+                   ORDER BY created_at ASC, file_id ASC"#,
+                &message_ids
+            )
+            .fetch_all(&self.pool)
+            .await?
         };
+
+        Ok(MessagesWithFilesResponse {
+            messages,
+            files,
+            timestamp,
+        })
+    }
+
+    async fn find_dm_messages_with_pagination(
+        &self,
+        user_id: i64,
+        other_user_id: i64,
+        timestamp: OffsetDateTime,
+        limit: i64,
+    ) -> Result<MessagesWithFilesResponse, DatabaseError> {
+        let messages = sqlx::query_as!(
+            Message,
+            r#"SELECT
+                id,
+                sender_id,
+                channel_id,
+                recipient_id,
+                message_text,
+                created_at,
+                modified_at,
+                reply_to_message_id
+            FROM messages
+            WHERE recipient_id IS NOT NULL
+            AND created_at < $1
+            AND (
+                (sender_id = $2 AND recipient_id = $3)
+                OR (sender_id = $3 AND recipient_id = $2)
+            )
+            ORDER BY created_at DESC
+            LIMIT $4"#,
+            timestamp,
+            user_id,
+            other_user_id,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         let message_ids: Vec<i64> = messages.iter().map(|m| m.id).collect();
         let files = if message_ids.is_empty() {
@@ -1039,7 +1090,8 @@ pub fn message_routes(
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
         .routes(routes!(create_message_handler))
-        .routes(routes!(get_messages_handler))
+        .routes(routes!(get_channel_messages_handler))
+        .routes(routes!(get_dm_messages_handler))
         .routes(routes!(edit_message_handler))
         .routes(routes!(delete_message_handler))
         .routes(routes!(get_file_handler))
@@ -1108,15 +1160,14 @@ async fn create_message_handler(
 #[utoipa::path(
    get,
    tag = "message",
-   path = "/{type}/{id}/messages",
+   path = "/channel/{channel_id}/messages",
    params(
-       ("type", Path, description = "Type of conversation (dm or channel)"),
-       ("id", Path, description = "The ID of the dm or channel to get messages from"),
+       ("channel_id", Path, description = "The ID of the channel to get messages from"),
        ("limit", Query, description = "Number of messages to retrieve (default: 50)"),
        ("timestamp", Query, description = "Get messages before this timestamp")
    ),
    responses(
-       (status = 200, description = "Successfully retrieved messages", body = MessagesWithFilesResponse),
+       (status = 200, description = "Successfully retrieved channel messages", body = MessagesWithFilesResponse),
        (status = 403, description = "Permission denied", body = ApiError),
        (status = 500, description = "Internal Server Error", body = ApiError),
    ),
@@ -1125,28 +1176,57 @@ async fn create_message_handler(
    )
 )]
 #[axum::debug_handler]
-async fn get_messages_handler(
+async fn get_channel_messages_handler(
     State(service): State<AppMessageService>,
     Extension(user_id): Extension<i64>,
-    Path((message_type, id)): Path<(MessageTypePath, i64)>,
+    Path(channel_id): Path<i64>,
     Query(query): Query<MessageQuery>,
 ) -> Result<Json<MessagesWithFilesResponse>, ApiError> {
     let limit = query.limit.unwrap_or(50);
-    let mut channel_id = None;
-    let mut other_user_id = None;
-
-    match message_type {
-        MessageTypePath::Dm => {
-            other_user_id = Some(id);
-        }
-        MessageTypePath::Channel => channel_id = Some(id),
-    };
 
     let response = service
-        .get_messages(user_id, channel_id, other_user_id, query.timestamp, limit)
+        .get_channel_messages(user_id, channel_id, query.timestamp, limit)
         .await
         .map_err(|e| {
-            debug!("get_messages failed: {}", e);
+            debug!("get_channel_messages failed: {}", e);
+            ApiError::from(e)
+        })?;
+
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+   get,
+   tag = "message",
+   path = "/dm/{user_id}/messages",
+   params(
+       ("user_id", Path, description = "The ID of the user to get DM messages with"),
+       ("limit", Query, description = "Number of messages to retrieve (default: 50)"),
+       ("timestamp", Query, description = "Get messages before this timestamp")
+   ),
+   responses(
+       (status = 200, description = "Successfully retrieved DM messages", body = MessagesWithFilesResponse),
+       (status = 403, description = "Permission denied", body = ApiError),
+       (status = 500, description = "Internal Server Error", body = ApiError),
+   ),
+   security(
+       ("api_key" = [])
+   )
+)]
+#[axum::debug_handler]
+async fn get_dm_messages_handler(
+    State(service): State<AppMessageService>,
+    Extension(user_id): Extension<i64>,
+    Path(other_user_id): Path<i64>,
+    Query(query): Query<MessageQuery>,
+) -> Result<Json<MessagesWithFilesResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(50);
+
+    let response = service
+        .get_dm_messages(user_id, other_user_id, query.timestamp, limit)
+        .await
+        .map_err(|e| {
+            debug!("get_dm_messages failed: {}", e);
             ApiError::from(e)
         })?;
 
