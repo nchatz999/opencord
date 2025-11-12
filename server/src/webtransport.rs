@@ -764,7 +764,7 @@ impl RealtimeServer {
             .map_err(|e| WebTransportError::Database(e))
     }
 
-    async fn handle_new_connection(
+    async fn handle_connection(
         &mut self,
         user_id: i64,
         connection: Connection,
@@ -791,13 +791,67 @@ impl RealtimeServer {
             )
             .await;
         }
-        tokio::spawn(handle_connection(
+        tokio::spawn(manage_client_session(
             connection,
             self.repository.clone(),
             subject_tx.clone(),
             observer_rx,
             user_id,
         ));
+    }
+
+    async fn manage_client_session(
+        mut connection: Connection,
+        repository: Postgre,
+        subject_tx: mpsc::Sender<SubjectMessage>,
+        mut observer_rx: mpsc::Receiver<ObserverMessage>,
+        user_id: i64,
+    ) {
+        info!(
+            "Connection accepted: user={}, session={}",
+            user_id,
+            connection.id()
+        );
+
+        loop {
+            tokio::select! {
+                may_msg = observer_rx.recv() => {
+                    if let Some(msg) = may_msg {
+                        match msg {
+                            ObserverMessage::Event(event) => {
+                                if let Ok(serialized_event)  = rmp_serde::to_vec_named(&event) {
+                                    connection.send_data_safe(serialized_event.into()).await;
+                                }
+                            }
+                            ObserverMessage::Voip(event) => {
+                                if let Ok(serialized_event) = rmp_serde::to_vec_named(&event) {
+                                    connection.send_data(serialized_event.into()).await;
+                                }
+                            }
+                            ObserverMessage::Close => {
+                                connection.disconnect_with_message(200, "New Connection").await;
+                                break;
+                            }
+                        }
+                    }
+                }
+                may_msg = connection.read_message() => {
+                    if let Some(msg)=may_msg {
+                        match msg {
+                            Message::Unsafe(bytes) => {
+                                if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
+                                    let _ = subject_tx.send(SubjectMessage::BroadcastVoip(user_id, voip_msg)).await;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }else {
+                        let _ = subject_tx.send(SubjectMessage::ClientTimout { user_id }).await;
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -807,68 +861,4 @@ pub async fn start_webtransport_server(
 ) -> Result<(), WebTransportError> {
     let subject = RealtimeServer::new(repository);
     subject.run(receiver).await
-}
-
-async fn handle_connection(
-    connection: Connection,
-    repository: Postgre,
-    subject_tx: mpsc::Sender<SubjectMessage>,
-    observer_rx: mpsc::Receiver<ObserverMessage>,
-    user_id: i64,
-) {
-    manage_client_session(connection, repository, subject_tx, observer_rx, user_id).await;
-}
-
-async fn manage_client_session(
-    mut connection: Connection,
-    repository: Postgre,
-    subject_tx: mpsc::Sender<SubjectMessage>,
-    mut observer_rx: mpsc::Receiver<ObserverMessage>,
-    user_id: i64,
-) {
-    info!(
-        "Connection accepted: user={}, session={}",
-        user_id,
-        connection.id()
-    );
-
-    loop {
-        tokio::select! {
-            may_msg = observer_rx.recv() => {
-                if let Some(msg) = may_msg {
-                    match msg {
-                        ObserverMessage::Event(event) => {
-                            if let Ok(serialized_event)  = rmp_serde::to_vec_named(&event) {
-                                connection.send_data_safe(serialized_event.into()).await;
-                            }
-                        }
-                        ObserverMessage::Voip(event) => {
-                            if let Ok(serialized_event) = rmp_serde::to_vec_named(&event) {
-                                connection.send_data(serialized_event.into()).await;
-                            }
-                        }
-                        ObserverMessage::Close => {
-                            connection.disconnect_with_message(200, "New Connection").await;
-                            break;
-                        }
-                    }
-                }
-            }
-            may_msg = connection.read_message() => {
-                if let Some(msg)=may_msg {
-                    match msg {
-                        Message::Unsafe(bytes) => {
-                            if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
-                                let _ = subject_tx.send(SubjectMessage::BroadcastVoip(user_id, voip_msg)).await;
-                            }
-                        }
-                        _ => {}
-                    }
-                }else {
-                    let _ = subject_tx.send(SubjectMessage::ClientTimout { user_id }).await;
-                    break;
-                }
-            }
-        }
-    }
 }
