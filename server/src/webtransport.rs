@@ -2,7 +2,7 @@ use crate::{
     db::Postgre,
     error::DatabaseError,
     managers::NotificationMessage,
-    model::Event,
+    model::ControlPayload,
     user::{User, UserStatusType},
     voip::VoipParticipant,
 };
@@ -48,14 +48,14 @@ impl From<opencord_transport_server::WebTransportError> for WebTransportError {
 }
 
 pub enum ObserverMessage {
-    Voip(VoipDataMessage),
-    Event(Event),
+    Voip(VoipPayload),
+    Event(ControlPayload),
     Close,
 }
 
 #[derive(Debug)]
 pub enum SubjectMessage {
-    BroadcastVoip(i64, VoipDataMessage),
+    BroadcastVoip(i64, VoipPayload),
     ClientTimout { user_id: i64 },
 }
 
@@ -70,7 +70,7 @@ pub enum VoipDataType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
-pub enum VoipDataMessage {
+pub enum VoipPayload {
     #[serde(rename_all = "camelCase")]
     Speech { user_id: u64, is_speaking: bool },
 
@@ -90,12 +90,6 @@ pub enum VoipDataMessage {
 pub enum KeyType {
     Key,
     Delta,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum DatagramMessage {
-    Ping { timestamp: u64 },
-    Pong { timestamp: u64 },
 }
 
 pub trait WebTransportTransaction: Send + Sync {
@@ -370,13 +364,13 @@ impl WebTransportRepository for Postgre {
     }
 }
 
-pub struct Observer {
+pub struct Subscriber {
     id: String,
     user_id: i64,
     sender: mpsc::Sender<ObserverMessage>,
 }
 
-impl Observer {
+impl Subscriber {
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -390,12 +384,12 @@ impl Observer {
     }
 }
 
-struct Subject {
-    observers: HashMap<String, Observer>,
+struct RealtimeServer {
+    observers: HashMap<String, Subscriber>,
     service: WebTransportService<Postgre>,
 }
 
-impl Subject {
+impl RealtimeServer {
     fn new(service: WebTransportService<Postgre>) -> Self {
         Self {
             observers: HashMap::new(),
@@ -403,7 +397,7 @@ impl Subject {
         }
     }
 
-    async fn register(&mut self, new_observer: Observer) {
+    async fn register(&mut self, new_observer: Subscriber) {
         self.observers
             .insert(new_observer.id().to_string(), new_observer);
     }
@@ -426,7 +420,7 @@ impl Subject {
         {
             if let Some(channel_id) = participant.channel_id {
                 self.notify_observers(
-                    Event::VoipParticipantDeleted {
+                    ControlPayload::VoipParticipantDeleted {
                         user_id: participant.user_id,
                     },
                     crate::managers::RecipientType::ChannelRights {
@@ -438,7 +432,7 @@ impl Subject {
             }
             if let Some(recipient_id) = participant.recipient_id {
                 self.notify_observers(
-                    Event::VoipParticipantDeleted {
+                    ControlPayload::VoipParticipantDeleted {
                         user_id: participant.user_id,
                     },
                     crate::managers::RecipientType::User {
@@ -450,13 +444,17 @@ impl Subject {
         }
     }
 
-    async fn notify_observers(&self, event: Event, recipients: crate::managers::RecipientType) {
+    async fn notify_observers(
+        &self,
+        event: ControlPayload,
+        recipients: crate::managers::RecipientType,
+    ) {
         self.service
             .notify_observers(&self.observers, event, recipients)
             .await;
     }
 
-    async fn broadcast_voip(&self, user_id: i64, data: VoipDataMessage) {
+    async fn broadcast_voip(&self, user_id: i64, data: VoipPayload) {
         let sender_id = user_id;
 
         let sender_participant = self
@@ -482,8 +480,8 @@ impl Subject {
 
                     for participant in &participants {
                         let should_send = match &data {
-                            VoipDataMessage::Speech { .. } => true,
-                            VoipDataMessage::MediaData { user_id, .. } => {
+                            VoipPayload::Speech { .. } => true,
+                            VoipPayload::MediaData { user_id, .. } => {
                                 participant.user_id != (*user_id as i64)
                             }
                         };
@@ -525,7 +523,7 @@ impl Subject {
         subject_tx: &mpsc::Sender<SubjectMessage>,
     ) {
         let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
-        let observer = Observer {
+        let observer = Subscriber {
             id: connection.id(),
             user_id,
             sender: observer_tx,
@@ -540,7 +538,7 @@ impl Subject {
             .await
         {
             self.notify_observers(
-                Event::UserUpdated { user: status },
+                ControlPayload::UserUpdated { user: status },
                 crate::managers::RecipientType::Broadcast,
             )
             .await;
@@ -554,7 +552,7 @@ impl Subject {
         ));
     }
 
-    pub async fn start_webtransport_server(
+    pub async fn run(
         mut self,
         mut receiver: mpsc::UnboundedReceiver<NotificationMessage>,
     ) -> Result<(), WebTransportError> {
@@ -586,7 +584,7 @@ impl Subject {
                                 if let Ok(Some(participant)) = self.service.remove_voip_participant(user_id).await {
                                     if let Some(channel_id) = participant.channel_id {
                                         self.notify_observers(
-                                            Event::VoipParticipantDeleted {
+                                            ControlPayload::VoipParticipantDeleted {
                                                 user_id: participant.user_id,
                                             },
                                             crate::managers::RecipientType::ChannelRights {
@@ -597,7 +595,7 @@ impl Subject {
                                         .await;
                                     } else if let Some(recipient_id) = participant.recipient_id {
                                         self.notify_observers(
-                                            Event::VoipParticipantDeleted {
+                                            ControlPayload::VoipParticipantDeleted {
                                                 user_id: participant.user_id,
                                             },
                                             crate::managers::RecipientType::User {
@@ -611,7 +609,7 @@ impl Subject {
                                 self.unregister(user_id).await;
                                 if let Ok(Some(user)) = self.service.update_user_status(user_id, UserStatusType::Offline).await {
                                     self.notify_observers(
-                                        Event::UserUpdated {
+                                        ControlPayload::UserUpdated {
                                             user,
                                         },
                                         crate::managers::RecipientType::Broadcast
@@ -642,8 +640,8 @@ pub async fn start_webtransport_server(
     webtransport_service: WebTransportService<Postgre>,
     receiver: mpsc::UnboundedReceiver<NotificationMessage>,
 ) -> Result<(), WebTransportError> {
-    let subject = Subject::new(webtransport_service);
-    subject.start_webtransport_server(receiver).await
+    let subject = RealtimeServer::new(webtransport_service);
+    subject.run(receiver).await
 }
 
 async fn handle_connection(
@@ -685,7 +683,7 @@ async fn handle_connection(
                 if let Some(msg)=may_msg {
                     match msg {
                         Message::Unsafe(bytes) => {
-                            if let Ok(voip_msg) = rmp_serde::from_slice::<VoipDataMessage>(&bytes) {
+                            if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                                 let _ = subject_tx.send(SubjectMessage::BroadcastVoip(user_id, voip_msg)).await;
                             }
                         }
@@ -712,8 +710,8 @@ impl<R: WebTransportRepository> WebTransportService<R> {
 
     pub async fn notify_observers(
         &self,
-        observers: &HashMap<String, Observer>,
-        event: Event,
+        observers: &HashMap<String, Subscriber>,
+        event: ControlPayload,
         recipients: crate::managers::RecipientType,
     ) {
         for observer in observers.values() {
