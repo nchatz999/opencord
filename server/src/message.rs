@@ -195,10 +195,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .repository
             .find_user_channel_rights(channel_id, sender_id)
             .await?
-            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
+            .ok_or(DomainError::PermissionDenied(
+                "No access to channel".to_string(),
+            ))?;
 
         if rights < 4 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to send messages".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to send messages".to_string(),
+            ));
         }
 
         let mut db_tx = self.repository.begin().await?;
@@ -213,10 +217,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "reply_to_message_id" => DomainError::BadRequest(
-                        format!("Reply message {} not found", reply_to_message_id.unwrap_or(-1))
-                    ),
-                    "channel_id" => DomainError::BadRequest(format!("Channel {} not found", channel_id)),
+                    "reply_to_message_id" => DomainError::BadRequest(format!(
+                        "Reply message {} not found",
+                        reply_to_message_id.unwrap_or(-1)
+                    )),
+                    "channel_id" => {
+                        DomainError::BadRequest(format!("Channel {} not found", channel_id))
+                    }
                     _ => DomainError::InternalError(e),
                 },
                 _ => DomainError::InternalError(e),
@@ -261,7 +268,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let recipient_role = self.repository.find_user_role(recipient_id).await?;
 
         if recipient_role.is_none() {
-            return Err(DomainError::BadRequest(format!("Recipient {} not found", recipient_id)));
+            return Err(DomainError::BadRequest(format!(
+                "Recipient {} not found",
+                recipient_id
+            )));
         }
 
         let mut db_tx = self.repository.begin().await?;
@@ -276,10 +286,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "reply_to_message_id" => DomainError::BadRequest(
-                        format!("Reply message {} not found", reply_to_message_id.unwrap_or(-1))
-                    ),
-                    "recipient_id" => DomainError::BadRequest(format!("Recipient {} not found", recipient_id)),
+                    "reply_to_message_id" => DomainError::BadRequest(format!(
+                        "Reply message {} not found",
+                        reply_to_message_id.unwrap_or(-1)
+                    )),
+                    "recipient_id" => {
+                        DomainError::BadRequest(format!("Recipient {} not found", recipient_id))
+                    }
                     _ => DomainError::InternalError(e),
                 },
                 _ => DomainError::InternalError(e),
@@ -366,10 +379,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
+            .ok_or(DomainError::PermissionDenied(
+                "No access to channel".to_string(),
+            ))?;
 
         if rights < 2 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to read messages".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to read messages".to_string(),
+            ));
         }
 
         let result = self
@@ -406,10 +423,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let rights = repo
             .find_user_channel_rights(channel_id, user_id)
             .await?
-            .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
+            .ok_or(DomainError::PermissionDenied(
+                "No access to channel".to_string(),
+            ))?;
 
         if rights < 2 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to read files".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to read files".to_string(),
+            ));
         }
 
         let result = self
@@ -446,7 +467,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         let message = tx
             .edit_message(message_id, &new_text, user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Message {} not found or not owned by user", message_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Message {} not found or not owned by user",
+                message_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -495,10 +519,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         let files = tx.delete_message_files(message_id).await?;
 
-        let message = tx
-            .delete_message(message_id, user_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!("Message {} not found", message_id)))?;
+        let message =
+            tx.delete_message(message_id, user_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Message {} not found",
+                    message_id
+                )))?;
 
         if message.sender_id != user_id {
             if let Some(channel_id) = message.channel_id {
@@ -513,8 +540,9 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                         .find_user_role(user_id)
                         .await?
                         .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
-                    let sender_role = repo.find_user_role(message.sender_id).await?
-                        .ok_or(DomainError::PermissionDenied("Sender not found".to_string()))?;
+                    let sender_role = repo.find_user_role(message.sender_id).await?.ok_or(
+                        DomainError::PermissionDenied("Sender not found".to_string()),
+                    )?;
 
                     if sender_role < 2 && user_role != 1 {
                         return Err(DomainError::PermissionDenied(
@@ -575,34 +603,50 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             .repository
             .find_file_by_id(file_id, user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("File {} not found", file_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "File {} not found",
+                file_id
+            )))?;
 
         let message = self
             .repository
             .find_message_by_id(file.message_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Message {} not found", file.message_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Message {} not found",
+                file.message_id
+            )))?;
 
         if let Some(channel_id) = message.channel_id {
             let mut repo = self.repository.clone();
             let rights = repo
                 .find_user_channel_rights(channel_id, user_id)
                 .await?
-                .ok_or(DomainError::PermissionDenied("No access to channel".to_string()))?;
+                .ok_or(DomainError::PermissionDenied(
+                    "No access to channel".to_string(),
+                ))?;
 
             if rights < 2 {
-                return Err(DomainError::PermissionDenied("Insufficient permissions to access files".to_string()));
+                return Err(DomainError::PermissionDenied(
+                    "Insufficient permissions to access files".to_string(),
+                ));
             }
         } else if let Some(recipient_id) = message.recipient_id {
             if message.sender_id != user_id && recipient_id != user_id {
-                return Err(DomainError::PermissionDenied("No access to this direct message".to_string()));
+                return Err(DomainError::PermissionDenied(
+                    "No access to this direct message".to_string(),
+                ));
             }
         } else {
-            return Err(DomainError::PermissionDenied("Invalid message type".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Invalid message type".to_string(),
+            ));
         }
 
         let raw_data = self.file_manager.get_file(file_id).map_err(|e| match e {
-            FileError::NotFound(_) => DomainError::BadRequest(format!("File {} not found", file_id)),
+            FileError::NotFound(_) => {
+                DomainError::BadRequest(format!("File {} not found", file_id))
+            }
             _ => DomainError::FileManagerError(e),
         })?;
 
@@ -1048,26 +1092,17 @@ pub struct MessageQuery {
     pub timestamp: OffsetDateTime,
 }
 
-#[derive(Serialize, ToSchema, Debug)]
-pub struct MessagesWithFilesResponse {
-    pub messages: Vec<Message>,
-    pub files: Vec<File>,
-    #[serde(with = "time::serde::iso8601")]
-    pub timestamp: OffsetDateTime,
-}
-
 use crate::error::ApiError;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
-use tracing::debug;
 
 type AppMessageService = MessageService<Postgre, LocalFileManager, DefaultNotifierManager>;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
-            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())

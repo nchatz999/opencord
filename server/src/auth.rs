@@ -176,8 +176,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             .validate_password(password)
             .map_err(|e| DomainError::BadRequest(format!("Password validation failed: {}", e)))?;
 
-        let password_hash = hash(password, DEFAULT_COST)
-            .map_err(|_| DomainError::PasswordHashingError)?;
+        let password_hash =
+            hash(password, DEFAULT_COST).map_err(|_| DomainError::PasswordHashingError)?;
 
         let mut tx = self.repository.begin().await?;
 
@@ -241,7 +241,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             .ok_or(DomainError::BadRequest("Invalid credentials".to_string()))?;
 
         if !verify(password, &auth.password_hash)
-            .map_err(|_| DomainError::PasswordVerificationError)? {
+            .map_err(|_| DomainError::PasswordVerificationError)?
+        {
             self.lockout_manager.record_failed_attempt(username);
             return Err(DomainError::BadRequest("Invalid credentials".to_string()));
         }
@@ -281,14 +282,15 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             )))?;
 
         if !verify(current_password, &auth.password_hash)
-            .map_err(|_| DomainError::PasswordVerificationError)? {
+            .map_err(|_| DomainError::PasswordVerificationError)?
+        {
             return Err(DomainError::BadRequest(
                 "Invalid current password".to_string(),
             ));
         }
 
-        let new_password_hash = hash(new_password, DEFAULT_COST)
-            .map_err(|_| DomainError::PasswordHashingError)?;
+        let new_password_hash =
+            hash(new_password, DEFAULT_COST).map_err(|_| DomainError::PasswordHashingError)?;
 
         tx.update_password(user_id, &new_password_hash)
             .await?
@@ -887,8 +889,8 @@ use axum::http::StatusCode;
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
-            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())

@@ -1,7 +1,3 @@
-
-
-
-
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use utoipa::ToSchema;
@@ -21,7 +17,6 @@ pub struct GroupRoleRights {
     pub rights: i64,
 }
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum DomainError {
     #[error("Bad request: {0}")]
@@ -34,9 +29,7 @@ pub enum DomainError {
     InternalError(#[from] DatabaseError),
 }
 
-
 use crate::error::{ApiError, DatabaseError};
-
 
 pub trait GroupTransaction: Send + Sync {
     async fn create(&mut self, name: &str) -> Result<Group, DatabaseError>;
@@ -49,7 +42,6 @@ pub trait GroupTransaction: Send + Sync {
 
     async fn delete(&mut self, group_id: i64) -> Result<Option<Group>, DatabaseError>;
 }
-
 
 pub trait GroupRepository: Send + Sync + Clone {
     type Transaction: GroupTransaction;
@@ -101,7 +93,10 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
             .repository
             .find_user_group_rights(group_id, user_id)
             .await?
-            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Group {} not found",
+                group_id
+            )))?;
         Ok(rights >= minimum_rights_level)
     }
 
@@ -112,15 +107,17 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
             .await?
             .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
-        
         if role_id != 0 && role_id != 1 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to create group".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to create group".to_string(),
+            ));
         }
 
-        
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
-            return Err(DomainError::BadRequest("Group name cannot be empty".to_string()));
+            return Err(DomainError::BadRequest(
+                "Group name cannot be empty".to_string(),
+            ));
         }
         if trimmed_name.len() > 100 {
             return Err(DomainError::BadRequest("Group name too long".to_string()));
@@ -128,7 +125,6 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
         let mut tx = self.repository.begin().await?;
 
-        
         let group = tx.create(trimmed_name).await.map_err(|e| match e {
             DatabaseError::UniqueConstraintViolation { .. } => {
                 DomainError::BadRequest(format!("Group name '{}' is already taken", trimmed_name))
@@ -138,7 +134,6 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::GroupUpdated {
             group: group.clone(),
         };
@@ -158,13 +153,18 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
     pub async fn get_group(&self, group_id: i64, user_id: i64) -> Result<Group, DomainError> {
         if !self.verify_user_permission(group_id, user_id, 1).await? {
-            return Err(DomainError::PermissionDenied("No access to group".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "No access to group".to_string(),
+            ));
         }
-        let group_data = self
-            .repository
-            .find_by_id(group_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
+        let group_data =
+            self.repository
+                .find_by_id(group_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Group {} not found",
+                    group_id
+                )))?;
 
         Ok(group_data)
     }
@@ -187,15 +187,17 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
             .await?
             .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
-        
         if role_id != 0 && role_id != 1 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to update group".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to update group".to_string(),
+            ));
         }
 
-        
         let trimmed_name = new_name.trim();
         if trimmed_name.is_empty() {
-            return Err(DomainError::BadRequest("Group name cannot be empty".to_string()));
+            return Err(DomainError::BadRequest(
+                "Group name cannot be empty".to_string(),
+            ));
         }
         if trimmed_name.len() > 100 {
             return Err(DomainError::BadRequest("Group name too long".to_string()));
@@ -203,21 +205,22 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
         let mut tx = self.repository.begin().await?;
 
-        
         let updated_group = tx
             .update_name(group_id, trimmed_name)
             .await
             .map_err(|e| match e {
-                DatabaseError::UniqueConstraintViolation { .. } => {
-                    DomainError::BadRequest(format!("Group name '{}' is already taken", trimmed_name))
-                }
+                DatabaseError::UniqueConstraintViolation { .. } => DomainError::BadRequest(
+                    format!("Group name '{}' is already taken", trimmed_name),
+                ),
                 other => DomainError::InternalError(other),
             })?
-            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Group {} not found",
+                group_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::GroupUpdated {
             group: updated_group.clone(),
         };
@@ -246,27 +249,24 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
             .await?
             .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
-        
         if role_id != 0 {
-            return Err(DomainError::PermissionDenied("Insufficient permissions to delete group".to_string()));
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to delete group".to_string(),
+            ));
         }
 
         let mut tx = self.repository.begin().await?;
 
         let deleted = tx
             .delete(group_id)
-            .await
-            .map_err(|e| match e {
-                DatabaseError::ForeignKeyViolation { .. } => {
-                    DomainError::BadRequest("Cannot delete group - it contains channels".to_string())
-                }
-                other => DomainError::InternalError(other),
-            })?
-            .ok_or(DomainError::BadRequest(format!("Group {} not found", group_id)))?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!(
+                "Group {} not found",
+                group_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
-        
         let event = Event::GroupDeleted { group_id };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
@@ -274,11 +274,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
     }
 }
 
-
-
-
 use crate::db::Postgre;
-
 
 pub struct PgGroupTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -402,10 +398,6 @@ impl GroupRepository for Postgre {
     }
 }
 
-
-
-
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateGroupRequest {
@@ -423,18 +415,14 @@ pub struct UpdateGroupRequest {
     pub name: String,
 }
 
-
-
-
-
 use axum::http::StatusCode;
 use axum::Json;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
-            DomainError::BadRequest(msg) => ApiError::BadRequest(msg),
-            DomainError::PermissionDenied(msg) => ApiError::Forbidden(msg),
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
@@ -442,7 +430,6 @@ impl From<DomainError> for ApiError {
         }
     }
 }
-
 
 use crate::middleware::{authorize, AuthorizeService};
 use axum::{
@@ -464,8 +451,6 @@ pub fn group_routes(
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(group_service)
 }
-
-
 
 #[utoipa::path(
     get,

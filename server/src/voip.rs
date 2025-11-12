@@ -159,7 +159,9 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "channel_id" => DomainError::BadRequest(format!("Channel {} not found", channel_id)),
+                    "channel_id" => {
+                        DomainError::BadRequest(format!("Channel {} not found", channel_id))
+                    }
                     _ => DomainError::InternalError(e),
                 },
                 _ => DomainError::InternalError(e),
@@ -207,7 +209,9 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "recipient_id" => DomainError::BadRequest(format!("User {} not found", recipient_user_id)),
+                    "recipient_id" => {
+                        DomainError::BadRequest(format!("User {} not found", recipient_user_id))
+                    }
                     _ => DomainError::InternalError(e),
                 },
                 _ => DomainError::InternalError(e),
