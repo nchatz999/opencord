@@ -571,40 +571,6 @@ impl RealtimeServer {
         }
     }
 
-    async fn handle_new_connection(
-        &mut self,
-        user_id: i64,
-        connection: Connection,
-        subject_tx: &mpsc::Sender<SubjectMessage>,
-    ) {
-        let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
-        let observer = Subscriber {
-            id: connection.id(),
-            user_id,
-            sender: observer_tx,
-        };
-        self.unregister(user_id).await;
-        self.register(observer).await;
-        self.remove_user_active_connections(user_id).await;
-
-        if let Ok(Some(status)) = self
-            .update_user_status(user_id, UserStatusType::Online)
-            .await
-        {
-            self.notify_observers(
-                ControlPayload::UserUpdated { user: status },
-                crate::managers::RecipientType::Broadcast,
-            )
-            .await;
-        }
-        tokio::spawn(handle_connection(
-            connection,
-            self.repository.clone(),
-            subject_tx.clone(),
-            observer_rx,
-            user_id,
-        ));
-    }
 
     pub async fn run(
         mut self,
@@ -676,8 +642,35 @@ impl RealtimeServer {
                 may_request= server.get_request() => {
                     if let Some(request) = may_request{
                         if let Ok(user_id)= self.get_user_from_session(&request.url().query().unwrap_or_default()).await {
-                            if let Some(conn) = server.accept_request(request).await{
-                                self.handle_new_connection(user_id,conn, &subject_tx).await;
+                            if let Some(connection) = server.accept_request(request).await{
+                                // Accept new client connection
+                                let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
+                                let observer = Subscriber {
+                                    id: connection.id(),
+                                    user_id,
+                                    sender: observer_tx,
+                                };
+                                self.unregister(user_id).await;
+                                self.register(observer).await;
+                                self.remove_user_active_connections(user_id).await;
+
+                                if let Ok(Some(status)) = self
+                                    .update_user_status(user_id, UserStatusType::Online)
+                                    .await
+                                {
+                                    self.notify_observers(
+                                        ControlPayload::UserUpdated { user: status },
+                                        crate::managers::RecipientType::Broadcast,
+                                    )
+                                    .await;
+                                }
+                                tokio::spawn(handle_connection(
+                                    connection,
+                                    self.repository.clone(),
+                                    subject_tx.clone(),
+                                    observer_rx,
+                                    user_id,
+                                ));
                             };
                         }else{
                             request.close(status::StatusCode::FORBIDDEN).await.unwrap();
