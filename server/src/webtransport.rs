@@ -413,10 +413,7 @@ impl RealtimeServer {
     }
 
     async fn remove_user_active_connections(&mut self, user_id_to_remove: i64) {
-        if let Ok(Some(participant)) = self
-            .remove_voip_participant(user_id_to_remove)
-            .await
-        {
+        if let Ok(Some(participant)) = self.remove_voip_participant(user_id_to_remove).await {
             if let Some(channel_id) = participant.channel_id {
                 self.notify_observers(
                     ControlPayload::VoipParticipantDeleted {
@@ -522,10 +519,7 @@ impl RealtimeServer {
     async fn broadcast_voip(&self, user_id: i64, data: VoipPayload) {
         let sender_id = user_id;
 
-        let sender_participant = self
-            .get_voip_participant(sender_id)
-            .await
-            .unwrap_or(None);
+        let sender_participant = self.get_voip_participant(sender_id).await.unwrap_or(None);
 
         if let Some(participant) = sender_participant {
             if let Some(channel_id) = participant.channel_id {
@@ -867,4 +861,3 @@ async fn handle_connection(
         }
     }
 }
-
