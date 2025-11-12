@@ -642,34 +642,7 @@ impl RealtimeServer {
                     if let Some(request) = may_request{
                         if let Ok(user_id)= self.get_user_from_session(&request.url().query().unwrap_or_default()).await {
                             if let Some(connection) = server.accept_request(request).await{
-                                // Accept new client connection
-                                let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
-                                let observer = Subscriber {
-                                    id: connection.id(),
-                                    user_id,
-                                    sender: observer_tx,
-                                };
-                                self.unregister(user_id).await;
-                                self.register(observer).await;
-                                self.remove_user_active_connections(user_id).await;
-
-                                if let Ok(Some(status)) = self
-                                    .update_user_status(user_id, UserStatusType::Online)
-                                    .await
-                                {
-                                    self.notify_observers(
-                                        ControlPayload::UserUpdated { user: status },
-                                        crate::managers::RecipientType::Broadcast,
-                                    )
-                                    .await;
-                                }
-                                tokio::spawn(handle_connection(
-                                    connection,
-                                    self.repository.clone(),
-                                    subject_tx.clone(),
-                                    observer_rx,
-                                    user_id,
-                                ));
+                                self.handle_new_connection(user_id, connection, &subject_tx).await;
                             };
                         }else{
                             request.close(status::StatusCode::FORBIDDEN).await.unwrap();
@@ -790,6 +763,42 @@ impl RealtimeServer {
             .await
             .map_err(|e| WebTransportError::Database(e))
     }
+
+    async fn handle_new_connection(
+        &mut self,
+        user_id: i64,
+        connection: Connection,
+        subject_tx: &mpsc::Sender<SubjectMessage>,
+    ) {
+        // Accept new client connection
+        let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
+        let observer = Subscriber {
+            id: connection.id(),
+            user_id,
+            sender: observer_tx,
+        };
+        self.unregister(user_id).await;
+        self.register(observer).await;
+        self.remove_user_active_connections(user_id).await;
+
+        if let Ok(Some(status)) = self
+            .update_user_status(user_id, UserStatusType::Online)
+            .await
+        {
+            self.notify_observers(
+                ControlPayload::UserUpdated { user: status },
+                crate::managers::RecipientType::Broadcast,
+            )
+            .await;
+        }
+        tokio::spawn(handle_connection(
+            connection,
+            self.repository.clone(),
+            subject_tx.clone(),
+            observer_rx,
+            user_id,
+        ));
+    }
 }
 
 pub async fn start_webtransport_server(
@@ -801,6 +810,16 @@ pub async fn start_webtransport_server(
 }
 
 async fn handle_connection(
+    connection: Connection,
+    repository: Postgre,
+    subject_tx: mpsc::Sender<SubjectMessage>,
+    observer_rx: mpsc::Receiver<ObserverMessage>,
+    user_id: i64,
+) {
+    manage_client_session(connection, repository, subject_tx, observer_rx, user_id).await;
+}
+
+async fn manage_client_session(
     mut connection: Connection,
     repository: Postgre,
     subject_tx: mpsc::Sender<SubjectMessage>,
