@@ -571,7 +571,6 @@ impl RealtimeServer {
         }
     }
 
-
     pub async fn run(
         mut self,
         mut receiver: mpsc::UnboundedReceiver<NotificationMessage>,
