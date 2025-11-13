@@ -135,7 +135,7 @@ pub trait AuthRepository: Send + Sync + Clone {
 }
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-use crate::model::Event;
+use crate::model::ControlPayload;
 use crate::user::User;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use time::Duration;
@@ -209,7 +209,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
-        let event = Event::UserUpdated { user: user.clone() };
+        let event = ControlPayload::UserUpdated { user: user.clone() };
 
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 

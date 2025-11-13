@@ -162,7 +162,7 @@ pub trait MessageRepository: Send + Sync + Clone {
 }
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-use crate::model::Event;
+use crate::model::ControlPayload;
 use tracing::{error, warn};
 
 #[derive(Clone)]
@@ -233,7 +233,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         self.repository.commit(db_tx).await?;
 
-        let event = Event::MessageCreated {
+        let event = ControlPayload::MessageCreated {
             message_id: message.id,
             sender_id: message.sender_id,
             message_type: MessageType::Channel { channel_id },
@@ -302,7 +302,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         self.repository.commit(db_tx).await?;
 
-        let event = Event::MessageCreated {
+        let event = ControlPayload::MessageCreated {
             message_id: message.id,
             sender_id: message.sender_id,
             message_type: MessageType::Direct { recipient_id },
@@ -474,7 +474,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         self.repository.commit(tx).await?;
 
-        let event = Event::MessageUpdated {
+        let event = ControlPayload::MessageUpdated {
             message_id: message.id,
             message_text: new_text.clone(),
         };
@@ -561,7 +561,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             }
         }
 
-        let event = Event::MessageDeleted { message_id };
+        let event = ControlPayload::MessageDeleted { message_id };
 
         if let Some(channel_id) = message.channel_id {
             let _ = self

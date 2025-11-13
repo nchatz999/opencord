@@ -33,7 +33,7 @@ pub enum VoipType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 #[serde(tag = "type")]
-pub enum Event {
+pub enum ControlPayload {
     ChannelUpdated {
         channel: Channel,
     },

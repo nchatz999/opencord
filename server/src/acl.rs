@@ -81,7 +81,7 @@ pub trait AclRepository: Send + Sync + Clone {
 }
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-use crate::model::Event;
+use crate::model::ControlPayload;
 
 #[derive(Clone)]
 pub struct AclService<R: AclRepository, N: NotifierManager> {
@@ -183,7 +183,7 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 })?
                 .unwrap_or(0);
 
-            let event = Event::GroupRoleRightUpdated {
+            let event = ControlPayload::GroupRoleRightUpdated {
                 group_id: acl.group_id,
                 role_id: acl.role_id,
                 rights: acl.rights,
@@ -205,7 +205,7 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 tx.delete_messages_by_role(acl.role_id, acl.group_id)
                     .await?;
 
-                let hide_event = Event::GroupHide {
+                let hide_event = ControlPayload::GroupHide {
                     group_id: acl.group_id,
                 };
                 let _ = self
@@ -224,7 +224,7 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 let channels = tx.find_channels_by_group(acl.group_id).await?;
                 let voip_participants = tx.find_voip_participants_by_group(acl.group_id).await?;
 
-                let reveal_event = Event::GroupReveal {
+                let reveal_event = ControlPayload::GroupReveal {
                     group_id: acl.group_id,
                     group_name: group.group_name,
                     channels,

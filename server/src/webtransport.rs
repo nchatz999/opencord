@@ -642,7 +642,7 @@ impl RealtimeServer {
                     if let Some(request) = may_request{
                         if let Ok(user_id)= self.get_user_from_session(&request.url().query().unwrap_or_default()).await {
                             if let Some(connection) = server.accept_request(request).await{
-                                self.handle_new_connection(user_id, connection, &subject_tx).await;
+                                self.handle_connection(user_id, connection, &subject_tx).await;
                             };
                         }else{
                             request.close(status::StatusCode::FORBIDDEN).await.unwrap();
@@ -764,7 +764,7 @@ impl RealtimeServer {
             .map_err(|e| WebTransportError::Database(e))
     }
 
-    async fn handle_new_connection(
+    async fn handle_connection(
         &mut self,
         user_id: i64,
         connection: Connection,

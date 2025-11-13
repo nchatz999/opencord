@@ -1,7 +1,3 @@
-
-
-
-
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use utoipa::ToSchema;
@@ -12,7 +8,6 @@ pub struct Role {
     pub role_id: i64,
     pub role_name: String,
 }
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum RoleError {
@@ -38,9 +33,7 @@ pub enum RoleError {
     DatabaseError(#[from] DatabaseError),
 }
 
-
 use crate::error::{ApiError, DatabaseError};
-
 
 pub trait RoleTransaction: Send + Sync {
     async fn create(&mut self, name: &str) -> Result<Role, DatabaseError>;
@@ -59,7 +52,6 @@ pub trait RoleTransaction: Send + Sync {
 
     async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
-
 
 pub trait RoleRepository: Send + Sync + Clone {
     type Transaction: RoleTransaction;
@@ -80,7 +72,7 @@ pub trait RoleRepository: Send + Sync + Clone {
 use crate::middleware::{authorize, AuthorizeService};
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-use crate::model::Event;
+use crate::model::ControlPayload;
 
 #[derive(Clone)]
 pub struct RoleService<R: RoleRepository, N: NotifierManager> {
@@ -103,12 +95,10 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
             .await?
             .ok_or(RoleError::PermissionDenied)?;
 
-        
         if role_id != 0 && role_id != 1 {
             return Err(RoleError::PermissionDenied);
         }
 
-        
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
             return Err(RoleError::InvalidName { name });
@@ -119,7 +109,6 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
 
         let mut tx = self.repository.begin().await?;
 
-        
         let role = tx.create(trimmed_name).await.map_err(|e| match e {
             DatabaseError::UniqueConstraintViolation { .. } => {
                 return RoleError::NameTaken {
@@ -131,8 +120,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
-        let event = Event::RoleUpdated { role: role.clone() };
+        let event = ControlPayload::RoleUpdated { role: role.clone() };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(role)
@@ -161,17 +149,14 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         new_name: String,
         user_role_id: i64,
     ) -> Result<(), RoleError> {
-        
         if user_role_id != 0 && user_role_id != 1 {
             return Err(RoleError::PermissionDenied);
         }
 
-        
         if role_id == 0 || (role_id == 1 && user_role_id != 0) {
             return Err(RoleError::SystemRole);
         }
 
-        
         let trimmed_name = new_name.trim();
         if trimmed_name.is_empty() {
             return Err(RoleError::InvalidName { name: new_name });
@@ -182,7 +167,6 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
 
         let mut tx = self.repository.begin().await?;
 
-        
         let updated_role = tx
             .update_name(role_id, trimmed_name)
             .await?
@@ -190,8 +174,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
-        let event = Event::RoleUpdated { role: updated_role };
+        let event = ControlPayload::RoleUpdated { role: updated_role };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -202,12 +185,10 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         role_id: i64,
         user_role_id: i64,
     ) -> Result<Option<Role>, RoleError> {
-        
         if user_role_id != 0 && user_role_id != 1 {
             return Err(RoleError::PermissionDenied);
         }
 
-        
         if role_id == 0 || role_id == 1 {
             return Err(RoleError::SystemRole);
         }
@@ -221,8 +202,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        
-        let event = Event::RoleDeleted {
+        let event = ControlPayload::RoleDeleted {
             role_id: deleted.role_id,
         };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
@@ -231,11 +211,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
     }
 }
 
-
-
-
 use crate::db::Postgre;
-
 
 pub struct PgRoleTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -364,10 +340,6 @@ impl RoleRepository for Postgre {
     }
 }
 
-
-
-
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRoleRequest {
@@ -385,15 +357,10 @@ pub struct UpdateRoleRequest {
     pub name: String,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct UsersSQL {
     pub role_id: i64,
 }
-
-
-
-
 
 use axum::http::StatusCode;
 use axum::Json;
@@ -424,7 +391,6 @@ impl From<RoleError> for ApiError {
     }
 }
 
-
 use axum::{
     extract::{Extension, Path, State},
     middleware::from_fn_with_state,
@@ -444,8 +410,6 @@ pub fn role_routes(
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(role_service)
 }
-
-
 
 #[utoipa::path(
     get,

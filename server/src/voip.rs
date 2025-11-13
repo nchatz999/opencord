@@ -1,4 +1,4 @@
-use crate::model::Event;
+use crate::model::ControlPayload;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
@@ -169,7 +169,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantUpdated { user: participant };
+        let event = ControlPayload::VoipParticipantUpdated { user: participant };
         let _ = self
             .notifier
             .notify(
@@ -219,7 +219,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantUpdated { user: participant };
+        let event = ControlPayload::VoipParticipantUpdated { user: participant };
 
         let _ = self
             .notifier
@@ -251,7 +251,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantDeleted { user_id };
+        let event = ControlPayload::VoipParticipantDeleted { user_id };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -270,7 +270,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantUpdated { user: participant };
+        let event = ControlPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -289,7 +289,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantUpdated { user: participant };
+        let event = ControlPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -308,7 +308,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantUpdated { user: participant };
+        let event = ControlPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -327,7 +327,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::VoipParticipantUpdated { user: participant };
+        let event = ControlPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())

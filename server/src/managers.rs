@@ -6,7 +6,6 @@ use base32;
 use rand::Rng;
 use totp_rs::{Algorithm, TOTP};
 
-
 #[derive(Debug)]
 pub enum FileError {
     Io(io::Error),
@@ -32,32 +31,23 @@ impl std::fmt::Display for FileError {
 
 impl std::error::Error for FileError {}
 
-
 pub trait FileTransaction: Send + Sync {
-    
     fn stage_upload(&mut self, id: i64, data: &[u8]) -> Result<(), FileError>;
 
-    
     fn commit(self) -> Result<(), FileError>;
 
-    
     fn rollback(self) -> Result<(), FileError>;
 }
-
 
 pub trait FileManager: Send + Sync {
     type Transaction: FileTransaction;
 
-    
     fn begin(&self) -> Result<Self::Transaction, FileError>;
 
-    
     fn upload_file(&self, id: i64, data: &[u8]) -> Result<(), FileError>;
 
-    
     fn get_file(&self, id: i64) -> Result<Vec<u8>, FileError>;
 
-    
     fn delete_file(&self, id: i64) -> Result<(), FileError>;
 }
 
@@ -67,24 +57,20 @@ pub struct LocalFileManager {
 }
 
 impl LocalFileManager {
-    
     pub fn new<P: AsRef<Path>>(base_directory: P) -> Self {
         Self {
             base_directory: base_directory.as_ref().to_path_buf(),
         }
     }
 
-    
     pub fn default() -> Self {
         Self::new("./files")
     }
 
-    
     fn get_file_path(&self, id: i64) -> PathBuf {
         self.base_directory.join(id.to_string())
     }
 
-    
     fn get_temp_file_path(&self, id: i64) -> PathBuf {
         self.base_directory.join(format!("{}.tmp", id))
     }
@@ -98,7 +84,6 @@ pub struct LocalFileTransaction {
 
 impl FileTransaction for LocalFileTransaction {
     fn stage_upload(&mut self, id: i64, data: &[u8]) -> Result<(), FileError> {
-        
         fs::create_dir_all(&self.base_directory)?;
 
         let temp_path = self.base_directory.join(format!("{}.tmp", id));
@@ -108,13 +93,11 @@ impl FileTransaction for LocalFileTransaction {
     }
 
     fn commit(mut self) -> Result<(), FileError> {
-        
         for id in &self.staged_files {
             let temp_path = self.base_directory.join(format!("{}.tmp", id));
             let final_path = self.base_directory.join(id.to_string());
 
             if let Err(e) = fs::rename(&temp_path, &final_path) {
-                
                 for cleanup_id in &self.staged_files {
                     let _ =
                         fs::remove_file(self.base_directory.join(format!("{}.tmp", cleanup_id)));
@@ -126,19 +109,16 @@ impl FileTransaction for LocalFileTransaction {
             }
         }
 
-        
         self.committed = true;
         Ok(())
     }
 
     fn rollback(mut self) -> Result<(), FileError> {
-        
         for id in &self.staged_files {
             let temp_path = self.base_directory.join(format!("{}.tmp", id));
             let _ = fs::remove_file(temp_path);
         }
 
-        
         self.committed = true;
         Ok(())
     }
@@ -146,7 +126,6 @@ impl FileTransaction for LocalFileTransaction {
 
 impl Drop for LocalFileTransaction {
     fn drop(&mut self) {
-        
         if !self.committed {
             for id in &self.staged_files {
                 let temp_path = self.base_directory.join(format!("{}.tmp", id));
@@ -168,7 +147,6 @@ impl FileManager for LocalFileManager {
     }
 
     fn upload_file(&self, id: i64, data: &[u8]) -> Result<(), FileError> {
-        
         fs::create_dir_all(&self.base_directory)?;
 
         let file_path = self.get_file_path(id);
@@ -199,7 +177,6 @@ impl FileManager for LocalFileManager {
     }
 }
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum TotpError {
     #[error("Failed to generate TOTP secret")]
@@ -212,12 +189,9 @@ pub enum TotpError {
     InvalidConfiguration,
 }
 
-
 pub trait TotpManager: Send + Sync + Clone {
-    
     fn generate_secret(&self) -> Result<String, TotpError>;
 
-    
     fn verify_code(&self, secret: &str, code: &str) -> Result<bool, TotpError>;
 }
 
@@ -255,7 +229,6 @@ impl TotpManager for DefaultTotpManager {
     }
 }
 
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -267,18 +240,13 @@ pub struct LockoutAttempt {
     pub locked_until: Option<Instant>,
 }
 
-
 pub trait LockoutManager: Send + Sync + Clone {
-    
     fn record_failed_attempt(&self, identifier: &str);
 
-    
     fn record_successful_login(&self, identifier: &str);
 
-    
     fn is_locked_out(&self, identifier: &str) -> Option<u64>;
 
-    
     fn unlock_account(&self, identifier: &str);
 }
 
@@ -305,7 +273,6 @@ impl DefaultLockoutManager {
     }
 
     pub fn default() -> Self {
-        
         Self::new(5, 15, 5)
     }
 }
@@ -323,18 +290,15 @@ impl LockoutManager for DefaultLockoutManager {
                 locked_until: None,
             });
 
-        
         if let Some(locked_until) = entry.locked_until {
             if now < locked_until {
-                return; 
+                return;
             } else {
-                
                 entry.attempts = 0;
                 entry.locked_until = None;
             }
         }
 
-        
         if now.duration_since(entry.last_attempt) > self.attempt_window {
             entry.attempts = 0;
         }
@@ -342,7 +306,6 @@ impl LockoutManager for DefaultLockoutManager {
         entry.attempts += 1;
         entry.last_attempt = now;
 
-        
         if entry.attempts >= self.max_attempts {
             entry.locked_until = Some(now + self.lockout_duration);
         }
@@ -362,7 +325,6 @@ impl LockoutManager for DefaultLockoutManager {
                 if now < locked_until {
                     return Some(locked_until.duration_since(now).as_secs());
                 } else {
-                    
                     entry.attempts = 0;
                     entry.locked_until = None;
                 }
@@ -377,7 +339,6 @@ impl LockoutManager for DefaultLockoutManager {
         attempts.remove(identifier);
     }
 }
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum RateLimitError {
@@ -394,15 +355,11 @@ pub struct RateLimitEntry {
     pub window_start: Instant,
 }
 
-
 pub trait RateLimiter: Send + Sync + Clone {
-    
     fn is_allowed(&self, identifier: &str) -> Result<(), RateLimitError>;
 
-    
     fn reset(&self, identifier: &str);
 
-    
     fn get_remaining(&self, identifier: &str) -> u32;
 }
 
@@ -423,7 +380,6 @@ impl DefaultRateLimiter {
     }
 
     pub fn default() -> Self {
-        
         Self::new(100, 60)
     }
 
@@ -448,18 +404,15 @@ impl RateLimiter for DefaultRateLimiter {
                 window_start: now,
             });
 
-        
         if now.duration_since(entry.window_start) >= self.window_duration {
             entry.requests = 0;
             entry.window_start = now;
         }
 
-        
         if entry.requests >= self.max_requests {
             return Err(RateLimitError::RateLimitExceeded);
         }
 
-        
         entry.requests += 1;
 
         Ok(())
@@ -475,7 +428,6 @@ impl RateLimiter for DefaultRateLimiter {
         let now = Instant::now();
 
         if let Some(entry) = entries.get_mut(identifier) {
-            
             if now.duration_since(entry.window_start) >= self.window_duration {
                 entry.requests = 0;
                 entry.window_start = now;
@@ -487,7 +439,6 @@ impl RateLimiter for DefaultRateLimiter {
         }
     }
 }
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum PasswordValidationError {
@@ -549,12 +500,9 @@ impl Default for PasswordRequirements {
     }
 }
 
-
 pub trait PasswordValidator: Send + Sync + Clone {
-    
     fn validate_password(&self, password: &str) -> Result<(), PasswordValidationError>;
 
-    
     fn get_password_strength(&self, password: &str) -> u8;
 }
 
@@ -575,7 +523,6 @@ impl DefaultPasswordValidator {
 
 impl PasswordValidator for DefaultPasswordValidator {
     fn validate_password(&self, password: &str) -> Result<(), PasswordValidationError> {
-        
         if password.len() < self.requirements.min_length {
             return Err(PasswordValidationError::TooShort {
                 min: self.requirements.min_length,
@@ -588,7 +535,6 @@ impl PasswordValidator for DefaultPasswordValidator {
             });
         }
 
-        
         if self.requirements.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {
             return Err(PasswordValidationError::NoUppercase);
         }
@@ -610,7 +556,6 @@ impl PasswordValidator for DefaultPasswordValidator {
             }
         }
 
-        
         let has_forbidden = password
             .chars()
             .any(|c| !c.is_alphanumeric() && !self.requirements.allowed_special_chars.contains(c));
@@ -618,7 +563,6 @@ impl PasswordValidator for DefaultPasswordValidator {
             return Err(PasswordValidationError::ForbiddenChars);
         }
 
-        
         let password_lower = password.to_lowercase();
         if self
             .requirements
@@ -635,11 +579,9 @@ impl PasswordValidator for DefaultPasswordValidator {
     fn get_password_strength(&self, password: &str) -> u8 {
         let mut score = 0u8;
 
-        
         let length_score = ((password.len() as f32 / 20.0) * 30.0).min(30.0) as u8;
         score += length_score;
 
-        
         let mut variety_score = 0;
         if password.chars().any(|c| c.is_lowercase()) {
             variety_score += 10;
@@ -655,16 +597,13 @@ impl PasswordValidator for DefaultPasswordValidator {
         }
         score += variety_score;
 
-        
         let mut complexity_score = 0;
 
-        
         let unique_chars = password.chars().collect::<std::collections::HashSet<_>>();
         if unique_chars.len() == password.len() {
             complexity_score += 10;
         }
 
-        
         let has_sequence = password.chars().collect::<Vec<_>>().windows(3).any(|w| {
             let a = w[0] as u8;
             let b = w[1] as u8;
@@ -675,7 +614,6 @@ impl PasswordValidator for DefaultPasswordValidator {
             complexity_score += 10;
         }
 
-        
         if !self
             .requirements
             .forbidden_passwords
@@ -691,8 +629,7 @@ impl PasswordValidator for DefaultPasswordValidator {
     }
 }
 
-
-use crate::model::Event;
+use crate::model::ControlPayload;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -706,36 +643,49 @@ pub enum NotifierError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RecipientType {
-    
-    User { user_id: i64 },
-    
-    Role { role_id: i64 },
-    
-    GroupRights { group_id: i64, minimum_rights: i64 },
-    
+    User {
+        user_id: i64,
+    },
+
+    Role {
+        role_id: i64,
+    },
+
+    GroupRights {
+        group_id: i64,
+        minimum_rights: i64,
+    },
+
     ChannelRights {
         channel_id: i64,
         minimum_rights: i64,
     },
-    
-    GroupMembers { group_id: i64 },
-    
-    ChannelRecipients { channel_id: i64, sender_id: i64 },
-    
+
+    GroupMembers {
+        group_id: i64,
+    },
+
+    ChannelRecipients {
+        channel_id: i64,
+        sender_id: i64,
+    },
+
     Broadcast,
 }
 
-
 pub trait NotifierManager: Send + Sync + Clone {
-    
-    async fn notify(&self, event: Event, recipients: RecipientType) -> Result<(), NotifierError>;
+    async fn notify(
+        &self,
+        event: ControlPayload,
+        recipients: RecipientType,
+    ) -> Result<(), NotifierError>;
 }
 
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub struct NotificationMessage {
-    pub event: Event,
+    pub event: ControlPayload,
     pub recipients: RecipientType,
 }
 
@@ -759,7 +709,11 @@ impl Default for DefaultNotifierManager {
 }
 
 impl NotifierManager for DefaultNotifierManager {
-    async fn notify(&self, event: Event, recipients: RecipientType) -> Result<(), NotifierError> {
+    async fn notify(
+        &self,
+        event: ControlPayload,
+        recipients: RecipientType,
+    ) -> Result<(), NotifierError> {
         let message = NotificationMessage { event, recipients };
 
         self.sender
@@ -769,7 +723,6 @@ impl NotifierManager for DefaultNotifierManager {
         Ok(())
     }
 }
-
 
 use std::fmt;
 
@@ -853,45 +806,35 @@ impl LogEntry {
     }
 }
 
-
 pub trait LoggerManager: Send + Sync + Clone {
-    
     async fn log(&self, entry: LogEntry) -> Result<(), LoggerError>;
 
-    
     async fn trace(&self, message: String) -> Result<(), LoggerError> {
         self.log(LogEntry::new(LogLevel::Trace, message)).await
     }
 
-    
     async fn debug(&self, message: String) -> Result<(), LoggerError> {
         self.log(LogEntry::new(LogLevel::Debug, message)).await
     }
 
-    
     async fn info(&self, message: String) -> Result<(), LoggerError> {
         self.log(LogEntry::new(LogLevel::Info, message)).await
     }
 
-    
     async fn warn(&self, message: String) -> Result<(), LoggerError> {
         self.log(LogEntry::new(LogLevel::Warn, message)).await
     }
 
-    
     async fn error(&self, message: String) -> Result<(), LoggerError> {
         self.log(LogEntry::new(LogLevel::Error, message)).await
     }
 
-    
     async fn fatal(&self, message: String) -> Result<(), LoggerError> {
         self.log(LogEntry::new(LogLevel::Fatal, message)).await
     }
 
-    
     fn set_level(&self, level: LogLevel);
 
-    
     fn should_log(&self, level: LogLevel) -> bool;
 }
 
@@ -941,11 +884,10 @@ impl LoggerManager for DefaultLoggerManager {
         if let Ok(min_level) = self.min_level.lock() {
             level >= *min_level
         } else {
-            true 
+            true
         }
     }
 }
-
 
 #[macro_export]
 macro_rules! log_trace {

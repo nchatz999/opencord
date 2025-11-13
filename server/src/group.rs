@@ -67,7 +67,7 @@ pub trait GroupRepository: Send + Sync + Clone {
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
 
-use crate::model::Event;
+use crate::model::ControlPayload;
 
 #[derive(Clone)]
 pub struct GroupService<R: GroupRepository, N: NotifierManager> {
@@ -134,7 +134,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::GroupUpdated {
+        let event = ControlPayload::GroupUpdated {
             group: group.clone(),
         };
         let _ = self
@@ -221,7 +221,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::GroupUpdated {
+        let event = ControlPayload::GroupUpdated {
             group: updated_group.clone(),
         };
         let _ = self
@@ -267,7 +267,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::GroupDeleted { group_id };
+        let event = ControlPayload::GroupDeleted { group_id };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(Some(deleted))

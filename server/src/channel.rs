@@ -103,7 +103,7 @@ pub trait ChannelRepository: Send + Sync + Clone {
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
 use crate::middleware::{authorize, AuthorizeService};
 
-use crate::model::Event;
+use crate::model::ControlPayload;
 
 #[derive(Clone)]
 pub struct ChannelService<R: ChannelRepository, N: NotifierManager> {
@@ -183,7 +183,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::ChannelUpdated {
+        let event = ControlPayload::ChannelUpdated {
             channel: channel.clone(),
         };
 
@@ -271,7 +271,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::ChannelUpdated {
+        let event = ControlPayload::ChannelUpdated {
             channel: updated_channel.clone(),
         };
         let _ = self
@@ -326,7 +326,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::ChannelUpdated {
+        let event = ControlPayload::ChannelUpdated {
             channel: updated_channel,
         };
         let _ = self
@@ -371,7 +371,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = Event::ChannelDeleted { channel_id };
+        let event = ControlPayload::ChannelDeleted { channel_id };
         let _ = self
             .notifier
             .notify(
