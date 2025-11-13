@@ -14,49 +14,31 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
-#[derive(Debug, thiserror::Error)]
-pub enum WebTransportError {
-    #[error("Connection error: {0}")]
-    Connection(String),
-
-    #[error("Session error: {0}")]
-    Session(String),
-
-    #[error("Deserialization error: {0}")]
-    Deserialization(#[from] rmp_serde::decode::Error),
-
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] rmp_serde::encode::Error),
-
-    #[error("Database error: {0}")]
-    Database(#[from] DatabaseError),
-
-    #[error("Protocol error: {0}")]
-    Er(#[from] sqlx::Error),
-
-    #[error("Service operation failed: {0}")]
-    ServiceError(String),
-
-    #[error("User not found: {user_id}")]
-    UserNotFound { user_id: i64 },
+pub enum RoutingPolicy {
+    GroupRights { group_id: i64, minimun_rights: i64 },
+    ChannelRights { group_id: i64, minimun_rights: i64 },
+    User { user_id: i64 },
+    Role { role_id: i64 },
 }
 
-impl From<opencord_transport_server::WebTransportError> for WebTransportError {
-    fn from(e: opencord_transport_server::WebTransportError) -> Self {
-        WebTransportError::Connection(e.to_string())
-    }
+//These can come from endpoints or subscribers
+pub enum CommandPayload {
+    Connect(i64),    //comes from subscribers with token
+    Timeout(i64),    //when a subscriber times out
+    Disconnect(i64), // can come from endpoint  and subscriber
+}
+pub enum ServerMessage {
+    Command(CommandPayload), //commands from endpoints or subscribers
+    Control(ControlPayload, RoutingPolicy), //events from endpoints
+    Voip(VoipPayload),       //voip data from subscribers, for voip routing policy is always same
+                             //channel
 }
 
-pub enum ObserverMessage {
+pub enum SubscriberMessage {
     Voip(VoipPayload),
     Event(ControlPayload),
-    Close,
-}
-
-#[derive(Debug)]
-pub enum SubjectMessage {
-    BroadcastVoip(i64, VoipPayload),
-    ClientTimout { user_id: i64 },
+    Connect(String),
+    Close(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -70,19 +52,30 @@ pub enum VoipDataType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
+pub struct SpeechPayload {
+    user_id: u64,
+    is_speaking: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub struct MediaPayload {
+    user_id: u64,
+    media_type: VoipDataType,
+    data: Vec<u8>,
+    timestamp: u64,
+    real_timestamp: u64,
+    key: KeyType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum VoipPayload {
     #[serde(rename_all = "camelCase")]
-    Speech { user_id: u64, is_speaking: bool },
+    Speech(SpeechPayload),
 
     #[serde(rename_all = "camelCase")]
-    MediaData {
-        user_id: u64,
-        media_type: VoipDataType,
-        data: Vec<u8>,
-        timestamp: u64,
-        real_timestamp: u64,
-        key: KeyType,
-    },
+    Media(MediaPayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,7 +98,7 @@ pub trait WebTransportTransaction: Send + Sync {
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
 
-pub trait WebTransportRepository: Send + Sync + Clone {
+pub trait Repository: Send + Sync + Clone {
     type Transaction: WebTransportTransaction;
 
     async fn begin(&self) -> Result<Self::Transaction, DatabaseError>;
@@ -210,7 +203,7 @@ impl WebTransportTransaction for PgWebTransportTransaction {
     }
 }
 
-impl WebTransportRepository for Postgre {
+impl Repository for Postgre {
     type Transaction = PgWebTransportTransaction;
 
     async fn begin(&self) -> Result<Self::Transaction, DatabaseError> {
@@ -367,7 +360,7 @@ impl WebTransportRepository for Postgre {
 pub struct Subscriber {
     id: String,
     user_id: i64,
-    sender: mpsc::Sender<ObserverMessage>,
+    sender: mpsc::Sender<SubscriberMessage>,
 }
 
 impl Subscriber {
@@ -379,7 +372,7 @@ impl Subscriber {
         self.user_id
     }
 
-    async fn send(&self, msg: ObserverMessage) -> bool {
+    async fn send(&self, msg: SubscriberMessage) -> bool {
         self.sender.send(msg).await.is_ok()
     }
 }
@@ -396,184 +389,20 @@ impl RealtimeServer {
             repository,
         }
     }
+    async fn handle_timeout(&self, user_id: i64) {}
+    async fn handle_connect(&self, user_id: i64) {}
+    async fn handle_disconnect(&self, user_id: i64) {}
 
-    async fn register(&mut self, new_observer: Subscriber) {
-        self.observers
-            .insert(new_observer.id().to_string(), new_observer);
-    }
-
-    async fn unregister(&mut self, user_id: i64) {
-        for observer in self.observers.values() {
-            if observer.user_id() == user_id {
-                let _ = observer.sender.send(ObserverMessage::Close).await;
-            }
-        }
-        self.observers
-            .retain(|_, observer| observer.user_id() != user_id);
-    }
-
-    async fn remove_user_active_connections(&mut self, user_id_to_remove: i64) {
-        if let Ok(Some(participant)) = self.remove_voip_participant(user_id_to_remove).await {
-            if let Some(channel_id) = participant.channel_id {
-                self.notify_observers(
-                    ControlPayload::VoipParticipantDeleted {
-                        user_id: participant.user_id,
-                    },
-                    crate::managers::RecipientType::ChannelRights {
-                        channel_id,
-                        minimum_rights: 1,
-                    },
-                )
-                .await;
-            }
-            if let Some(recipient_id) = participant.recipient_id {
-                self.notify_observers(
-                    ControlPayload::VoipParticipantDeleted {
-                        user_id: participant.user_id,
-                    },
-                    crate::managers::RecipientType::User {
-                        user_id: recipient_id,
-                    },
-                )
-                .await;
-            }
-        }
-    }
-
-    async fn notify_observers(
-        &self,
-        event: ControlPayload,
-        recipients: crate::managers::RecipientType,
-    ) {
-        for observer in self.observers.values() {
-            let should_receive = match recipients {
-                crate::managers::RecipientType::User { user_id } => observer.user_id() == user_id,
-                crate::managers::RecipientType::Role { role_id } => {
-                    match self.get_user_role(observer.user_id()).await {
-                        Ok(user_role_id) => user_role_id == role_id,
-                        Err(_) => false,
-                    }
-                }
-                crate::managers::RecipientType::GroupRights {
-                    group_id,
-                    minimum_rights,
-                } => {
-                    match self
-                        .get_user_group_rights(observer.user_id(), group_id)
-                        .await
-                    {
-                        Ok(rights) => rights >= minimum_rights,
-                        Err(_) => false,
-                    }
-                }
-                crate::managers::RecipientType::ChannelRights {
-                    channel_id,
-                    minimum_rights,
-                } => {
-                    match self
-                        .get_user_rights_in_channel(observer.user_id(), channel_id)
-                        .await
-                    {
-                        Ok(rights) => rights >= minimum_rights,
-                        Err(_) => false,
-                    }
-                }
-                crate::managers::RecipientType::GroupMembers { group_id } => {
-                    match self
-                        .get_user_group_rights(observer.user_id(), group_id)
-                        .await
-                    {
-                        Ok(rights) => rights > 0,
-                        Err(_) => false,
-                    }
-                }
-                crate::managers::RecipientType::ChannelRecipients {
-                    channel_id,
-                    sender_id,
-                } => {
-                    let rights = self
-                        .get_user_rights_in_channel(observer.user_id(), channel_id)
-                        .await
-                        .unwrap_or(0);
-
-                    let joined_participants = self
-                        .get_channel_voip_participants(channel_id)
-                        .await
-                        .unwrap_or(vec![]);
-
-                    rights > 0
-                        && joined_participants
-                            .iter()
-                            .any(|p| p.user_id == observer.user_id)
-                        && sender_id != observer.user_id()
-                }
-                crate::managers::RecipientType::Broadcast => true,
-            };
-
-            if should_receive {
-                let _ = observer.send(ObserverMessage::Event(event.clone())).await;
-            }
-        }
-    }
-
-    async fn broadcast_voip(&self, user_id: i64, data: VoipPayload) {
-        let sender_id = user_id;
-
-        let sender_participant = self.get_voip_participant(sender_id).await.unwrap_or(None);
-
-        if let Some(participant) = sender_participant {
-            if let Some(channel_id) = participant.channel_id {
-                let rights = self
-                    .get_user_rights_in_channel(sender_id, channel_id)
-                    .await
-                    .unwrap_or(0);
-
-                if rights > 2 {
-                    let participants = self
-                        .get_channel_voip_participants(channel_id)
-                        .await
-                        .unwrap_or_default();
-
-                    for participant in &participants {
-                        let should_send = match &data {
-                            VoipPayload::Speech { .. } => true,
-                            VoipPayload::MediaData { user_id, .. } => {
-                                participant.user_id != (*user_id as i64)
-                            }
-                        };
-
-                        if should_send {
-                            if let Some(observer) = self
-                                .observers
-                                .values()
-                                .find(|observer| observer.user_id() == participant.user_id)
-                            {
-                                let _ = observer.send(ObserverMessage::Voip(data.clone())).await;
-                            }
-                        }
-                    }
-                }
-            } else if let Some(recipient_id) = participant.recipient_id {
-                let recipient_participant = self
-                    .get_voip_participant(recipient_id)
-                    .await
-                    .unwrap_or(None);
-
-                if let Some(recipient_participant) = recipient_participant {
-                    for observer in self.observers.values() {
-                        if observer.user_id() == recipient_participant.user_id {
-                            let _ = observer.send(ObserverMessage::Voip(data.clone())).await;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    async fn handle_media(&self, media: MediaPayload) {}
+    async fn handle_speech(&self, speech: SpeechPayload) {}
+    async fn handle_voip(&self, payload: VoipPayload) {}
+    async fn handle_control(&self, payload: ControlPayload, policy: RoutingPolicy) {}
+    async fn route_control(&self, payload: ControlPayload, policy: RoutingPolicy) {}
+    async fn route_voip(&self, event: VoipPayload, recipients: crate::managers::RecipientType) {}
 
     pub async fn run(
         mut self,
-        mut receiver: mpsc::UnboundedReceiver<NotificationMessage>,
+        mut receiver: mpsc::UnboundedReceiver<ServerMessage>,
     ) -> Result<(), WebTransportError> {
         let cert_path = std::env::var("CERT_PATH").expect("Cert not found");
         let key_path = std::env::var("KEY_PATH").expect("Key not found");
@@ -582,72 +411,11 @@ impl RealtimeServer {
 
         info!("WebTransport server started on port 4433");
 
-        let (subject_tx, mut subject_rx) = mpsc::channel::<SubjectMessage>(1024);
-
         loop {
             tokio::select! {
-                may_msg = receiver.recv() => {
-                    if let Some(msg) = may_msg {
-                        self.notify_observers(msg.event, msg.recipients).await;
-                    }
+                Some(msg)= receiver.recv() => {
                 }
-
-                may_msg = subject_rx.recv() => {
-                    if let Some(msg) = may_msg {
-                        match msg {
-                            SubjectMessage::BroadcastVoip(user_id, voip_msg) => {
-                                self.broadcast_voip(user_id, voip_msg).await;
-                            }
-                            SubjectMessage::ClientTimout { user_id } => {
-
-                                if let Ok(Some(participant)) = self.remove_voip_participant(user_id).await {
-                                    if let Some(channel_id) = participant.channel_id {
-                                        self.notify_observers(
-                                            ControlPayload::VoipParticipantDeleted {
-                                                user_id: participant.user_id,
-                                            },
-                                            crate::managers::RecipientType::ChannelRights {
-                                                channel_id,
-                                                minimum_rights: 2
-                                            }
-                                        )
-                                        .await;
-                                    } else if let Some(recipient_id) = participant.recipient_id {
-                                        self.notify_observers(
-                                            ControlPayload::VoipParticipantDeleted {
-                                                user_id: participant.user_id,
-                                            },
-                                            crate::managers::RecipientType::User {
-                                                user_id: recipient_id,
-                                            },
-                                        )
-                                        .await;
-                                    }
-                                }
-
-                                self.unregister(user_id).await;
-                                if let Ok(Some(user)) = self.update_user_status(user_id, UserStatusType::Offline).await {
-                                    self.notify_observers(
-                                        ControlPayload::UserUpdated {
-                                            user,
-                                        },
-                                        crate::managers::RecipientType::Broadcast
-                                    ).await;
-                                }
-                            }
-                        }
-                    }
-                }
-                may_request= server.get_request() => {
-                    if let Some(request) = may_request{
-                        if let Ok(user_id)= self.get_user_from_session(&request.url().query().unwrap_or_default()).await {
-                            if let Some(connection) = server.accept_request(request).await{
-                                self.handle_connection(user_id, connection, &subject_tx).await;
-                            };
-                        }else{
-                            request.close(status::StatusCode::FORBIDDEN).await.unwrap();
-                        }
-                    }
+                Some(req)= server.get_request() => {
                 }
 
             }
@@ -763,102 +531,44 @@ impl RealtimeServer {
             .await
             .map_err(|e| WebTransportError::Database(e))
     }
-
-    async fn handle_connection(
-        &mut self,
-        user_id: i64,
-        connection: Connection,
-        subject_tx: &mpsc::Sender<SubjectMessage>,
-    ) {
-        // Accept new client connection
-        let (observer_tx, observer_rx) = mpsc::channel::<ObserverMessage>(1024);
-        let observer = Subscriber {
-            id: connection.id(),
-            user_id,
-            sender: observer_tx,
-        };
-        self.unregister(user_id).await;
-        self.register(observer).await;
-        self.remove_user_active_connections(user_id).await;
-
-        if let Ok(Some(status)) = self
-            .update_user_status(user_id, UserStatusType::Online)
-            .await
-        {
-            self.notify_observers(
-                ControlPayload::UserUpdated { user: status },
-                crate::managers::RecipientType::Broadcast,
-            )
-            .await;
-        }
-        tokio::spawn(manage_client_session(
-            connection,
-            self.repository.clone(),
-            subject_tx.clone(),
-            observer_rx,
-            user_id,
-        ));
-    }
 }
 
 async fn manage_client_session(
     mut connection: Connection,
     repository: Postgre,
-    subject_tx: mpsc::Sender<SubjectMessage>,
-    mut observer_rx: mpsc::Receiver<ObserverMessage>,
-    user_id: i64,
+    mut observer_rx: mpsc::Receiver<SubscriberMessage>,
+    mut subject_tx: &mpsc::Sender<ServerMessage>,
 ) {
-    info!(
-        "Connection accepted: user={}, session={}",
-        user_id,
-        connection.id()
-    );
-
+    let mut user_id: Option<i64> = None;
     loop {
         tokio::select! {
-            may_msg = observer_rx.recv() => {
-                if let Some(msg) = may_msg {
-                    match msg {
-                        ObserverMessage::Event(event) => {
-                            if let Ok(serialized_event)  = rmp_serde::to_vec_named(&event) {
-                                connection.send_data_safe(serialized_event.into()).await;
-                            }
-                        }
-                        ObserverMessage::Voip(event) => {
-                            if let Ok(serialized_event) = rmp_serde::to_vec_named(&event) {
-                                connection.send_data(serialized_event.into()).await;
-                            }
-                        }
-                        ObserverMessage::Close => {
-                            connection.disconnect_with_message(200, "New Connection").await;
-                            break;
-                        }
+            Some(msg) = observer_rx.recv() => {
+                match msg {
+                    SubscriberMessage::Event(payload) if  user_id.is_some() => {
+                    }
+                    SubscriberMessage::Voip(payload) if  user_id.is_some() => {
+                        subject_tx.send(ServerMessage::Voip(payload)).await;
+                    }
+                    SubscriberMessage::Connect(token)=>{
+                        if let Some(id) = repository.find_session_user_id(&token).await.unwrap_or(None){
+                            user_id = Some(id);
+                            subject_tx.send(ServerMessage::Command(CommandPayload::Connect(id))).await;
+                        };
+                    }
+                    SubscriberMessage::Close(reason) if user_id.is_some() => {
+                        subject_tx.send(ServerMessage::Command(CommandPayload::Disconnect(user_id.unwrap()))).await;
+                    }
+                    _ => {
+                        break
                     }
                 }
             }
-            may_msg = connection.read_message() => {
-                if let Some(msg)=may_msg {
-                    match msg {
-                        Message::Unsafe(bytes) => {
-                            if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
-                                let _ = subject_tx.send(SubjectMessage::BroadcastVoip(user_id, voip_msg)).await;
-                            }
-                        }
-                        _ => {}
-                    }
-                }else {
-                    let _ = subject_tx.send(SubjectMessage::ClientTimout { user_id }).await;
-                    break;
+            Some(msg) = connection.read_message() => {
+                match msg {
+                    Message::Unsafe(bytes)=>{}
+                    Message::Safe(bytes) => {},
                 }
             }
         }
     }
-}
-
-pub async fn start_webtransport_server(
-    repository: Postgre,
-    receiver: mpsc::UnboundedReceiver<NotificationMessage>,
-) -> Result<(), WebTransportError> {
-    let subject = RealtimeServer::new(repository);
-    subject.run(receiver).await
 }
