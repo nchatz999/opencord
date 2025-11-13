@@ -452,21 +452,44 @@ impl RealtimeServer {
     }
 
     async fn route_control(&self, payload: ControlPayload, policy: RoutingPolicy) {
-        for (_, subscriber) in self.observers {
-            let can_receive = match policy {
+        for (_, subscriber) in &self.observers {
+            let can_receive = match &policy {
                 RoutingPolicy::GroupRights {
                     group_id,
                     minimun_rights,
-                } => {}
+                } => {
+                    if let Ok(rights) = self.get_user_group_rights(subscriber.user_id(), *group_id).await {
+                        rights >= *minimun_rights
+                    } else {
+                        false
+                    }
+                }
                 RoutingPolicy::ChannelRights {
                     group_id,
                     minimun_rights,
-                } => {}
-                RoutingPolicy::User { user_id } => {}
-                RoutingPolicy::Role { role_id } => {}
+                } => {
+                    if let Ok(rights) = self.get_user_group_rights(subscriber.user_id(), *group_id).await {
+                        rights >= *minimun_rights
+                    } else {
+                        false
+                    }
+                }
+                RoutingPolicy::User { user_id } => {
+                    subscriber.user_id() == *user_id
+                }
+                RoutingPolicy::Role { role_id } => {
+                    if let Ok(user_role) = self.get_user_role(subscriber.user_id()).await {
+                        user_role == *role_id
+                    } else {
+                        false
+                    }
+                }
             };
+            
             if can_receive {
-                subscriber.send(SubscriberMessage::Event(payload)).await;
+                if !subscriber.send(SubscriberMessage::Event(payload.clone())).await {
+                    warn!("Failed to send control message to user {}", subscriber.user_id());
+                }
             }
         }
     }
