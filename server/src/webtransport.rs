@@ -12,7 +12,27 @@ use rmp_serde;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
+
+#[derive(Debug)]
+pub enum WebTransportError {
+    Database(DatabaseError),
+    UserNotFound { user_id: i64 },
+    Session(String),
+    Transport(String),
+}
+
+impl From<DatabaseError> for WebTransportError {
+    fn from(err: DatabaseError) -> Self {
+        WebTransportError::Database(err)
+    }
+}
+
+impl From<opencord_transport_server::Error> for WebTransportError {
+    fn from(err: opencord_transport_server::Error) -> Self {
+        WebTransportError::Transport(err.to_string())
+    }
+}
 
 pub enum RoutingPolicy {
     GroupRights { group_id: i64, minimun_rights: i64 },
@@ -389,16 +409,176 @@ impl RealtimeServer {
             repository,
         }
     }
-    async fn handle_timeout(&self, user_id: i64) {}
-    async fn handle_connect(&self, user_id: i64) {}
-    async fn handle_disconnect(&self, user_id: i64) {}
+    async fn handle_timeout(&self, user_id: i64) {
+        info!("Handling timeout for user {}", user_id);
+        
+        // Update user status to offline and remove from voip if participating
+        if let Err(e) = self.update_user_status(user_id, UserStatusType::Offline).await {
+            error!("Failed to update user status on timeout: {:?}", e);
+        }
+        
+        if let Ok(Some(participant)) = self.remove_voip_participant(user_id).await {
+            info!("Removed voip participant {} from timeout", user_id);
+        }
+        
+        // Remove subscriber from observers
+        self.observers.retain(|_, subscriber| subscriber.user_id() != user_id);
+    }
 
-    async fn handle_media(&self, media: MediaPayload) {}
-    async fn handle_speech(&self, speech: SpeechPayload) {}
-    async fn handle_voip(&self, payload: VoipPayload) {}
-    async fn handle_control(&self, payload: ControlPayload, policy: RoutingPolicy) {}
-    async fn route_control(&self, payload: ControlPayload, policy: RoutingPolicy) {}
-    async fn route_voip(&self, event: VoipPayload, recipients: crate::managers::RecipientType) {}
+    async fn handle_connect(&self, user_id: i64) {
+        info!("Handling connect for user {}", user_id);
+        
+        // Update user status to online
+        if let Err(e) = self.update_user_status(user_id, UserStatusType::Online).await {
+            error!("Failed to update user status on connect: {:?}", e);
+        }
+    }
+
+    async fn handle_disconnect(&self, user_id: i64) {
+        info!("Handling disconnect for user {}", user_id);
+        
+        // Update user status to offline and remove from voip if participating
+        if let Err(e) = self.update_user_status(user_id, UserStatusType::Offline).await {
+            error!("Failed to update user status on disconnect: {:?}", e);
+        }
+        
+        if let Ok(Some(participant)) = self.remove_voip_participant(user_id).await {
+            info!("Removed voip participant {} on disconnect", user_id);
+        }
+        
+        // Remove subscriber from observers
+        self.observers.retain(|_, subscriber| subscriber.user_id() != user_id);
+    }
+
+    async fn handle_media(&self, media: MediaPayload) {
+        // Get the user's voip participant to determine routing
+        if let Ok(Some(participant)) = self.get_voip_participant(media.user_id as i64).await {
+            let recipients = if let Some(channel_id) = participant.channel_id {
+                // Channel voip - route to all participants in the channel
+                if let Ok(participants) = self.get_channel_voip_participants(channel_id).await {
+                    crate::managers::RecipientType::Users(
+                        participants.into_iter().map(|p| p.user_id).collect()
+                    )
+                } else {
+                    return;
+                }
+            } else if let Some(recipient_id) = participant.recipient_id {
+                // DM voip - route to the other participant
+                crate::managers::RecipientType::Users(vec![recipient_id])
+            } else {
+                return;
+            };
+            
+            self.route_voip(VoipPayload::Media(media), recipients).await;
+        }
+    }
+
+    async fn handle_speech(&self, speech: SpeechPayload) {
+        // Get the user's voip participant to determine routing
+        if let Ok(Some(participant)) = self.get_voip_participant(speech.user_id as i64).await {
+            let recipients = if let Some(channel_id) = participant.channel_id {
+                // Channel voip - route to all participants in the channel
+                if let Ok(participants) = self.get_channel_voip_participants(channel_id).await {
+                    crate::managers::RecipientType::Users(
+                        participants.into_iter().map(|p| p.user_id).collect()
+                    )
+                } else {
+                    return;
+                }
+            } else if let Some(recipient_id) = participant.recipient_id {
+                // DM voip - route to the other participant
+                crate::managers::RecipientType::Users(vec![recipient_id])
+            } else {
+                return;
+            };
+            
+            self.route_voip(VoipPayload::Speech(speech), recipients).await;
+        }
+    }
+
+    async fn handle_voip(&self, payload: VoipPayload) {
+        match payload {
+            VoipPayload::Media(media) => self.handle_media(media).await,
+            VoipPayload::Speech(speech) => self.handle_speech(speech).await,
+        }
+    }
+    async fn handle_control(&self, payload: ControlPayload, policy: RoutingPolicy) {
+        // Delegate to route_control for actual routing logic
+        self.route_control(payload, policy).await;
+    }
+
+    async fn route_control(&self, payload: ControlPayload, policy: RoutingPolicy) {
+        let recipients = match policy {
+            RoutingPolicy::GroupRights { group_id, minimun_rights } => {
+                // Find all users in the group with sufficient rights
+                let mut user_ids = Vec::new();
+                for subscriber in self.observers.values() {
+                    if let Ok(rights) = self.get_user_group_rights(subscriber.user_id(), group_id).await {
+                        if rights >= minimun_rights {
+                            user_ids.push(subscriber.user_id());
+                        }
+                    }
+                }
+                crate::managers::RecipientType::Users(user_ids)
+            },
+            RoutingPolicy::ChannelRights { group_id, minimun_rights } => {
+                // Find all users in the group with sufficient rights (treating as group rights for now)
+                let mut user_ids = Vec::new();
+                for subscriber in self.observers.values() {
+                    if let Ok(rights) = self.get_user_group_rights(subscriber.user_id(), group_id).await {
+                        if rights >= minimun_rights {
+                            user_ids.push(subscriber.user_id());
+                        }
+                    }
+                }
+                crate::managers::RecipientType::Users(user_ids)
+            },
+            RoutingPolicy::User { user_id } => {
+                crate::managers::RecipientType::Users(vec![user_id])
+            },
+            RoutingPolicy::Role { role_id } => {
+                // Find all users with this role
+                let mut user_ids = Vec::new();
+                for subscriber in self.observers.values() {
+                    if let Ok(user_role) = self.get_user_role(subscriber.user_id()).await {
+                        if user_role == role_id {
+                            user_ids.push(subscriber.user_id());
+                        }
+                    }
+                }
+                crate::managers::RecipientType::Users(user_ids)
+            }
+        };
+
+        // Send the control payload to all eligible subscribers
+        if let crate::managers::RecipientType::Users(user_ids) = recipients {
+            for user_id in user_ids {
+                for subscriber in self.observers.values() {
+                    if subscriber.user_id() == user_id {
+                        if !subscriber.send(SubscriberMessage::Event(payload.clone())).await {
+                            warn!("Failed to send control message to user {}", user_id);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn route_voip(&self, event: VoipPayload, recipients: crate::managers::RecipientType) {
+        if let crate::managers::RecipientType::Users(user_ids) = recipients {
+            for user_id in user_ids {
+                for subscriber in self.observers.values() {
+                    if subscriber.user_id() == user_id {
+                        if !subscriber.send(SubscriberMessage::Voip(event.clone())).await {
+                            warn!("Failed to send voip message to user {}", user_id);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     pub async fn run(
         mut self,
