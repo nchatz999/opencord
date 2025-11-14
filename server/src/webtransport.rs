@@ -398,35 +398,40 @@ impl SubscriberSession {
         &mut self,
         msg: SubscriberMessage,
         server_tx: &mpsc::Sender<SubscriberMessage>,
-    ) -> bool {
+    ) -> SessionAction {
         match msg {
             SubscriberMessage::Event(_payload) if self.user_id.is_some() => {
                 // Handle event - currently no implementation needed
+                SessionAction::Continue
             }
             SubscriberMessage::Voip(payload) if self.user_id.is_some() => {
                 self.handle_voip_message(payload).await;
+                SessionAction::Continue
             }
             SubscriberMessage::Connect(token) => {
                 self.handle_connect(token, server_tx.clone()).await;
+                SessionAction::Continue
             }
             SubscriberMessage::Close(_reason) if self.user_id.is_some() => {
                 self.handle_close().await;
-                return false;
+                SessionAction::Close
             }
             _ => {
-                return false;
+                warn!("Received unexpected message or user not authenticated");
+                SessionAction::Close
             }
         }
-        true
     }
 
-    async fn handle_connection_message(&mut self, msg: Message) {
+    async fn handle_connection_message(&mut self, msg: Message) -> SessionAction {
         match msg {
             Message::Unsafe(_bytes) => {
                 // Handle unsafe message
+                SessionAction::Continue
             }
             Message::Safe(_bytes) => {
                 // Handle safe message
+                SessionAction::Continue
             }
         }
     }
