@@ -379,6 +379,12 @@ impl SubscriberHandler {
     }
 }
 
+#[derive(Debug)]
+enum SessionAction {
+    Continue,
+    Close,
+}
+
 struct SubscriberSession {
     user_id: Option<i64>,
     observer_tx: mpsc::Sender<ServerMessage>,
@@ -792,12 +798,16 @@ impl RealtimeServer {
         loop {
             tokio::select! {
                 Some(msg) = server_rx.recv() => {
-                    if !session.handle_server_message(msg, &server_tx).await {
-                        break;
+                    match session.handle_server_message(msg, &server_tx).await {
+                        SessionAction::Continue => {}
+                        SessionAction::Close => break,
                     }
                 }
                 Some(msg) = connection.read_message() => {
-                    session.handle_connection_message(msg).await;
+                    match session.handle_connection_message(msg).await {
+                        SessionAction::Continue => {}
+                        SessionAction::Close => break,
+                    }
                 }
             }
         }
