@@ -669,20 +669,20 @@ impl RealtimeServer {
                     match msg {
                         SubscriberMessage::Event(payload) if user_id.is_some() => {
                         }
-                        
+
                         SubscriberMessage::Voip(payload) if user_id.is_some() => {
                             if let Some(session) = repository.find_voip_participant(user_id.unwrap()).await.unwrap_or(None) {
                                 if let Some(channel_id) = session.channel_id {
                                     match &payload {
                                         VoipPayload::Speech(speech_payload) => {
                                             observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(), 
+                                                payload.clone(),
                                                 VoipRoutingPolicy::Channel(channel_id, false)
                                             )).await;
                                         },
                                         VoipPayload::Media(media_payload) => {
                                             observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(), 
+                                                payload.clone(),
                                                 VoipRoutingPolicy::Channel(channel_id, true)
                                             )).await;
                                         }
@@ -691,25 +691,25 @@ impl RealtimeServer {
                                     match &payload {
                                         VoipPayload::Speech(speech_payload) => {
                                             observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(), 
+                                                payload.clone(),
                                                 VoipRoutingPolicy::Recipient(recipient_id)
                                             )).await;
                                         },
                                         VoipPayload::Media(media_payload) => {
                                             observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(), 
+                                                payload.clone(),
                                                 VoipRoutingPolicy::Recipient(recipient_id)
                                             )).await;
                                         }
                                     }
                                     observer_tx.send(ServerMessage::Voip(
-                                        payload, 
+                                        payload,
                                         VoipRoutingPolicy::Recipient(recipient_id)
                                     )).await;
                                 }
                             };
                         }
-                        
+
                         SubscriberMessage::Connect(token) => {
                             if let Some(id) = repository.find_session_user_id(&token).await.unwrap_or(None) {
                                 user_id = Some(id);
@@ -718,19 +718,19 @@ impl RealtimeServer {
                                 )).await;
                             };
                         }
-                        
+
                         SubscriberMessage::Close(reason) if user_id.is_some() => {
                             observer_tx.send(ServerMessage::Command(
                                 CommandPayload::Disconnect(user_id.unwrap())
                             )).await;
                         }
-                        
+
                         _ => {
                             break
                         }
                     }
                 }
-                
+
                 Some(msg) = connection.read_message() => {
                     match msg {
                         Message::Unsafe(bytes) => {}
