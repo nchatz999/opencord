@@ -364,12 +364,12 @@ impl Repository for Postgre {
     }
 }
 
-pub struct Subscriber {
+pub struct SubscriberHandler {
     user_id: i64,
     sender: mpsc::Sender<SubscriberMessage>,
 }
 
-impl Subscriber {
+impl SubscriberHandler {
     pub fn user_id(&self) -> i64 {
         self.user_id
     }
@@ -432,13 +432,11 @@ impl SubscriberSession {
     }
 
     async fn handle_voip_message(&mut self, payload: VoipPayload) {
-        let Some(user_id) = self.user_id else {
-            warn!("VoIP message received but no user authenticated");
-            return;
-        };
-
-        let Ok(Some(session)) = self.repository.find_voip_participant(user_id).await else {
-            warn!("VoIP session not found for user {}", user_id);
+        let Ok(Some(session)) = self
+            .repository
+            .find_voip_participant(self.user_id.unwrap())
+            .await
+        else {
             return;
         };
 
@@ -451,17 +449,23 @@ impl SubscriberSession {
 
     async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64) {
         let is_media = matches!(payload, VoipPayload::Media(_));
-        let _ = self.observer_tx.send(ServerMessage::Voip(
-            payload,
-            VoipRoutingPolicy::Channel(channel_id, is_media)
-        )).await;
+        let _ = self
+            .observer_tx
+            .send(ServerMessage::Voip(
+                payload,
+                VoipRoutingPolicy::Channel(channel_id, is_media),
+            ))
+            .await;
     }
 
     async fn route_to_recipient(&mut self, payload: VoipPayload, recipient_id: i64) {
-        let _ = self.observer_tx.send(ServerMessage::Voip(
-            payload,
-            VoipRoutingPolicy::Recipient(recipient_id)
-        )).await;
+        let _ = self
+            .observer_tx
+            .send(ServerMessage::Voip(
+                payload,
+                VoipRoutingPolicy::Recipient(recipient_id),
+            ))
+            .await;
     }
 
     async fn handle_connect(&mut self, token: String, server_tx: mpsc::Sender<SubscriberMessage>) {
@@ -469,9 +473,12 @@ impl SubscriberSession {
             Ok(Some(id)) => {
                 info!("User {} connected", id);
                 self.user_id = Some(id);
-                let _ = self.observer_tx.send(ServerMessage::Command(
-                    CommandPayload::Connect(id, server_tx)
-                )).await;
+                let _ = self
+                    .observer_tx
+                    .send(ServerMessage::Command(CommandPayload::Connect(
+                        id, server_tx,
+                    )))
+                    .await;
             }
             Ok(None) => {
                 warn!("Invalid session token provided");
@@ -484,15 +491,16 @@ impl SubscriberSession {
 
     async fn handle_close(&mut self) {
         if let Some(user_id) = self.user_id {
-            let _ = self.observer_tx.send(ServerMessage::Command(
-                CommandPayload::Disconnect(user_id)
-            )).await;
+            let _ = self
+                .observer_tx
+                .send(ServerMessage::Command(CommandPayload::Disconnect(user_id)))
+                .await;
         }
     }
 }
 
 struct RealtimeServer {
-    observers: HashMap<String, Subscriber>,
+    observers: HashMap<String, SubscriberHandler>,
     repository: Postgre,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
@@ -532,7 +540,7 @@ impl RealtimeServer {
         self.observers.retain(|_, sub| sub.user_id() != user_id);
         self.update_user_status(user_id, UserStatusType::Online)
             .await;
-        let subscriber = Subscriber { user_id, sender };
+        let subscriber = SubscriberHandler { user_id, sender };
         self.observers
             .insert(subscriber.user_id().to_string(), subscriber);
     }
