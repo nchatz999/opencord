@@ -379,6 +379,118 @@ impl Subscriber {
     }
 }
 
+struct SubscriberSession {
+    user_id: Option<i64>,
+    observer_tx: mpsc::Sender<ServerMessage>,
+    repository: Postgre,
+}
+
+impl SubscriberSession {
+    fn new(observer_tx: mpsc::Sender<ServerMessage>, repository: Postgre) -> Self {
+        Self {
+            user_id: None,
+            observer_tx,
+            repository,
+        }
+    }
+
+    async fn handle_server_message(
+        &mut self,
+        msg: SubscriberMessage,
+        server_tx: &mpsc::Sender<SubscriberMessage>,
+    ) -> bool {
+        match msg {
+            SubscriberMessage::Event(_payload) if self.user_id.is_some() => {
+                // Handle event - currently no implementation needed
+            }
+            SubscriberMessage::Voip(payload) if self.user_id.is_some() => {
+                self.handle_voip_message(payload).await;
+            }
+            SubscriberMessage::Connect(token) => {
+                self.handle_connect(token, server_tx.clone()).await;
+            }
+            SubscriberMessage::Close(_reason) if self.user_id.is_some() => {
+                self.handle_close().await;
+                return false;
+            }
+            _ => {
+                return false;
+            }
+        }
+        true
+    }
+
+    async fn handle_connection_message(&mut self, msg: Message) {
+        match msg {
+            Message::Unsafe(_bytes) => {
+                // Handle unsafe message
+            }
+            Message::Safe(_bytes) => {
+                // Handle safe message
+            }
+        }
+    }
+
+    async fn handle_voip_message(&mut self, payload: VoipPayload) {
+        let Some(user_id) = self.user_id else {
+            warn!("VoIP message received but no user authenticated");
+            return;
+        };
+
+        let Ok(Some(session)) = self.repository.find_voip_participant(user_id).await else {
+            warn!("VoIP session not found for user {}", user_id);
+            return;
+        };
+
+        if let Some(channel_id) = session.channel_id {
+            self.route_to_channel(payload, channel_id).await;
+        } else if let Some(recipient_id) = session.recipient_id {
+            self.route_to_recipient(payload, recipient_id).await;
+        }
+    }
+
+    async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64) {
+        let is_media = matches!(payload, VoipPayload::Media(_));
+        let _ = self.observer_tx.send(ServerMessage::Voip(
+            payload,
+            VoipRoutingPolicy::Channel(channel_id, is_media)
+        )).await;
+    }
+
+    async fn route_to_recipient(&mut self, payload: VoipPayload, recipient_id: i64) {
+        let _ = self.observer_tx.send(ServerMessage::Voip(
+            payload,
+            VoipRoutingPolicy::Recipient(recipient_id)
+        )).await;
+    }
+
+    async fn handle_connect(&mut self, token: String, server_tx: mpsc::Sender<SubscriberMessage>) {
+        match self.repository.find_session_user_id(&token).await {
+            Ok(Some(id)) => {
+                info!("User {} connected", id);
+                self.user_id = Some(id);
+                let _ = self.observer_tx.send(ServerMessage::Command(
+                    CommandPayload::Connect(id, server_tx)
+                )).await;
+            }
+            Ok(None) => {
+                warn!("Invalid session token provided");
+            }
+            Err(e) => {
+                error!("Database error during authentication: {:?}", e);
+            }
+        }
+    }
+
+    async fn handle_close(&mut self) {
+        if let Some(user_id) = self.user_id {
+            let _ = self.observer_tx.send(ServerMessage::Command(
+                CommandPayload::Disconnect(user_id)
+            )).await;
+        }
+    }
+}
+
 struct RealtimeServer {
     observers: HashMap<String, Subscriber>,
     repository: Postgre,
@@ -534,7 +646,11 @@ impl RealtimeServer {
                 }
                 Some(req)= server.get_request() => {
                     if let Some(conn) = server.accept_request(req).await{
-                        RealtimeServer::handle_client_session(conn,self.repository.clone(), sender.clone()).await;
+                        let repo = self.repository.clone();
+                        let tx = sender.clone();
+                        tokio::spawn(async move {
+                            RealtimeServer::handle_subscriber_session(conn, repo, tx).await;
+                        });
                     }
                 }
             }
@@ -652,90 +768,23 @@ impl RealtimeServer {
             .unwrap_or(None)
     }
 
-    async fn handle_client_session(
+    async fn handle_subscriber_session(
         mut connection: Connection,
         repository: Postgre,
         mut observer_tx: mpsc::Sender<ServerMessage>,
     ) {
-        let mut user_id: Option<i64> = None;
-        let (server_tx, mut server_rx): (
-            mpsc::Sender<SubscriberMessage>,
-            mpsc::Receiver<SubscriberMessage>,
-        ) = mpsc::channel(1000);
+        let mut session = SubscriberSession::new(observer_tx, repository);
+        let (server_tx, mut server_rx) = mpsc::channel(1000);
 
         loop {
             tokio::select! {
                 Some(msg) = server_rx.recv() => {
-                    match msg {
-                        SubscriberMessage::Event(payload) if user_id.is_some() => {
-                        }
-
-                        SubscriberMessage::Voip(payload) if user_id.is_some() => {
-                            if let Some(session) = repository.find_voip_participant(user_id.unwrap()).await.unwrap_or(None) {
-                                if let Some(channel_id) = session.channel_id {
-                                    match &payload {
-                                        VoipPayload::Speech(speech_payload) => {
-                                            observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(),
-                                                VoipRoutingPolicy::Channel(channel_id, false)
-                                            )).await;
-                                        },
-                                        VoipPayload::Media(media_payload) => {
-                                            observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(),
-                                                VoipRoutingPolicy::Channel(channel_id, true)
-                                            )).await;
-                                        }
-                                    }
-                                } else if let Some(recipient_id) = session.recipient_id {
-                                    match &payload {
-                                        VoipPayload::Speech(speech_payload) => {
-                                            observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(),
-                                                VoipRoutingPolicy::Recipient(recipient_id)
-                                            )).await;
-                                        },
-                                        VoipPayload::Media(media_payload) => {
-                                            observer_tx.send(ServerMessage::Voip(
-                                                payload.clone(),
-                                                VoipRoutingPolicy::Recipient(recipient_id)
-                                            )).await;
-                                        }
-                                    }
-                                    observer_tx.send(ServerMessage::Voip(
-                                        payload,
-                                        VoipRoutingPolicy::Recipient(recipient_id)
-                                    )).await;
-                                }
-                            };
-                        }
-
-                        SubscriberMessage::Connect(token) => {
-                            if let Some(id) = repository.find_session_user_id(&token).await.unwrap_or(None) {
-                                user_id = Some(id);
-                                observer_tx.send(ServerMessage::Command(
-                                    CommandPayload::Connect(id, server_tx.clone())
-                                )).await;
-                            };
-                        }
-
-                        SubscriberMessage::Close(reason) if user_id.is_some() => {
-                            observer_tx.send(ServerMessage::Command(
-                                CommandPayload::Disconnect(user_id.unwrap())
-                            )).await;
-                        }
-
-                        _ => {
-                            break
-                        }
+                    if !session.handle_server_message(msg, &server_tx).await {
+                        break;
                     }
                 }
-
                 Some(msg) = connection.read_message() => {
-                    match msg {
-                        Message::Unsafe(bytes) => {}
-                        Message::Safe(bytes) => {},
-                    }
+                    session.handle_connection_message(msg).await;
                 }
             }
         }
