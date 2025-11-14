@@ -661,10 +661,6 @@ pub enum RecipientType {
         minimum_rights: i64,
     },
 
-    GroupMembers {
-        group_id: i64,
-    },
-
     ChannelRecipients {
         channel_id: i64,
         sender_id: i64,
