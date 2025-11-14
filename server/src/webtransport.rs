@@ -44,7 +44,7 @@ pub enum ControlRoutingPolicy {
 }
 
 pub enum VoipRoutingPolicy {
-    Channel(i64),
+    Channel(i64, bool),
     Recipient(i64),
 }
 
@@ -662,6 +662,7 @@ impl RealtimeServer {
             mpsc::Sender<SubscriberMessage>,
             mpsc::Receiver<SubscriberMessage>,
         ) = mpsc::channel(1000);
+
         loop {
             tokio::select! {
                 Some(msg) = server_rx.recv() => {
@@ -671,8 +672,15 @@ impl RealtimeServer {
                         SubscriberMessage::Voip(payload) if  user_id.is_some() => {
                             if let Some(session) = repository.find_voip_participant(user_id.unwrap()).await.unwrap_or(None){
                                 if let Some(channel_id) = session.channel_id{
-                                    observer_tx.send(ServerMessage::Voip(payload, VoipRoutingPolicy::Channel(channel_id))).await;
+                                    match &payload{
+                                        VoipPayload::Speech(speech_payload) =>{observer_tx.send(ServerMessage::Voip( payload.clone(), VoipRoutingPolicy::Channel(channel_id, false))).await;},
+                                        VoipPayload::Media(media_payload)  =>{observer_tx.send(ServerMessage::Voip( payload.clone(), VoipRoutingPolicy::Channel(channel_id,true))).await;}
+                                    }
                                 } else if let Some(recipient_id) = session.recipient_id{
+                                    match &payload{
+                                        VoipPayload::Speech(speech_payload) =>{observer_tx.send(ServerMessage::Voip( payload.clone(), VoipRoutingPolicy::Recipient(recipient_id))).await;},
+                                        VoipPayload::Media(media_payload)  =>{observer_tx.send(ServerMessage::Voip( payload.clone(), VoipRoutingPolicy::Recipient(recipient_id))).await;}
+                                    }
                                     observer_tx.send(ServerMessage::Voip(payload, VoipRoutingPolicy::Recipient(recipient_id))).await;
                                 }
                             };
