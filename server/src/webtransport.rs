@@ -10,7 +10,6 @@ use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub enum DomainError {
@@ -33,7 +32,7 @@ pub enum SessionError {
 pub struct ServerError;
 
 impl From<DomainError> for ServerError {
-    fn from(err: DomainError) -> Self {
+    fn from(_err: DomainError) -> Self {
         ServerError
     }
 }
@@ -44,19 +43,6 @@ impl From<DomainError> for SessionError {
             DomainError::BadRequest(msg) => SessionError::BadRequest(msg),
             DomainError::InternalError(_) => SessionError::InternalError,
         }
-    }
-}
-
-pub enum WebTransportError {
-    Database(DatabaseError),
-    UserNotFound { user_id: i64 },
-    Session(String),
-    Transport(String),
-}
-
-impl From<DatabaseError> for WebTransportError {
-    fn from(err: DatabaseError) -> Self {
-        WebTransportError::Database(err)
     }
 }
 
@@ -79,8 +65,8 @@ pub enum ControlRoutingPolicy {
 }
 
 pub enum VoipRoutingPolicy {
-    Channel(i64, bool),
-    Recipient(i64),
+    Channel(i64, Option<i64>),
+    Recipient(i64, Option<i64>),
 }
 
 //These can come from endpoints or subscribers
@@ -573,9 +559,9 @@ struct SubscriberSession {
     may_user_id: Option<i64>,
     observer_tx: mpsc::Sender<ServerMessage>,
     server_tx: mpsc::Sender<SubscriberMessage>,
-    server_rx: mpsc::Receiver<SubscriberMessage>,
+    pub server_rx: mpsc::Receiver<SubscriberMessage>,
     service: Service,
-    connection: Connection,
+    pub connection: Connection,
 }
 
 impl SubscriberSession {
@@ -634,7 +620,7 @@ impl SubscriberSession {
 
     async fn handle_connection_message(&mut self, msg: Message) -> Result<(), SessionError> {
         match msg {
-            Message::Unsafe(bytes) => {
+            Message::Unordered(bytes) => {
                 if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                     return self.handle_voip_message(voip_msg).await;
                 }
@@ -642,7 +628,7 @@ impl SubscriberSession {
                     "Invalid VoIP message format".to_string(),
                 ))
             }
-            Message::Safe(bytes) => {
+            Message::Ordered(bytes) => {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
                     return self.handle_control_message(ctr_msg).await;
                 }
@@ -654,10 +640,6 @@ impl SubscriberSession {
     }
 
     async fn handle_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
-        return Ok(self.process_voip_message(payload).await?);
-    }
-
-    async fn process_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
         let user_id = self
             .may_user_id
             .ok_or_else(|| SessionError::BadRequest("No user authenticated".to_string()))?;
@@ -669,13 +651,15 @@ impl SubscriberSession {
             .ok_or_else(|| SessionError::BadRequest("No active VoIP session".to_string()))?;
 
         if let Some(channel_id) = session.channel_id {
-            self.route_to_channel(payload, channel_id).await;
+            self.route_to_channel(payload, channel_id, user_id).await;
         } else if let Some(recipient_id) = session.recipient_id {
-            self.route_to_recipient(payload, recipient_id).await;
+            self.route_to_recipient(payload, recipient_id, user_id)
+                .await;
         }
 
         Ok(())
     }
+
     async fn handle_control_message(
         &mut self,
         payload: ControlPayload,
@@ -685,23 +669,27 @@ impl SubscriberSession {
                 match self.service.authenticate_session(&token).await? {
                     Some(session) => {
                         self.may_user_id = Some(session.user_id);
-                        let _ = self
-                            .observer_tx
-                            .send(ServerMessage::Command(CommandPayload::Connect(
-                                session.user_id,
-                                self.server_tx.clone(),
-                            )))
-                            .await;
-                        self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                            AnswerPayload::Accept,
+                        self.send_to_server(ServerMessage::Command(CommandPayload::Connect(
+                            session.user_id,
+                            self.server_tx.clone(),
                         )))
+                        .await;
+                        self.send_to_connection(
+                            ConnectionMessage::Control(ControlPayload::Answer(
+                                AnswerPayload::Accept,
+                            )),
+                            true,
+                        )
                         .await;
                         Ok(())
                     }
                     None => {
-                        self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                            AnswerPayload::Decline("Bad Credentials".to_string()),
-                        )))
+                        self.send_to_connection(
+                            ConnectionMessage::Control(ControlPayload::Answer(
+                                AnswerPayload::Decline("Bad Credentials".to_string()),
+                            )),
+                            true,
+                        )
                         .await;
                         Ok(())
                     }
@@ -717,37 +705,52 @@ impl SubscriberSession {
         }
     }
 
-    async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64) {
-        let is_media = matches!(payload, VoipPayload::Media(_));
-        let _ = self
-            .observer_tx
-            .send(ServerMessage::Voip(
-                payload,
-                VoipRoutingPolicy::Channel(channel_id, is_media),
-            ))
-            .await;
+    async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64, sender_id: i64) {
+        let except = if matches!(payload, VoipPayload::Media(_)) {
+            Some(sender_id)
+        } else {
+            None
+        };
+        self.send_to_server(ServerMessage::Voip(
+            payload,
+            VoipRoutingPolicy::Channel(channel_id, except),
+        ))
+        .await;
     }
 
-    async fn route_to_recipient(&mut self, payload: VoipPayload, recipient_id: i64) {
-        let _ = self
-            .observer_tx
-            .send(ServerMessage::Voip(
-                payload,
-                VoipRoutingPolicy::Recipient(recipient_id),
-            ))
-            .await;
+    async fn route_to_recipient(
+        &mut self,
+        payload: VoipPayload,
+        recipient_id: i64,
+        sender_id: i64,
+    ) {
+        let except = if matches!(payload, VoipPayload::Media(_)) {
+            Some(sender_id)
+        } else {
+            None
+        };
+
+        self.send_to_server(ServerMessage::Voip(
+            payload,
+            VoipRoutingPolicy::Recipient(recipient_id, except),
+        ))
+        .await;
     }
-    async fn send_ordered<T>(&mut self, payload: T)
+    async fn send_to_connection<T>(&mut self, payload: T, ordered: bool)
     where
         T: serde::Serialize,
     {
         if let Ok(serialized_data) = rmp_serde::to_vec_named(&payload) {
-            self.connection.send_data_safe(serialized_data.into()).await;
+            if ordered {
+                self.connection.send_data_safe(serialized_data.into()).await;
+            } else {
+                self.connection.send_data(serialized_data.into()).await;
+            }
         }
     }
 
-    async fn read_connection_message(&mut self) -> Option<Message> {
-        self.connection.read_message().await
+    async fn send_to_server(&mut self, payload: ServerMessage) {
+        self.observer_tx.send(payload).await;
     }
 }
 
@@ -772,7 +775,7 @@ impl RealtimeServer {
     }
     async fn handle_timeout(&mut self, user_id: i64) {
         let _ = self
-            .broadcast_user_status_update(user_id, UserStatusType::Offline)
+            .handle_user_status_update(user_id, UserStatusType::Offline)
             .await;
 
         let _ = self.handle_voip_participant_removal(user_id).await;
@@ -796,7 +799,7 @@ impl RealtimeServer {
 
         self.observers.retain(|_, sub| sub.user_id() != user_id);
         let _ = self
-            .broadcast_user_status_update(user_id, UserStatusType::Online)
+            .handle_user_status_update(user_id, UserStatusType::Online)
             .await;
         let subscriber = SubscriberHandler { user_id, sender };
         self.observers
@@ -805,7 +808,7 @@ impl RealtimeServer {
     }
 
     async fn handle_disconnect(&mut self, user_id: i64) -> Result<(), ServerError> {
-        self.broadcast_user_status_update(user_id, UserStatusType::Offline)
+        self.handle_user_status_update(user_id, UserStatusType::Offline)
             .await?;
 
         self.handle_voip_participant_removal(user_id).await?;
@@ -816,7 +819,7 @@ impl RealtimeServer {
     }
 
     async fn handle_removal(&mut self, user_id: i64, reason: String) -> Result<(), ServerError> {
-        self.broadcast_user_status_update(user_id, UserStatusType::Offline)
+        self.handle_user_status_update(user_id, UserStatusType::Offline)
             .await?;
 
         self.handle_voip_participant_removal(user_id).await?;
@@ -921,41 +924,41 @@ impl RealtimeServer {
         policy: VoipRoutingPolicy,
     ) -> Result<(), ServerError> {
         for (_, subscriber) in &self.observers {
-            let can_receive = match &policy {
-                VoipRoutingPolicy::Channel(channel_id, include_sender) => {
-                    // Check if user is in the channel
-                    if let Some(participant) = self
-                        .service
-                        .get_voip_participant(subscriber.user_id())
-                        .await?
+            if let Some(participant) = self
+                .service
+                .get_voip_participant(subscriber.user_id())
+                .await?
+            {
+                let can_receive = match (&policy, participant.channel_id, participant.recipient_id)
+                {
+                    (VoipRoutingPolicy::Channel(id, Some(except_id)), Some(channel_id), None)
+                        if *id == channel_id && subscriber.user_id() != *except_id =>
                     {
-                        if participant.channel_id == Some(*channel_id) {
-                            // If include_sender is false, skip the sender
-                            if !include_sender {
-                                let sender_user_id = match &event {
-                                    VoipPayload::Speech(speech) => speech.user_id as i64,
-                                    VoipPayload::Media(media) => media.user_id as i64,
-                                };
-                                subscriber.user_id() != sender_user_id
-                            } else {
-                                true
-                            }
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
+                        true
                     }
-                }
-                VoipRoutingPolicy::Recipient(recipient_id) => {
-                    subscriber.user_id() == *recipient_id
-                }
-            };
+                    (VoipRoutingPolicy::Channel(id, None), Some(channel_id), None)
+                        if *id == channel_id =>
+                    {
+                        true
+                    }
+                    (
+                        VoipRoutingPolicy::Recipient(id, Some(except_id)),
+                        None,
+                        Some(recipient_id),
+                    ) if *id == recipient_id && subscriber.user_id() != *except_id => true,
+                    (VoipRoutingPolicy::Recipient(id, None), None, Some(recipient_id))
+                        if *id == recipient_id =>
+                    {
+                        true
+                    }
 
-            if can_receive {
-                subscriber
-                    .send(SubscriberMessage::Voip(event.clone()))
-                    .await;
+                    (_, _, _) => false,
+                };
+                if can_receive {
+                    subscriber
+                        .send(SubscriberMessage::Voip(event.clone()))
+                        .await;
+                }
             }
         }
         Ok(())
@@ -996,7 +999,7 @@ impl RealtimeServer {
         self.sender.clone()
     }
 
-    pub async fn broadcast_user_status_update(
+    pub async fn handle_user_status_update(
         &mut self,
         user_id: i64,
         status: UserStatusType,
@@ -1043,15 +1046,14 @@ impl RealtimeServer {
         observer_tx: mpsc::Sender<ServerMessage>,
     ) {
         let mut session = SubscriberSession::new(observer_tx, service, connection);
-        let (server_tx, mut server_rx) = mpsc::channel(1000);
 
         loop {
             tokio::select! {
-                Some(msg) = server_rx.recv() => {
+                Some(msg) = session.server_rx.recv() => {
                     session.handle_server_message(msg).await;
 
                 }
-                Some(msg) = session.read_connection_message() => {
+                Some(msg) = session.connection.read_message() => {
                     if let Err(e) = session.handle_connection_message(msg).await {
                         session.close("sadf".to_string()).await;
                         break;
