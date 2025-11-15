@@ -11,6 +11,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
+// ============================================================================
+// Error Types
+// ============================================================================
+
 #[derive(Debug, Clone)]
 pub enum DomainError {
     BadRequest(String),
@@ -46,6 +50,10 @@ impl From<DomainError> for SessionError {
     }
 }
 
+// ============================================================================
+// Routing Policies
+// ============================================================================
+
 pub enum ControlRoutingPolicy {
     GroupRights {
         group_id: i64,
@@ -69,6 +77,10 @@ pub enum VoipRoutingPolicy {
     Recipient(i64, Option<i64>),
 }
 
+// ============================================================================
+// Message Types
+// ============================================================================
+
 //These can come from endpoints or subscribers
 pub enum CommandPayload {
     Connect(i64, mpsc::Sender<SubscriberMessage>), //comes from subscribers with token
@@ -88,6 +100,10 @@ pub enum SubscriberMessage {
     Event(EventPayload),
     Close(String),
 }
+
+// ============================================================================
+// Connection Protocol Types
+// ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AnswerPayload {
@@ -109,6 +125,10 @@ pub enum ConnectionMessage {
     Control(ControlPayload),
 }
 
+// ============================================================================
+// VoIP Types
+// ============================================================================
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VoipDataType {
@@ -116,6 +136,13 @@ pub enum VoipDataType {
     Camera,
     Screen,
     ScreenSound,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KeyType {
+    Key,
+    Delta,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,12 +172,9 @@ pub enum VoipPayload {
     Media(MediaPayload),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum KeyType {
-    Key,
-    Delta,
-}
+// ============================================================================
+// Repository Traits
+// ============================================================================
 
 pub trait WebTransportTransaction: Send + Sync {
     async fn update_user_status(
@@ -209,6 +233,10 @@ pub trait Repository: Send + Sync + Clone {
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
+
+// ============================================================================
+// Service Layer
+// ============================================================================
 
 #[derive(Clone)]
 pub struct Service {
@@ -349,6 +377,10 @@ impl Service {
             .map_err(DomainError::from)
     }
 }
+
+// ============================================================================
+// Repository Implementation
+// ============================================================================
 
 impl Repository for Postgre {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
@@ -539,6 +571,10 @@ impl Repository for Postgre {
         Ok(result)
     }
 }
+
+// ============================================================================
+// Subscriber Components
+// ============================================================================
 
 pub struct SubscriberHandler {
     user_id: i64,
@@ -753,6 +789,10 @@ impl SubscriberSession {
         self.observer_tx.send(payload).await;
     }
 }
+
+// ============================================================================
+// Realtime Server
+// ============================================================================
 
 struct RealtimeServer {
     observers: HashMap<String, SubscriberHandler>,
