@@ -245,13 +245,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         let _ = self
             .notifier
-            .notify(
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::ChannelRights {
+                ControlRoutingPolicy::ChannelRights {
                     channel_id,
-                    minimum_rights: 2,
+                    minimun_rights: 2,
                 },
-            )
+            ))
             .await;
 
         Ok((message, file_attachments))
@@ -314,17 +314,20 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         let _ = self
             .notifier
-            .notify(event.clone(), RecipientType::User { user_id: sender_id })
+            .notify(ServerMessage::Control(
+                event.clone(),
+                ControlRoutingPolicy::User { user_id: sender_id },
+            ))
             .await;
         if sender_id != recipient_id {
             let _ = self
                 .notifier
-                .notify(
+                .notify(ServerMessage::Control(
                     event,
-                    RecipientType::User {
+                    ControlRoutingPolicy::User {
                         user_id: recipient_id,
                     },
-                )
+                ))
                 .await;
         }
 
@@ -482,28 +485,31 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         if let Some(channel_id) = message.channel_id {
             let _ = self
                 .notifier
-                .notify(
+                .notify(ServerMessage::Control(
                     event.clone(),
-                    RecipientType::ChannelRights {
+                    ControlRoutingPolicy::ChannelRights {
                         channel_id,
-                        minimum_rights: 2,
+                        minimun_rights: 2,
                     },
-                )
+                ))
                 .await;
         }
         if let Some(recipient_id) = message.recipient_id {
             let _ = self
                 .notifier
-                .notify(event.clone(), RecipientType::User { user_id })
+                .notify(ServerMessage::Control(
+                    event.clone(),
+                    ControlRoutingPolicy::User { user_id },
+                ))
                 .await;
             let _ = self
                 .notifier
-                .notify(
+                .notify(ServerMessage::Control(
                     event,
-                    RecipientType::User {
+                    ControlRoutingPolicy::User {
                         user_id: recipient_id,
                     },
-                )
+                ))
                 .await;
         }
 
@@ -566,28 +572,31 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         if let Some(channel_id) = message.channel_id {
             let _ = self
                 .notifier
-                .notify(
+                .notify(ServerMessage::Control(
                     event.clone(),
-                    RecipientType::ChannelRights {
+                    ControlRoutingPolicy::ChannelRights {
                         channel_id,
-                        minimum_rights: 2,
+                        minimun_rights: 2,
                     },
-                )
+                ))
                 .await;
         }
         if let Some(recipient_id) = message.recipient_id {
             let _ = self
                 .notifier
-                .notify(event.clone(), RecipientType::User { user_id })
+                .notify(ServerMessage::Control(
+                    event.clone(),
+                    ControlRoutingPolicy::User { user_id },
+                ))
                 .await;
             let _ = self
                 .notifier
-                .notify(
+                .notify(ServerMessage::Control(
                     event,
-                    RecipientType::User {
+                    ControlRoutingPolicy::User {
                         user_id: recipient_id,
                     },
-                )
+                ))
                 .await;
         }
 

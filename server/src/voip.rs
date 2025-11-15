@@ -102,7 +102,7 @@ pub trait VoipRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{NotifierManager, RecipientType};
+use crate::managers::NotifierManager;
 
 #[derive(Clone)]
 pub struct VoipService<R: VoipRepository, N: NotifierManager> {
