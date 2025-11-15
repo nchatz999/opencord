@@ -973,19 +973,11 @@ impl RealtimeServer {
     }
 
     pub async fn get_user_from_session(&self, session_token: &str) -> Option<Session> {
-        let user_id = self
-            .repository
-            .find_session(session_token)
-            .await
-            .unwrap_or(None);
-        user_id
+        self.service.authenticate_session(session_token).await.ok()
     }
 
     pub async fn get_user_group_rights(&self, user_id: i64, group_id: i64) -> Option<i64> {
-        self.repository
-            .find_user_group_rights(group_id, user_id)
-            .await
-            .unwrap_or(None)
+        self.service.get_user_group_rights(user_id, group_id).await.unwrap_or(None)
     }
 
     pub async fn remove_voip_participant(&mut self, user_id: i64) -> Option<VoipParticipant> {
@@ -1020,10 +1012,7 @@ impl RealtimeServer {
     }
 
     pub async fn get_voip_participant(&self, user_id: i64) -> Option<VoipParticipant> {
-        self.repository
-            .find_voip_participant(user_id)
-            .await
-            .unwrap_or(None)
+        self.service.get_voip_participant(user_id).await.unwrap_or(None)
     }
 
     async fn handle_subscriber_session(
