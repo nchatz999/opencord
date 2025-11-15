@@ -11,10 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-// ============================================================================
-// Error Types
-// ============================================================================
-
 #[derive(Debug, Clone)]
 pub enum DomainError {
     BadRequest(String),
@@ -50,10 +46,6 @@ impl From<DomainError> for SessionError {
     }
 }
 
-// ============================================================================
-// Routing Policies
-// ============================================================================
-
 pub enum ControlRoutingPolicy {
     GroupRights {
         group_id: i64,
@@ -77,11 +69,6 @@ pub enum VoipRoutingPolicy {
     Recipient(i64, Option<i64>),
 }
 
-// ============================================================================
-// Message Types
-// ============================================================================
-
-//These can come from endpoints or subscribers
 pub enum CommandPayload {
     Connect(i64, mpsc::Sender<SubscriberMessage>), //comes from subscribers with token
     Timeout(i64),                                  //when a subscriber times out
@@ -100,10 +87,6 @@ pub enum SubscriberMessage {
     Event(EventPayload),
     Close(String),
 }
-
-// ============================================================================
-// Connection Protocol Types
-// ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AnswerPayload {
@@ -124,10 +107,6 @@ pub enum ConnectionMessage {
     Event(EventPayload),
     Control(ControlPayload),
 }
-
-// ============================================================================
-// VoIP Types
-// ============================================================================
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -170,23 +149,6 @@ pub enum VoipPayload {
     Speech(SpeechPayload),
     #[serde(rename_all = "camelCase")]
     Media(MediaPayload),
-}
-
-// ============================================================================
-// Repository Traits
-// ============================================================================
-
-pub trait WebTransportTransaction: Send + Sync {
-    async fn update_user_status(
-        &mut self,
-        user_id: i64,
-        status: UserStatusType,
-    ) -> Result<Option<User>, DatabaseError>;
-
-    async fn remove_voip_participant(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
 
 pub trait Repository: Send + Sync + Clone {
@@ -234,10 +196,6 @@ pub trait Repository: Send + Sync + Clone {
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
 
-// ============================================================================
-// Service Layer
-// ============================================================================
-
 #[derive(Clone)]
 pub struct Service {
     repository: Postgre,
@@ -249,10 +207,6 @@ impl Service {
     }
 
     pub async fn get_user_role(&self, user_id: i64) -> Result<Option<i64>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-
         self.repository
             .find_user_role(user_id)
             .await
@@ -264,13 +218,6 @@ impl Service {
         user_id: i64,
         channel_id: i64,
     ) -> Result<Option<i64>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-        if channel_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid channel ID".to_string()));
-        }
-
         self.repository
             .find_user_channel_rights(channel_id, user_id)
             .await
@@ -282,13 +229,6 @@ impl Service {
         user_id: i64,
         group_id: i64,
     ) -> Result<Option<i64>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-        if group_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid group ID".to_string()));
-        }
-
         self.repository
             .find_user_group_rights(group_id, user_id)
             .await
@@ -299,10 +239,6 @@ impl Service {
         &self,
         channel_id: i64,
     ) -> Result<Vec<VoipParticipant>, DomainError> {
-        if channel_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid channel ID".to_string()));
-        }
-
         self.repository
             .find_voip_participants_for_channel(channel_id)
             .await
@@ -314,13 +250,6 @@ impl Service {
         user_id: i64,
         recipient_id: i64,
     ) -> Result<Option<VoipParticipant>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-        if recipient_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid recipient ID".to_string()));
-        }
-
         self.repository
             .find_voip_participant_for_dm(user_id, recipient_id)
             .await
@@ -331,10 +260,6 @@ impl Service {
         &self,
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-
         self.repository
             .find_voip_participant(user_id)
             .await
@@ -353,10 +278,6 @@ impl Service {
         user_id: i64,
         status: UserStatusType,
     ) -> Result<Option<User>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-
         let mut repo = self.repository.clone();
         repo.update_user_status(user_id, status)
             .await
@@ -367,20 +288,12 @@ impl Service {
         &self,
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DomainError> {
-        if user_id <= 0 {
-            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
-        }
-
         let mut repo = self.repository.clone();
         repo.remove_voip_participant(user_id)
             .await
             .map_err(DomainError::from)
     }
 }
-
-// ============================================================================
-// Repository Implementation
-// ============================================================================
 
 impl Repository for Postgre {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
@@ -571,10 +484,6 @@ impl Repository for Postgre {
         Ok(result)
     }
 }
-
-// ============================================================================
-// Subscriber Components
-// ============================================================================
 
 pub struct SubscriberHandler {
     user_id: i64,
@@ -790,11 +699,7 @@ impl SubscriberSession {
     }
 }
 
-// ============================================================================
-// Realtime Server
-// ============================================================================
-
-struct RealtimeServer {
+pub struct RealtimeServer {
     observers: HashMap<String, SubscriberHandler>,
     service: Service,
     receiver: mpsc::Receiver<ServerMessage>,
@@ -802,7 +707,7 @@ struct RealtimeServer {
 }
 
 impl RealtimeServer {
-    fn new(repository: Postgre) -> Self {
+    pub fn new(repository: Postgre) -> Self {
         let (server_tx, server_rx): (mpsc::Sender<ServerMessage>, mpsc::Receiver<ServerMessage>) =
             mpsc::channel(1000);
 
