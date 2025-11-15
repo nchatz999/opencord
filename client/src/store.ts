@@ -109,6 +109,89 @@ export type MessageType =
   | { type: 'Channel'; channel_id: number }
   | { type: 'Direct'; recipient_id: number }
 
+// VoIP Data Types
+export enum VoipDataType {
+  Voice = 'voice',
+  Camera = 'camera',
+  Screen = 'screen',
+  ScreenSound = 'screenSound',
+}
+
+export enum KeyType {
+  Key = 'key',
+  Delta = 'delta',
+}
+
+export interface SpeechPayload {
+  type: 'speech';
+  userId: number;
+  isSpeaking: boolean;
+}
+
+export interface MediaPayload {
+  type: 'media';
+  userId: number;
+  mediaType: VoipDataType;
+  data: number[];
+  timestamp: number;
+  realTimestamp: number;
+  key: KeyType;
+}
+
+export type VoipPayload = SpeechPayload | MediaPayload;
+
+// Control Message Types
+export enum AnswerType {
+  Accept = 'accept',
+  Decline = 'decline',
+}
+
+export interface AcceptAnswer {
+  type: AnswerType.Accept;
+}
+
+export interface DeclineAnswer {
+  type: AnswerType.Decline;
+  reason: string;
+}
+
+export type AnswerPayload = AcceptAnswer | DeclineAnswer;
+
+export interface ConnectControl {
+  type: 'connect';
+  token: string;
+}
+
+export interface AnswerControl {
+  type: 'answer';
+  payload: AnswerPayload;
+}
+
+export interface CloseControl {
+  type: 'close';
+  reason: string;
+}
+
+export type ControlPayload = ConnectControl | AnswerControl | CloseControl;
+
+// Connection Message Types
+export interface VoipConnectionMessage {
+  type: 'voip';
+  payload: VoipPayload;
+}
+
+export interface EventConnectionMessage {
+  type: 'event';
+  payload: ServerEvent;
+}
+
+export interface ControlConnectionMessage {
+  type: 'control';
+  payload: ControlPayload;
+}
+
+export type ConnectionMessage = VoipConnectionMessage | EventConnectionMessage | ControlConnectionMessage;
+
 export type ServerEvent =
   | { type: 'ChannelUpdated'; channel: Channel }
   | { type: 'ChannelDeleted'; channel_id: number }
@@ -1027,10 +1110,10 @@ const certificateHash = {
 export let connection = new RTCPProtocol(`https://${window.location.hostname}:4443/session`,
   certificateHash,
   (data: any) => {
-    let frame = decode(data) as VoipDataMessage
-    if (frame.type === "mediaData") {
+    let frame = decode(data) as VoipPayload
+    if (frame.type === "media") {
       switch (frame.mediaType) {
-        case 'voice': {
+        case VoipDataType.Voice: {
           let packet = new EncodedAudioChunk({
             type: frame.key,
             timestamp: frame.realTimestamp,
@@ -1040,7 +1123,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
           voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
           break
         }
-        case 'camera': {
+        case VoipDataType.Camera: {
           let videoPacket = new EncodedVideoChunk({
             type: frame.key as EncodedVideoChunkType,
             timestamp: frame.realTimestamp,
@@ -1050,7 +1133,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
           voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
           break
         }
-        case 'screen': {
+        case VoipDataType.Screen: {
           let videoPacket = new EncodedVideoChunk({
             type: frame.key as EncodedVideoChunkType,
             timestamp: frame.realTimestamp,
@@ -1060,7 +1143,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
           voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
           break
         }
-        case 'screenSound': {
+        case VoipDataType.ScreenSound: {
           let videoPacket = new EncodedAudioChunk({
             type: frame.key as EncodedAudioChunkType,
             timestamp: frame.realTimestamp,
@@ -1093,14 +1176,14 @@ microphone.onEncodedData((data) => {
   data.copyTo(buffer);
   if (!user) return
   connection.send(encode({
-    type: "mediaData",
+    type: "media",
     userId: user.userId,
-    mediaType: "voice",
+    mediaType: VoipDataType.Voice,
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }))
+  } as MediaPayload))
 })
 
 microphone.onSpeech((speech) => {
@@ -1110,7 +1193,7 @@ microphone.onSpeech((speech) => {
     type: "speech",
     userId: user.userId,
     isSpeaking: speech
-  }))
+  } as SpeechPayload))
 
 })
 
@@ -1121,14 +1204,14 @@ screenShare.onEncodedVideoData((data) => {
   data.copyTo(buffer);
   if (!user) return
   connection.send(encode({
-    type: "mediaData",
+    type: "media",
     userId: user.userId,
-    mediaType: "screen",
+    mediaType: VoipDataType.Screen,
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }))
+  } as MediaPayload))
 })
 
 screenShare.onEncodedAudioData((data) => {
@@ -1137,14 +1220,14 @@ screenShare.onEncodedAudioData((data) => {
   data.copyTo(buffer);
   if (!user) return
   connection.send(encode({
-    type: "mediaData",
+    type: "media",
     userId: user.userId,
-    mediaType: "screenSound",
+    mediaType: VoipDataType.ScreenSound,
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }))
+  } as MediaPayload))
 })
 
 export let camera = new Camera();
@@ -1154,14 +1237,14 @@ camera.onEncodedData((data) => {
   data.copyTo(buffer);
   if (!user) return
   connection.send(encode({
-    type: "mediaData",
+    type: "media",
     userId: user.userId,
-    mediaType: "camera",
+    mediaType: VoipDataType.Camera,
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  }))
+  } as MediaPayload))
 
 })
 
