@@ -52,10 +52,34 @@ export class TransportProvider {
   private handleControlMessage(payload: ConnectionMessage): void {
     switch (payload.type) {
       case 'control':
+        this.handleControlPayload(payload.control);
         break;
       case "event":
         if (this.onServerEvent)
           this.onServerEvent(payload.event)
+        break;
+    }
+  }
+
+  private handleControlPayload(payload: ControlPayload): void {
+    switch (payload.type) {
+      case 'answer':
+        if (this.pendingConnection) {
+          const success = payload.answer.type === 'accept';
+          this.pendingConnection.resolve(success);
+          this.pendingConnection = null;
+        }
+        break;
+      
+      case 'close':
+        if (this.onDisconnect) {
+          this.onDisconnect();
+        }
+        break;
+      
+      case 'connect':
+        // Server shouldn't send connect messages to client
+        console.warn('Received unexpected connect message from server');
         break;
     }
   }
@@ -101,7 +125,7 @@ export class TransportProvider {
     this.onVoipData = callback;
   }
 
-  public onServerEventReceived(callback: (event: ServerEvent) => void): void {
+  public onServerEventReceived(callback: (event: EventPayload) => void): void {
     this.onServerEvent = callback;
   }
 
