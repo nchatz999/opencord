@@ -771,7 +771,8 @@ impl RealtimeServer {
         }
     }
     async fn handle_timeout(&mut self, user_id: i64) {
-        let _ = self.broadcast_user_status_update(user_id, UserStatusType::Offline)
+        let _ = self
+            .broadcast_user_status_update(user_id, UserStatusType::Offline)
             .await;
 
         let _ = self.handle_voip_participant_removal(user_id).await;
@@ -794,7 +795,8 @@ impl RealtimeServer {
         }
 
         self.observers.retain(|_, sub| sub.user_id() != user_id);
-        let _ = self.broadcast_user_status_update(user_id, UserStatusType::Online)
+        let _ = self
+            .broadcast_user_status_update(user_id, UserStatusType::Online)
             .await;
         let subscriber = SubscriberHandler { user_id, sender };
         self.observers
@@ -918,37 +920,6 @@ impl RealtimeServer {
         event: VoipPayload,
         policy: VoipRoutingPolicy,
     ) -> Result<(), ServerError> {
-        match policy {
-            VoipRoutingPolicy::Channel(channel_id, include_sender) => {
-                let participants = self.service.get_channel_voip_participants(channel_id).await?;
-                
-                for participant in participants {
-                    // Skip sender if include_sender is false
-                    if !include_sender {
-                        if let VoipPayload::Speech(ref speech) = event {
-                            if speech.user_id as i64 == participant.user_id {
-                                continue;
-                            }
-                        }
-                        if let VoipPayload::Media(ref media) = event {
-                            if media.user_id as i64 == participant.user_id {
-                                continue;
-                            }
-                        }
-                    }
-                    
-                    if let Some(subscriber) = self.observers.get(&participant.user_id.to_string()) {
-                        subscriber.send(SubscriberMessage::Voip(event.clone())).await;
-                    }
-                }
-            }
-            VoipRoutingPolicy::Recipient(recipient_id) => {
-                if let Some(subscriber) = self.observers.get(&recipient_id.to_string()) {
-                    subscriber.send(SubscriberMessage::Voip(event)).await;
-                }
-            }
-        }
-        Ok(())
     }
 
     pub async fn run(mut self) -> Result<(), ServerError> {
