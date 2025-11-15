@@ -1,12 +1,6 @@
 import { RTCPProtocol } from 'opencord-transport'
 import { decode, encode } from '@msgpack/msgpack'
-import { 
-  type ControlPayload, 
-  type ConnectionMessage, 
-  type VoipPayload, 
-  type ServerEvent,
-  AnswerType 
-} from '../store'
+import type { ConnectionMessage, ControlPayload, EventPayload, VoipPayload } from '../store';
 
 export interface TransportConfig {
   url: string;
@@ -24,7 +18,7 @@ export class TransportProvider {
   } | null = null;
 
   private onVoipData?: (data: VoipPayload) => void;
-  private onServerEvent?: (event: ServerEvent) => void;
+  private onServerEvent?: (event: EventPayload) => void;
   private onConnect?: () => void;
   private onDisconnect?: () => void;
 
@@ -33,14 +27,14 @@ export class TransportProvider {
       config.url,
       config.certificateHash,
       (data: any) => {
-        const message = decode(data) as ConnectionMessage;
-        this.handleConnectionMessage(message);
+        const message = decode(data) as VoipPayload;
+        if (this.onVoipData) {
+          this.onVoipData(message);
+        }
       },
       (data: any) => {
-        const event = decode(data) as ServerEvent;
-        if (this.onServerEvent) {
-          this.onServerEvent(event);
-        }
+        const event = decode(data) as ConnectionMessage;
+        this.handleControlMessage(event)
       },
       () => {
         if (this.onConnect) {
@@ -55,40 +49,13 @@ export class TransportProvider {
     );
   }
 
-  private handleConnectionMessage(message: ConnectionMessage): void {
-    switch (message.type) {
-      case 'voip':
-        if (this.onVoipData) {
-          this.onVoipData(message.payload);
-        }
-        break;
-      
-      case 'event':
-        if (this.onServerEvent) {
-          this.onServerEvent(message.payload);
-        }
-        break;
-      
-      case 'control':
-        this.handleControlMessage(message.payload);
-        break;
-    }
-  }
-
-  private handleControlMessage(payload: ControlPayload): void {
+  private handleControlMessage(payload: ConnectionMessage): void {
     switch (payload.type) {
-      case 'answer':
-        if (this.pendingConnection) {
-          const success = payload.payload.type === AnswerType.Accept;
-          this.pendingConnection.resolve(success);
-          this.pendingConnection = null;
-        }
+      case 'control':
         break;
-      
-      case 'close':
-        if (this.onDisconnect) {
-          this.onDisconnect();
-        }
+      case "event":
+        if (this.onServerEvent)
+          this.onServerEvent(payload.event)
         break;
     }
   }
@@ -102,12 +69,11 @@ export class TransportProvider {
 
       this.pendingConnection = { resolve, reject };
 
-      // Send connect message
       const connectMessage: ConnectionMessage = {
         type: 'control',
-        payload: {
+        control: {
           type: 'connect',
-          token: token
+          connect: token
         }
       };
 
@@ -124,19 +90,11 @@ export class TransportProvider {
   }
 
   public sendVoip(payload: VoipPayload): void {
-    const message: ConnectionMessage = {
-      type: 'voip',
-      payload: payload
-    };
-    this.protocol.send(encode(message));
+    this.protocol.send(encode(payload));
   }
 
   public sendControl(payload: ControlPayload): void {
-    const message: ConnectionMessage = {
-      type: 'control',
-      payload: payload
-    };
-    this.protocol.send(encode(message));
+    this.protocol.sendSafe(encode(payload));
   }
 
   public onVoipDataReceived(callback: (data: VoipPayload) => void): void {
