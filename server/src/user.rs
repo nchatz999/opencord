@@ -113,8 +113,9 @@ pub trait UserRepository: Send + Sync + Clone {
     async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
+use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 use base64::{engine::general_purpose, Engine as _};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -175,7 +176,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(updated_user)
     }
@@ -227,7 +228,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(updated_user)
     }
@@ -282,7 +283,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }

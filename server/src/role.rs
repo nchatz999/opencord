@@ -71,8 +71,9 @@ pub trait RoleRepository: Send + Sync + Clone {
 
 use crate::middleware::{authorize, AuthorizeService};
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
+use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
 pub struct RoleService<R: RoleRepository, N: NotifierManager> {
@@ -121,7 +122,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::RoleUpdated { role: role.clone() };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(role)
     }
@@ -175,7 +176,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::RoleUpdated { role: updated_role };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }
@@ -205,7 +206,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         let event = EventPayload::RoleDeleted {
             role_id: deleted.role_id,
         };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(Some(deleted))
     }
