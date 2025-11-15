@@ -549,11 +549,6 @@ impl SubscriberHandler {
     }
 }
 
-#[derive(Debug)]
-enum SessionAction {
-    Continue,
-    Close,
-}
 
 struct SubscriberSession {
     may_user_id: Option<i64>,
@@ -626,39 +621,39 @@ impl SubscriberSession {
         }
     }
 
-    async fn handle_connection_message(&mut self, msg: Message) -> SessionAction {
+    async fn handle_connection_message(&mut self, msg: Message) -> Result<(), SessionError> {
         match msg {
             Message::Unsafe(bytes) => {
                 if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                     return self.handle_voip_message(voip_msg).await;
                 }
-                SessionAction::Close
+                Err(SessionError::BadRequest("Invalid VoIP message format".to_string()))
             }
             Message::Safe(bytes) => {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
                     return self.handle_control_message(ctr_msg).await;
                 }
-                SessionAction::Close
+                Err(SessionError::BadRequest("Invalid control message format".to_string()))
             }
         }
     }
 
-    async fn handle_voip_message(&mut self, payload: VoipPayload) -> SessionAction {
+    async fn handle_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
         match self.process_voip_message(payload).await {
-            Ok(_) => SessionAction::Continue,
+            Ok(_) => Ok(()),
             Err(SessionError::BadRequest(msg)) => {
                 warn!("Bad VoIP request: {}", msg);
                 self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                    AnswerPayload::Decline(msg)
+                    AnswerPayload::Decline(msg.clone())
                 ))).await;
-                SessionAction::Close
+                Err(SessionError::BadRequest(msg))
             }
             Err(SessionError::InternalError) => {
                 error!("Internal error processing VoIP message");
                 self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
                     AnswerPayload::Decline("Internal server error".to_string())
                 ))).await;
-                SessionAction::Close
+                Err(SessionError::InternalError)
             }
         }
     }
@@ -681,7 +676,7 @@ impl SubscriberSession {
 
         Ok(())
     }
-    async fn handle_control_message(&mut self, payload: ControlPayload) -> SessionAction {
+    async fn handle_control_message(&mut self, payload: ControlPayload) -> Result<(), SessionError> {
         match payload {
             ControlPayload::Connect(token) => {
                 match self.authenticate_user(&token).await {
@@ -697,25 +692,29 @@ impl SubscriberSession {
                             AnswerPayload::Accept
                         )))
                             .await;
-                        SessionAction::Continue
+                        Ok(())
                     }
                     Err(SessionError::BadRequest(msg)) => {
                         self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                            AnswerPayload::Decline(msg)
+                            AnswerPayload::Decline(msg.clone())
                         ))).await;
-                        SessionAction::Close
+                        Err(SessionError::BadRequest(msg))
                     }
                     Err(SessionError::InternalError) => {
                         self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
                             AnswerPayload::Decline("Internal server error".to_string())
                         )))
                             .await;
-                        SessionAction::Close
+                        Err(SessionError::InternalError)
                     }
                 }
             }
-            ControlPayload::Answer(_answer_payload) => SessionAction::Close,
-            ControlPayload::Close(_reason) => SessionAction::Close,
+            ControlPayload::Answer(_answer_payload) => {
+                Err(SessionError::BadRequest("Unexpected answer payload".to_string()))
+            }
+            ControlPayload::Close(reason) => {
+                Err(SessionError::BadRequest(format!("Connection closed: {}", reason)))
+            }
         }
     }
 
@@ -1030,9 +1029,16 @@ impl RealtimeServer {
 
                 }
                 Some(msg) = session.read_connection_message() => {
-                    match session.handle_connection_message(msg).await {
-                        SessionAction::Continue => {}
-                        SessionAction::Close => break,
+                    if let Err(e) = session.handle_connection_message(msg).await {
+                        match e {
+                            SessionError::BadRequest(msg) => {
+                                warn!("Session error: {}", msg);
+                            }
+                            SessionError::InternalError => {
+                                error!("Internal session error");
+                            }
+                        }
+                        break;
                     }
                 }
             }
