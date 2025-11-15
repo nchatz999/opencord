@@ -65,9 +65,9 @@ pub trait GroupRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-
+use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
 pub struct GroupService<R: GroupRepository, N: NotifierManager> {
@@ -139,13 +139,13 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         };
         let _ = self
             .notifier
-            .notify(
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::GroupRights {
+                ControlRoutingPolicy::GroupRights {
                     group_id: group.group_id,
-                    minimum_rights: 1,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(group)
@@ -226,13 +226,13 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         };
         let _ = self
             .notifier
-            .notify(
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::GroupRights {
+                ControlRoutingPolicy::GroupRights {
                     group_id,
-                    minimum_rights: 1,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(())
@@ -268,7 +268,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::GroupDeleted { group_id };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(Some(deleted))
     }
