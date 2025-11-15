@@ -134,8 +134,9 @@ pub trait AuthRepository: Send + Sync + Clone {
     async fn find_user_by_username(&self, username: &str) -> Result<Option<User>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
+use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 use crate::user::User;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use time::Duration;
@@ -211,7 +212,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         let event = EventPayload::UserUpdated { user: user.clone() };
 
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(user)
     }
