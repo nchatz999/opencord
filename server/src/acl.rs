@@ -80,8 +80,9 @@ pub trait AclRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
+use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
 pub struct AclService<R: AclRepository, N: NotifierManager> {
@@ -190,13 +191,13 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
             };
             let _ = self
                 .notifier
-                .notify(
+                .notify(ServerMessage::Control(
                     event,
-                    RecipientType::GroupRights {
+                    ControlRoutingPolicy::GroupRights {
                         group_id: acl.group_id,
-                        minimum_rights: 1,
+                        minimun_rights: 1,
                     },
-                )
+                ))
                 .await;
 
             if new_right > 0 && acl.rights == 0 {
@@ -210,12 +211,12 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 };
                 let _ = self
                     .notifier
-                    .notify(
+                    .notify(ServerMessage::Control(
                         hide_event,
-                        RecipientType::Role {
+                        ControlRoutingPolicy::Role {
                             role_id: acl.role_id,
                         },
-                    )
+                    ))
                     .await;
             }
 
@@ -232,12 +233,12 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 };
                 let _ = self
                     .notifier
-                    .notify(
+                    .notify(ServerMessage::Control(
                         reveal_event,
-                        RecipientType::Role {
+                        ControlRoutingPolicy::Role {
                             role_id: acl.role_id,
                         },
-                    )
+                    ))
                     .await;
             }
         }
