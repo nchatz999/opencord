@@ -224,16 +224,19 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let _ = self
             .notifier
-            .notify(event.clone(), RecipientType::User { user_id })
+            .notify(ServerMessage::Control(
+                event.clone(),
+                ControlRoutingPolicy::User { user_id }
+            ))
             .await;
         let _ = self
             .notifier
-            .notify(
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::User {
+                ControlRoutingPolicy::User {
                     user_id: recipient_user_id,
-                },
-            )
+                }
+            ))
             .await;
 
         Ok(())
@@ -253,7 +256,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::VoipParticipantDeleted { user_id };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }
@@ -272,7 +275,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::VoipParticipantUpdated { user: participant };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }
@@ -291,7 +294,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::VoipParticipantUpdated { user: participant };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }
@@ -310,7 +313,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::VoipParticipantUpdated { user: participant };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }
@@ -329,7 +332,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::VoipParticipantUpdated { user: participant };
-        let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
+        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
 
         Ok(())
     }
