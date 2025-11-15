@@ -1,4 +1,5 @@
-use crate::model::ControlPayload;
+use crate::model::EventPayload;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
@@ -169,16 +170,16 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantUpdated { user: participant };
-        let _ = self
-            .notifier
-            .notify(
+        let event = EventPayload::VoipParticipantUpdated { user: participant };
+
+        self.notifier
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::ChannelRights {
+                ControlRoutingPolicy::ChannelRights {
                     channel_id,
-                    minimum_rights: 1,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(())
@@ -219,7 +220,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantUpdated { user: participant };
+        let event = EventPayload::VoipParticipantUpdated { user: participant };
 
         let _ = self
             .notifier
@@ -251,7 +252,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantDeleted { user_id };
+        let event = EventPayload::VoipParticipantDeleted { user_id };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -270,7 +271,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantUpdated { user: participant };
+        let event = EventPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -289,7 +290,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantUpdated { user: participant };
+        let event = EventPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -308,7 +309,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantUpdated { user: participant };
+        let event = EventPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -327,7 +328,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::VoipParticipantUpdated { user: participant };
+        let event = EventPayload::VoipParticipantUpdated { user: participant };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
 
         Ok(())
@@ -555,9 +556,9 @@ impl VoipRepository for Postgre {
 use crate::error::ApiError;
 use crate::managers::DefaultNotifierManager;
 use crate::middleware::authorize;
+use axum::Json;
 use axum::extract::{Extension, Path, State};
 use axum::middleware::from_fn_with_state;
-use axum::Json;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
