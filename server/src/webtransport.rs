@@ -217,6 +217,133 @@ pub trait Repository: Send + Sync + Clone {
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
 
+#[derive(Clone)]
+pub struct WebTransportService {
+    repository: Postgre,
+}
+
+impl WebTransportService {
+    pub fn new(repository: Postgre) -> Self {
+        Self { repository }
+    }
+
+    pub async fn get_user_role(&self, user_id: i64) -> Result<Option<i64>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+        
+        self.repository
+            .find_user_role(user_id)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn get_user_rights_in_channel(&self, user_id: i64, channel_id: i64) -> Result<Option<i64>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+        if channel_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid channel ID".to_string()));
+        }
+
+        self.repository
+            .find_user_channel_rights(channel_id, user_id)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn get_user_group_rights(&self, user_id: i64, group_id: i64) -> Result<Option<i64>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+        if group_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid group ID".to_string()));
+        }
+
+        self.repository
+            .find_user_group_rights(group_id, user_id)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn get_channel_voip_participants(&self, channel_id: i64) -> Result<Vec<VoipParticipant>, DomainError> {
+        if channel_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid channel ID".to_string()));
+        }
+
+        self.repository
+            .find_voip_participants_for_channel(channel_id)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn get_dm_voip_participant(
+        &self,
+        user_id: i64,
+        recipient_id: i64,
+    ) -> Result<Option<VoipParticipant>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+        if recipient_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid recipient ID".to_string()));
+        }
+
+        self.repository
+            .find_voip_participant_for_dm(user_id, recipient_id)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn get_voip_participant(&self, user_id: i64) -> Result<Option<VoipParticipant>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+
+        self.repository
+            .find_voip_participant(user_id)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn authenticate_session(&self, session_token: &str) -> Result<Session, DomainError> {
+        if session_token.trim().is_empty() {
+            return Err(DomainError::BadRequest("Session token cannot be empty".to_string()));
+        }
+
+        match self.repository.find_session(session_token).await? {
+            Some(session) => Ok(session),
+            None => Err(DomainError::BadRequest("Invalid session token".to_string())),
+        }
+    }
+
+    pub async fn update_user_status(
+        &self,
+        user_id: i64,
+        status: UserStatusType,
+    ) -> Result<Option<User>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+
+        let mut repo = self.repository.clone();
+        repo.update_user_status(user_id, status)
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn remove_voip_participant(&self, user_id: i64) -> Result<Option<VoipParticipant>, DomainError> {
+        if user_id <= 0 {
+            return Err(DomainError::BadRequest("Invalid user ID".to_string()));
+        }
+
+        let mut repo = self.repository.clone();
+        repo.remove_voip_participant(user_id)
+            .await
+            .map_err(DomainError::from)
+    }
+}
+
 impl Repository for Postgre {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
         let result = sqlx::query_scalar!("SELECT role_id FROM users WHERE user_id = $1", user_id)
@@ -433,14 +560,14 @@ struct SubscriberSession {
     observer_tx: mpsc::Sender<ServerMessage>,
     server_tx: mpsc::Sender<SubscriberMessage>,
     server_rx: mpsc::Receiver<SubscriberMessage>,
-    repository: Postgre,
+    service: WebTransportService,
     connection: Connection,
 }
 
 impl SubscriberSession {
     fn new(
         observer_tx: mpsc::Sender<ServerMessage>,
-        repository: Postgre,
+        service: WebTransportService,
         conn: Connection,
     ) -> Self {
         let (server_tx, server_rx): (
@@ -452,7 +579,7 @@ impl SubscriberSession {
             observer_tx,
             server_tx,
             server_rx,
-            repository,
+            service,
             connection: conn,
         }
     }
@@ -517,48 +644,84 @@ impl SubscriberSession {
     }
 
     async fn handle_voip_message(&mut self, payload: VoipPayload) -> SessionAction {
-        let user_id = match self.may_user_id {
-            Some(id) => id,
-            None => return SessionAction::Close,
-        };
+        match self.process_voip_message(payload).await {
+            Ok(_) => SessionAction::Continue,
+            Err(SessionError::BadRequest(msg)) => {
+                warn!("Bad VoIP request: {}", msg);
+                self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
+                    AnswerPayload::Decline(msg)
+                ))).await;
+                SessionAction::Close
+            }
+            Err(SessionError::InternalError) => {
+                error!("Internal error processing VoIP message");
+                self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
+                    AnswerPayload::Decline("Internal server error".to_string())
+                ))).await;
+                SessionAction::Close
+            }
+        }
+    }
 
-        let voip_session = match self.repository.find_voip_participant(user_id).await {
-            Ok(Some(session)) => session,
-            _ => return SessionAction::Close,
-        };
+    async fn process_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
+        let user_id = self.may_user_id.ok_or_else(|| {
+            SessionError::BadRequest("No user authenticated".to_string())
+        })?;
 
-        if let Some(channel_id) = voip_session.channel_id {
+        let session = self.service.get_voip_participant(user_id).await?
+            .ok_or_else(|| {
+                SessionError::BadRequest("No active VoIP session".to_string())
+            })?;
+
+        if let Some(channel_id) = session.channel_id {
             self.route_to_channel(payload, channel_id).await;
-        } else if let Some(recipient_id) = voip_session.recipient_id {
+        } else if let Some(recipient_id) = session.recipient_id {
             self.route_to_recipient(payload, recipient_id).await;
         }
 
-        SessionAction::Continue
+        Ok(())
     }
     async fn handle_control_message(&mut self, payload: ControlPayload) -> SessionAction {
         match payload {
             ControlPayload::Connect(token) => {
-                if let Ok(Some(session)) = self.repository.find_session(&token).await {
-                    self.observer_tx
-                        .send(ServerMessage::Command(CommandPayload::Connect(
-                            session.user_id,
-                            self.server_tx.clone(),
-                        )));
-                    self.send_ordered(&ConnectionMessage::Control(ControlPayload::Answer(
-                        AnswerPayload::Accept,
-                    )))
-                    .await;
-                    return SessionAction::Continue;
+                match self.authenticate_user(&token).await {
+                    Ok(user_id) => {
+                        self.may_user_id = Some(user_id);
+                        let _ = self.observer_tx
+                            .send(ServerMessage::Command(CommandPayload::Connect(
+                                user_id,
+                                self.server_tx.clone(),
+                            )))
+                            .await;
+                        self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
+                            AnswerPayload::Accept
+                        )))
+                            .await;
+                        SessionAction::Continue
+                    }
+                    Err(SessionError::BadRequest(msg)) => {
+                        self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
+                            AnswerPayload::Decline(msg)
+                        ))).await;
+                        SessionAction::Close
+                    }
+                    Err(SessionError::InternalError) => {
+                        self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
+                            AnswerPayload::Decline("Internal server error".to_string())
+                        )))
+                            .await;
+                        SessionAction::Close
+                    }
                 }
-                self.send_ordered(&ConnectionMessage::Control(ControlPayload::Answer(
-                    AnswerPayload::Decline("Bad".to_string()),
-                )))
-                .await;
-                SessionAction::Close
             }
-            ControlPayload::Answer(answer_payload) => SessionAction::Close,
-            ControlPayload::Close(reason) => SessionAction::Close,
+            ControlPayload::Answer(_answer_payload) => SessionAction::Close,
+            ControlPayload::Close(_reason) => SessionAction::Close,
         }
+    }
+
+    async fn authenticate_user(&self, token: &str) -> Result<i64, SessionError> {
+        let session = self.service.authenticate_session(token).await?;
+        Ok(session.user_id)
     }
 
     async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64) {
@@ -597,7 +760,7 @@ impl SubscriberSession {
 
 struct RealtimeServer {
     observers: HashMap<String, SubscriberHandler>,
-    repository: Postgre,
+    service: WebTransportService,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
 }
@@ -609,7 +772,7 @@ impl RealtimeServer {
 
         Self {
             observers: HashMap::new(),
-            repository,
+            service: WebTransportService::new(repository),
             receiver: server_rx,
             sender: server_tx,
         }
@@ -750,10 +913,10 @@ impl RealtimeServer {
                 }
                 Some(req)= server.get_request() => {
                     if let Some(conn) = server.accept_request(req).await{
-                        let repo = self.repository.clone();
+                        let service = self.service.clone();
                         let tx = sender.clone();
                         tokio::spawn(async move {
-                            RealtimeServer::handle_subscriber_session(conn, repo, tx).await;
+                            RealtimeServer::handle_subscriber_session(conn, service, tx).await;
                         });
                     }
                 }
@@ -765,26 +928,17 @@ impl RealtimeServer {
         self.sender.clone()
     }
 
-    // Repository methods moved from WebTransportService
+    // Service methods
     pub async fn get_user_role(&self, user_id: i64) -> Option<i64> {
-        self.repository
-            .find_user_role(user_id)
-            .await
-            .unwrap_or(None)
+        self.service.get_user_role(user_id).await.unwrap_or(None)
     }
 
     pub async fn get_user_rights_in_channel(&self, user_id: i64, channel_id: i64) -> Option<i64> {
-        self.repository
-            .find_user_channel_rights(channel_id, user_id)
-            .await
-            .unwrap_or(None)
+        self.service.get_user_rights_in_channel(user_id, channel_id).await.unwrap_or(None)
     }
 
     pub async fn get_channel_voip_participants(&self, channel_id: i64) -> Vec<VoipParticipant> {
-        self.repository
-            .find_voip_participants_for_channel(channel_id)
-            .await
-            .unwrap_or(vec![])
+        self.service.get_channel_voip_participants(channel_id).await.unwrap_or_default()
     }
 
     pub async fn get_dm_voip_participant(
@@ -792,10 +946,7 @@ impl RealtimeServer {
         user_id: i64,
         recipient_id: i64,
     ) -> Option<VoipParticipant> {
-        self.repository
-            .find_voip_participant_for_dm(user_id, recipient_id)
-            .await
-            .unwrap_or(None)
+        self.service.get_dm_voip_participant(user_id, recipient_id).await.unwrap_or(None)
     }
 
     pub async fn update_user_status(
@@ -803,20 +954,22 @@ impl RealtimeServer {
         user_id: i64,
         status: UserStatusType,
     ) -> Option<User> {
-        let may_user = self
-            .repository
-            .update_user_status(user_id, status)
-            .await
-            .unwrap_or(None);
-
-        if let Some(ref user) = may_user {
-            self.route_control(
-                EventPayload::UserUpdated { user: user.clone() },
-                ControlRoutingPolicy::Broadcast,
-            )
-            .await;
+        match self.service.update_user_status(user_id, status).await {
+            Ok(may_user) => {
+                if let Some(ref user) = may_user {
+                    self.route_control(
+                        EventPayload::UserUpdated { user: user.clone() },
+                        ControlRoutingPolicy::Broadcast,
+                    )
+                    .await;
+                }
+                may_user
+            }
+            Err(e) => {
+                error!("Failed to update user status: {:?}", e);
+                None
+            }
         }
-        may_user
     }
 
     pub async fn get_user_from_session(&self, session_token: &str) -> Option<Session> {
@@ -836,33 +989,34 @@ impl RealtimeServer {
     }
 
     pub async fn remove_voip_participant(&mut self, user_id: i64) -> Option<VoipParticipant> {
-        let may_participant = self
-            .repository
-            .remove_voip_participant(user_id)
-            .await
-            .unwrap_or(None);
-
-        if let Some(ref participant) = may_participant {
-            let policy = if let Some(channel_id) = participant.channel_id {
-                ControlRoutingPolicy::ChannelRights {
-                    channel_id,
-                    minimun_rights: 2,
+        match self.service.remove_voip_participant(user_id).await {
+            Ok(may_participant) => {
+                if let Some(ref participant) = may_participant {
+                    let policy = if let Some(channel_id) = participant.channel_id {
+                        ControlRoutingPolicy::ChannelRights {
+                            channel_id,
+                            minimun_rights: 2,
+                        }
+                    } else {
+                        ControlRoutingPolicy::User {
+                            user_id: participant.recipient_id.unwrap(),
+                        }
+                    };
+                    self.route_control(
+                        EventPayload::VoipParticipantDeleted {
+                            user_id: participant.user_id,
+                        },
+                        policy,
+                    )
+                    .await;
                 }
-            } else {
-                ControlRoutingPolicy::User {
-                    user_id: participant.recipient_id.unwrap(),
-                }
-            };
-            self.route_control(
-                EventPayload::VoipParticipantDeleted {
-                    user_id: participant.user_id,
-                },
-                policy,
-            )
-            .await;
+                may_participant
+            }
+            Err(e) => {
+                error!("Failed to remove VoIP participant: {:?}", e);
+                None
+            }
         }
-
-        may_participant
     }
 
     pub async fn get_voip_participant(&self, user_id: i64) -> Option<VoipParticipant> {
@@ -874,10 +1028,10 @@ impl RealtimeServer {
 
     async fn handle_subscriber_session(
         connection: Connection,
-        repository: Postgre,
+        service: WebTransportService,
         observer_tx: mpsc::Sender<ServerMessage>,
     ) {
-        let mut session = SubscriberSession::new(observer_tx, repository, connection);
+        let mut session = SubscriberSession::new(observer_tx, service, connection);
         let (server_tx, mut server_rx) = mpsc::channel(1000);
 
         loop {
