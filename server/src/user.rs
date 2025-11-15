@@ -114,7 +114,7 @@ pub trait UserRepository: Send + Sync + Clone {
 }
 
 use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-use crate::model::ControlPayload;
+use crate::model::EventPayload;
 use base64::{engine::general_purpose, Engine as _};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -172,7 +172,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::UserUpdated {
+        let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
@@ -224,7 +224,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         self.file_manager
             .upload_file(avatar_file.file_id, &file_data)?;
 
-        let event = ControlPayload::UserUpdated {
+        let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
@@ -279,7 +279,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::UserUpdated {
+        let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
         let _ = self.notifier.notify(event, RecipientType::Broadcast).await;
