@@ -920,6 +920,45 @@ impl RealtimeServer {
         event: VoipPayload,
         policy: VoipRoutingPolicy,
     ) -> Result<(), ServerError> {
+        for (_, subscriber) in &self.observers {
+            let can_receive = match &policy {
+                VoipRoutingPolicy::Channel(channel_id, include_sender) => {
+                    // Check if user is in the channel
+                    if let Some(participant) = self
+                        .service
+                        .get_voip_participant(subscriber.user_id())
+                        .await?
+                    {
+                        if participant.channel_id == Some(*channel_id) {
+                            // If include_sender is false, skip the sender
+                            if !include_sender {
+                                let sender_user_id = match &event {
+                                    VoipPayload::Speech(speech) => speech.user_id as i64,
+                                    VoipPayload::Media(media) => media.user_id as i64,
+                                };
+                                subscriber.user_id() != sender_user_id
+                            } else {
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                VoipRoutingPolicy::Recipient(recipient_id) => {
+                    subscriber.user_id() == *recipient_id
+                }
+            };
+
+            if can_receive {
+                subscriber
+                    .send(SubscriberMessage::Voip(event.clone()))
+                    .await;
+            }
+        }
+        Ok(())
     }
 
     pub async fn run(mut self) -> Result<(), ServerError> {
