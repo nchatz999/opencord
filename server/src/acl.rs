@@ -483,8 +483,8 @@ pub struct SetGroupRoleRightsRequest {
     pub rights: i64,
 }
 
-use axum::http::StatusCode;
 use axum::Json;
+use axum::http::StatusCode;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
@@ -499,7 +499,7 @@ impl From<DomainError> for ApiError {
     }
 }
 
-use crate::middleware::{authorize, AuthorizeService};
+use crate::middleware::{AuthorizeService, authorize};
 use axum::{
     extract::{Extension, State},
     middleware::from_fn_with_state,
