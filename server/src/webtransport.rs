@@ -13,6 +13,33 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
+#[derive(Debug, Clone)]
+pub enum DomainError {
+    BadRequest(String),
+    InternalError(String),
+}
+
+impl From<DatabaseError> for DomainError {
+    fn from(err: DatabaseError) -> Self {
+        DomainError::InternalError(format!("Database error: {:?}", err))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum SessionError {
+    BadRequest(String),
+    InternalError,
+}
+
+impl From<DomainError> for SessionError {
+    fn from(err: DomainError) -> Self {
+        match err {
+            DomainError::BadRequest(msg) => SessionError::BadRequest(msg),
+            DomainError::InternalError(_) => SessionError::InternalError,
+        }
+    }
+}
+
 pub enum WebTransportError {
     Database(DatabaseError),
     UserNotFound { user_id: i64 },
