@@ -7,7 +7,6 @@ use crate::{
     voip::VoipParticipant,
 };
 use opencord_transport_server::{Connection, Message, Server};
-use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -29,6 +28,14 @@ impl From<DatabaseError> for DomainError {
 pub enum SessionError {
     BadRequest(String),
     InternalError,
+}
+
+pub struct ServerError;
+
+impl From<DomainError> for ServerError {
+    fn from(err: DomainError) -> Self {
+        ServerError
+    }
 }
 
 impl From<DomainError> for SessionError {
@@ -218,11 +225,11 @@ pub trait Repository: Send + Sync + Clone {
 }
 
 #[derive(Clone)]
-pub struct WebTransportService {
+pub struct Service {
     repository: Postgre,
 }
 
-impl WebTransportService {
+impl Service {
     pub fn new(repository: Postgre) -> Self {
         Self { repository }
     }
@@ -231,14 +238,18 @@ impl WebTransportService {
         if user_id <= 0 {
             return Err(DomainError::BadRequest("Invalid user ID".to_string()));
         }
-        
+
         self.repository
             .find_user_role(user_id)
             .await
             .map_err(DomainError::from)
     }
 
-    pub async fn get_user_rights_in_channel(&self, user_id: i64, channel_id: i64) -> Result<Option<i64>, DomainError> {
+    pub async fn get_user_rights_in_channel(
+        &self,
+        user_id: i64,
+        channel_id: i64,
+    ) -> Result<Option<i64>, DomainError> {
         if user_id <= 0 {
             return Err(DomainError::BadRequest("Invalid user ID".to_string()));
         }
@@ -252,7 +263,11 @@ impl WebTransportService {
             .map_err(DomainError::from)
     }
 
-    pub async fn get_user_group_rights(&self, user_id: i64, group_id: i64) -> Result<Option<i64>, DomainError> {
+    pub async fn get_user_group_rights(
+        &self,
+        user_id: i64,
+        group_id: i64,
+    ) -> Result<Option<i64>, DomainError> {
         if user_id <= 0 {
             return Err(DomainError::BadRequest("Invalid user ID".to_string()));
         }
@@ -266,7 +281,10 @@ impl WebTransportService {
             .map_err(DomainError::from)
     }
 
-    pub async fn get_channel_voip_participants(&self, channel_id: i64) -> Result<Vec<VoipParticipant>, DomainError> {
+    pub async fn get_channel_voip_participants(
+        &self,
+        channel_id: i64,
+    ) -> Result<Vec<VoipParticipant>, DomainError> {
         if channel_id <= 0 {
             return Err(DomainError::BadRequest("Invalid channel ID".to_string()));
         }
@@ -295,7 +313,10 @@ impl WebTransportService {
             .map_err(DomainError::from)
     }
 
-    pub async fn get_voip_participant(&self, user_id: i64) -> Result<Option<VoipParticipant>, DomainError> {
+    pub async fn get_voip_participant(
+        &self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DomainError> {
         if user_id <= 0 {
             return Err(DomainError::BadRequest("Invalid user ID".to_string()));
         }
@@ -306,15 +327,11 @@ impl WebTransportService {
             .map_err(DomainError::from)
     }
 
-    pub async fn authenticate_session(&self, session_token: &str) -> Result<Session, DomainError> {
-        if session_token.trim().is_empty() {
-            return Err(DomainError::BadRequest("Session token cannot be empty".to_string()));
-        }
-
-        match self.repository.find_session(session_token).await? {
-            Some(session) => Ok(session),
-            None => Err(DomainError::BadRequest("Invalid session token".to_string())),
-        }
+    pub async fn authenticate_session(
+        &self,
+        session_token: &str,
+    ) -> Result<Option<Session>, DomainError> {
+        return Ok(self.repository.find_session(session_token).await?);
     }
 
     pub async fn update_user_status(
@@ -332,7 +349,10 @@ impl WebTransportService {
             .map_err(DomainError::from)
     }
 
-    pub async fn remove_voip_participant(&self, user_id: i64) -> Result<Option<VoipParticipant>, DomainError> {
+    pub async fn remove_voip_participant(
+        &self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DomainError> {
         if user_id <= 0 {
             return Err(DomainError::BadRequest("Invalid user ID".to_string()));
         }
@@ -549,22 +569,17 @@ impl SubscriberHandler {
     }
 }
 
-
 struct SubscriberSession {
     may_user_id: Option<i64>,
     observer_tx: mpsc::Sender<ServerMessage>,
     server_tx: mpsc::Sender<SubscriberMessage>,
     server_rx: mpsc::Receiver<SubscriberMessage>,
-    service: WebTransportService,
+    service: Service,
     connection: Connection,
 }
 
 impl SubscriberSession {
-    fn new(
-        observer_tx: mpsc::Sender<ServerMessage>,
-        service: WebTransportService,
-        conn: Connection,
-    ) -> Self {
+    fn new(observer_tx: mpsc::Sender<ServerMessage>, service: Service, conn: Connection) -> Self {
         let (server_tx, server_rx): (
             mpsc::Sender<SubscriberMessage>,
             mpsc::Receiver<SubscriberMessage>,
@@ -589,11 +604,7 @@ impl SubscriberSession {
         }
     }
 
-    async fn handle_server_message(
-        &mut self,
-        msg: SubscriberMessage,
-        server_tx: &mpsc::Sender<SubscriberMessage>,
-    ) {
+    async fn handle_server_message(&mut self, msg: SubscriberMessage) {
         match msg {
             SubscriberMessage::Event(payload) => {
                 if let Ok(serialized_event) =
@@ -627,46 +638,35 @@ impl SubscriberSession {
                 if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                     return self.handle_voip_message(voip_msg).await;
                 }
-                Err(SessionError::BadRequest("Invalid VoIP message format".to_string()))
+                Err(SessionError::BadRequest(
+                    "Invalid VoIP message format".to_string(),
+                ))
             }
             Message::Safe(bytes) => {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
                     return self.handle_control_message(ctr_msg).await;
                 }
-                Err(SessionError::BadRequest("Invalid control message format".to_string()))
+                Err(SessionError::BadRequest(
+                    "Invalid control message format".to_string(),
+                ))
             }
         }
     }
 
     async fn handle_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
-        match self.process_voip_message(payload).await {
-            Ok(_) => Ok(()),
-            Err(SessionError::BadRequest(msg)) => {
-                warn!("Bad VoIP request: {}", msg);
-                self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                    AnswerPayload::Decline(msg.clone())
-                ))).await;
-                Err(SessionError::BadRequest(msg))
-            }
-            Err(SessionError::InternalError) => {
-                error!("Internal error processing VoIP message");
-                self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                    AnswerPayload::Decline("Internal server error".to_string())
-                ))).await;
-                Err(SessionError::InternalError)
-            }
-        }
+        return Ok(self.process_voip_message(payload).await?);
     }
 
     async fn process_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
-        let user_id = self.may_user_id.ok_or_else(|| {
-            SessionError::BadRequest("No user authenticated".to_string())
-        })?;
+        let user_id = self
+            .may_user_id
+            .ok_or_else(|| SessionError::BadRequest("No user authenticated".to_string()))?;
 
-        let session = self.service.get_voip_participant(user_id).await?
-            .ok_or_else(|| {
-                SessionError::BadRequest("No active VoIP session".to_string())
-            })?;
+        let session = self
+            .service
+            .get_voip_participant(user_id)
+            .await?
+            .ok_or_else(|| SessionError::BadRequest("No active VoIP session".to_string()))?;
 
         if let Some(channel_id) = session.channel_id {
             self.route_to_channel(payload, channel_id).await;
@@ -676,51 +676,45 @@ impl SubscriberSession {
 
         Ok(())
     }
-    async fn handle_control_message(&mut self, payload: ControlPayload) -> Result<(), SessionError> {
+    async fn handle_control_message(
+        &mut self,
+        payload: ControlPayload,
+    ) -> Result<(), SessionError> {
         match payload {
             ControlPayload::Connect(token) => {
-                match self.authenticate_user(&token).await {
-                    Ok(user_id) => {
-                        self.may_user_id = Some(user_id);
-                        let _ = self.observer_tx
+                match self.service.authenticate_session(&token).await? {
+                    Some(session) => {
+                        self.may_user_id = Some(session.user_id);
+                        let _ = self
+                            .observer_tx
                             .send(ServerMessage::Command(CommandPayload::Connect(
-                                user_id,
+                                session.user_id,
                                 self.server_tx.clone(),
                             )))
                             .await;
                         self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                            AnswerPayload::Accept
+                            AnswerPayload::Accept,
                         )))
-                            .await;
+                        .await;
                         Ok(())
                     }
-                    Err(SessionError::BadRequest(msg)) => {
+                    None => {
                         self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                            AnswerPayload::Decline(msg.clone())
-                        ))).await;
-                        Err(SessionError::BadRequest(msg))
-                    }
-                    Err(SessionError::InternalError) => {
-                        self.send_ordered(ConnectionMessage::Control(ControlPayload::Answer(
-                            AnswerPayload::Decline("Internal server error".to_string())
+                            AnswerPayload::Decline("Bad Credentials".to_string()),
                         )))
-                            .await;
-                        Err(SessionError::InternalError)
+                        .await;
+                        Ok(())
                     }
                 }
             }
-            ControlPayload::Answer(_answer_payload) => {
-                Err(SessionError::BadRequest("Unexpected answer payload".to_string()))
-            }
-            ControlPayload::Close(reason) => {
-                Err(SessionError::BadRequest(format!("Connection closed: {}", reason)))
-            }
+            ControlPayload::Answer(_answer_payload) => Err(SessionError::BadRequest(
+                "Unexpected answer payload".to_string(),
+            )),
+            ControlPayload::Close(reason) => Err(SessionError::BadRequest(format!(
+                "Connection closed: {}",
+                reason
+            ))),
         }
-    }
-
-    async fn authenticate_user(&self, token: &str) -> Result<i64, SessionError> {
-        let session = self.service.authenticate_session(token).await?;
-        Ok(session.user_id)
     }
 
     async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64) {
@@ -759,7 +753,7 @@ impl SubscriberSession {
 
 struct RealtimeServer {
     observers: HashMap<String, SubscriberHandler>,
-    service: WebTransportService,
+    service: Service,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
 }
@@ -771,22 +765,26 @@ impl RealtimeServer {
 
         Self {
             observers: HashMap::new(),
-            service: WebTransportService::new(repository),
+            service: Service::new(repository),
             receiver: server_rx,
             sender: server_tx,
         }
     }
     async fn handle_timeout(&mut self, user_id: i64) {
-        self.update_user_status(user_id, UserStatusType::Offline)
+        self.handle_user_status_update(user_id, UserStatusType::Offline)
             .await;
 
-        self.remove_voip_participant(user_id).await;
+        self.handle_voip_participant_removal(user_id).await;
 
         self.observers
             .retain(|_, subscriber| subscriber.user_id() != user_id);
     }
 
-    async fn handle_connect(&mut self, user_id: i64, sender: mpsc::Sender<SubscriberMessage>) {
+    async fn handle_connect(
+        &mut self,
+        user_id: i64,
+        sender: mpsc::Sender<SubscriberMessage>,
+    ) -> Result<(), ServerError> {
         for (_, existing_subscriber) in &self.observers {
             if existing_subscriber.user_id() == user_id {
                 existing_subscriber
@@ -796,53 +794,73 @@ impl RealtimeServer {
         }
 
         self.observers.retain(|_, sub| sub.user_id() != user_id);
-        self.update_user_status(user_id, UserStatusType::Online)
+        self.handle_user_status_update(user_id, UserStatusType::Online)
             .await;
         let subscriber = SubscriberHandler { user_id, sender };
         self.observers
             .insert(subscriber.user_id().to_string(), subscriber);
+        Ok(())
     }
 
-    async fn handle_disconnect(&mut self, user_id: i64) {
-        self.update_user_status(user_id, UserStatusType::Offline)
+    async fn handle_disconnect(&mut self, user_id: i64) -> Result<(), ServerError> {
+        self.handle_user_status_update(user_id, UserStatusType::Offline)
             .await;
 
-        self.remove_voip_participant(user_id).await;
+        self.handle_voip_participant_removal(user_id).await;
 
         self.observers
             .retain(|_, subscriber| subscriber.user_id() != user_id);
+        Ok(())
     }
 
-    async fn handle_removal(&mut self, user_id: i64, reason: String) {
-        self.update_user_status(user_id, UserStatusType::Offline)
+    async fn handle_removal(&mut self, user_id: i64, reason: String) -> Result<(), ServerError> {
+        self.handle_user_status_update(user_id, UserStatusType::Offline)
             .await;
 
-        self.remove_voip_participant(user_id).await;
+        self.handle_voip_participant_removal(user_id).await;
 
         if let Some(observer) = self.observers.get(&user_id.to_string()) {
             observer.send(SubscriberMessage::Close(reason)).await;
         }
         self.observers
             .retain(|_, subscriber| subscriber.user_id() != user_id);
+        Ok(())
     }
 
-    async fn handle_voip(&self, payload: VoipPayload, policy: VoipRoutingPolicy) {
-        self.route_voip(payload, policy).await;
+    async fn handle_voip(
+        &self,
+        payload: VoipPayload,
+        policy: VoipRoutingPolicy,
+    ) -> Result<(), ServerError> {
+        self.route_voip(payload, policy).await?;
+        Ok(())
     }
-    async fn handle_control(&self, payload: EventPayload, policy: ControlRoutingPolicy) {
-        self.route_control(payload, policy).await;
+    async fn handle_control(
+        &self,
+        payload: EventPayload,
+        policy: ControlRoutingPolicy,
+    ) -> Result<(), ServerError> {
+        self.route_control(payload, policy).await?;
+        Ok(())
     }
 
-    async fn handle_command(&mut self, payload: CommandPayload) {
+    async fn handle_command(&mut self, payload: CommandPayload) -> Result<(), ServerError> {
         match payload {
-            CommandPayload::Connect(user_id, sender) => self.handle_connect(user_id, sender).await,
+            CommandPayload::Connect(user_id, sender) => {
+                self.handle_connect(user_id, sender).await?
+            }
             CommandPayload::Timeout(_) => todo!(),
-            CommandPayload::Disconnect(user_id) => self.handle_disconnect(user_id).await,
-            CommandPayload::Remove(user_id, reason) => self.handle_removal(user_id, reason).await,
+            CommandPayload::Disconnect(user_id) => self.handle_disconnect(user_id).await?,
+            CommandPayload::Remove(user_id, reason) => self.handle_removal(user_id, reason).await?,
         }
+        Ok(())
     }
 
-    async fn route_control(&self, payload: EventPayload, policy: ControlRoutingPolicy) {
+    async fn route_control(
+        &self,
+        payload: EventPayload,
+        policy: ControlRoutingPolicy,
+    ) -> Result<(), ServerError> {
         for (_, subscriber) in &self.observers {
             let can_receive = match &policy {
                 ControlRoutingPolicy::GroupRights {
@@ -850,8 +868,9 @@ impl RealtimeServer {
                     minimun_rights,
                 } => {
                     if let Some(rights) = self
+                        .service
                         .get_user_group_rights(subscriber.user_id(), *group_id)
-                        .await
+                        .await?
                     {
                         rights >= *minimun_rights
                     } else {
@@ -863,8 +882,9 @@ impl RealtimeServer {
                     minimun_rights,
                 } => {
                     if let Some(rights) = self
-                        .get_user_group_rights(subscriber.user_id(), *channel_id)
-                        .await
+                        .service
+                        .get_user_rights_in_channel(subscriber.user_id(), *channel_id)
+                        .await?
                     {
                         rights >= *minimun_rights
                     } else {
@@ -873,7 +893,9 @@ impl RealtimeServer {
                 }
                 ControlRoutingPolicy::User { user_id } => subscriber.user_id() == *user_id,
                 ControlRoutingPolicy::Role { role_id } => {
-                    if let Some(user_role) = self.get_user_role(subscriber.user_id()).await {
+                    if let Some(user_role) =
+                        self.service.get_user_role(subscriber.user_id()).await?
+                    {
                         user_role == *role_id
                     } else {
                         false
@@ -888,11 +910,24 @@ impl RealtimeServer {
                     .await;
             }
         }
+        return Ok(());
     }
 
-    async fn route_voip(&self, event: VoipPayload, policy: VoipRoutingPolicy) {}
+    async fn route_voip(
+        &self,
+        event: VoipPayload,
+        policy: VoipRoutingPolicy,
+    ) -> Result<(), ServerError> {
+        for (_, subscriber) in self.observers {
+            match policy {
+                VoipRoutingPolicy::Channel(channel_id, self_receive) => {}
+                VoipRoutingPolicy::Recipient(recipient_id) => todo!(),
+            }
+        }
+        Ok(())
+    }
 
-    pub async fn run(mut self) -> Result<(), WebTransportError> {
+    pub async fn run(mut self) -> Result<(), ServerError> {
         let cert_path = std::env::var("CERT_PATH").expect("Cert not found");
         let key_path = std::env::var("KEY_PATH").expect("Key not found");
 
@@ -905,9 +940,9 @@ impl RealtimeServer {
             tokio::select! {
                 Some(msg)= self.receiver.recv() => {
                     match msg{
-                        ServerMessage::Command(payload) => self.handle_command(payload).await,
-                        ServerMessage::Control(control_payload, control_routing_policy) => self.handle_control(control_payload,control_routing_policy).await,
-                        ServerMessage::Voip(voip_payload, voip_routing_policy) => self.handle_voip(voip_payload,voip_routing_policy).await,
+                        ServerMessage::Command(payload) => self.handle_command(payload).await?,
+                        ServerMessage::Control(control_payload, control_routing_policy) => self.handle_control(control_payload,control_routing_policy).await?,
+                        ServerMessage::Voip(voip_payload, voip_routing_policy) => self.handle_voip(voip_payload,voip_routing_policy).await?,
                     }
                 }
                 Some(req)= server.get_request() => {
@@ -927,96 +962,50 @@ impl RealtimeServer {
         self.sender.clone()
     }
 
-    // Service methods
-    pub async fn get_user_role(&self, user_id: i64) -> Option<i64> {
-        self.service.get_user_role(user_id).await.unwrap_or(None)
-    }
-
-    pub async fn get_user_rights_in_channel(&self, user_id: i64, channel_id: i64) -> Option<i64> {
-        self.service.get_user_rights_in_channel(user_id, channel_id).await.unwrap_or(None)
-    }
-
-    pub async fn get_channel_voip_participants(&self, channel_id: i64) -> Vec<VoipParticipant> {
-        self.service.get_channel_voip_participants(channel_id).await.unwrap_or_default()
-    }
-
-    pub async fn get_dm_voip_participant(
-        &self,
-        user_id: i64,
-        recipient_id: i64,
-    ) -> Option<VoipParticipant> {
-        self.service.get_dm_voip_participant(user_id, recipient_id).await.unwrap_or(None)
-    }
-
-    pub async fn update_user_status(
+    pub async fn handle_user_status_update(
         &mut self,
         user_id: i64,
         status: UserStatusType,
-    ) -> Option<User> {
-        match self.service.update_user_status(user_id, status).await {
-            Ok(may_user) => {
-                if let Some(ref user) = may_user {
-                    self.route_control(
-                        EventPayload::UserUpdated { user: user.clone() },
-                        ControlRoutingPolicy::Broadcast,
-                    )
-                    .await;
-                }
-                may_user
-            }
-            Err(e) => {
-                error!("Failed to update user status: {:?}", e);
-                None
-            }
+    ) -> Result<(), ServerError> {
+        if let Some(ref user) = self.service.update_user_status(user_id, status).await? {
+            self.route_control(
+                EventPayload::UserUpdated { user: user.clone() },
+                ControlRoutingPolicy::Broadcast,
+            )
+            .await?;
         }
+        Ok(())
     }
 
-    pub async fn get_user_from_session(&self, session_token: &str) -> Option<Session> {
-        self.service.authenticate_session(session_token).await.ok()
-    }
-
-    pub async fn get_user_group_rights(&self, user_id: i64, group_id: i64) -> Option<i64> {
-        self.service.get_user_group_rights(user_id, group_id).await.unwrap_or(None)
-    }
-
-    pub async fn remove_voip_participant(&mut self, user_id: i64) -> Option<VoipParticipant> {
-        match self.service.remove_voip_participant(user_id).await {
-            Ok(may_participant) => {
-                if let Some(ref participant) = may_participant {
-                    let policy = if let Some(channel_id) = participant.channel_id {
-                        ControlRoutingPolicy::ChannelRights {
-                            channel_id,
-                            minimun_rights: 2,
-                        }
-                    } else {
-                        ControlRoutingPolicy::User {
-                            user_id: participant.recipient_id.unwrap(),
-                        }
-                    };
-                    self.route_control(
-                        EventPayload::VoipParticipantDeleted {
-                            user_id: participant.user_id,
-                        },
-                        policy,
-                    )
-                    .await;
+    pub async fn handle_voip_participant_removal(
+        &mut self,
+        user_id: i64,
+    ) -> Result<(), ServerError> {
+        if let Some(ref participant) = self.service.remove_voip_participant(user_id).await? {
+            let policy = if let Some(channel_id) = participant.channel_id {
+                ControlRoutingPolicy::ChannelRights {
+                    channel_id,
+                    minimun_rights: 2,
                 }
-                may_participant
-            }
-            Err(e) => {
-                error!("Failed to remove VoIP participant: {:?}", e);
-                None
-            }
+            } else {
+                ControlRoutingPolicy::User {
+                    user_id: participant.recipient_id.unwrap(),
+                }
+            };
+            self.route_control(
+                EventPayload::VoipParticipantDeleted {
+                    user_id: participant.user_id,
+                },
+                policy,
+            )
+            .await?;
         }
-    }
-
-    pub async fn get_voip_participant(&self, user_id: i64) -> Option<VoipParticipant> {
-        self.service.get_voip_participant(user_id).await.unwrap_or(None)
+        Ok(())
     }
 
     async fn handle_subscriber_session(
         connection: Connection,
-        service: WebTransportService,
+        service: Service,
         observer_tx: mpsc::Sender<ServerMessage>,
     ) {
         let mut session = SubscriberSession::new(observer_tx, service, connection);
@@ -1025,19 +1014,12 @@ impl RealtimeServer {
         loop {
             tokio::select! {
                 Some(msg) = server_rx.recv() => {
-                    session.handle_server_message(msg, &server_tx).await;
+                    session.handle_server_message(msg).await;
 
                 }
                 Some(msg) = session.read_connection_message() => {
                     if let Err(e) = session.handle_connection_message(msg).await {
-                        match e {
-                            SessionError::BadRequest(msg) => {
-                                warn!("Session error: {}", msg);
-                            }
-                            SessionError::InternalError => {
-                                error!("Internal session error");
-                            }
-                        }
+                        session.close("sadf".to_string()).await;
                         break;
                     }
                 }
