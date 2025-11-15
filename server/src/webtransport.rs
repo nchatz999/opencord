@@ -1,7 +1,8 @@
 use crate::{
+    auth::Session,
     db::Postgre,
     error::DatabaseError,
-    model::ControlPayload,
+    model::EventPayload,
     user::{User, UserStatusType},
     voip::VoipParticipant,
 };
@@ -58,16 +59,34 @@ pub enum CommandPayload {
 
 pub enum ServerMessage {
     Command(CommandPayload), //commands from endpoints or subscribers
-    Control(ControlPayload, ControlRoutingPolicy), //events from endpoints
-    Voip(VoipPayload, VoipRoutingPolicy), //voip data from subscribers, for voip routing policy is always same
-                                          //channel
+    Control(EventPayload, ControlRoutingPolicy), //events from endpoints
+    Voip(VoipPayload, VoipRoutingPolicy), //voip data from subscribers, for voip routing policy is always same channel
 }
 
 pub enum SubscriberMessage {
     Voip(VoipPayload),
-    Event(ControlPayload),
-    Connect(String),
+    Event(EventPayload),
     Close(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AnswerPayload {
+    Accept,
+    Decline(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ControlPayload {
+    Connect(String),
+    Answer(AnswerPayload),
+    Close(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ConnectionMessage {
+    Voip(VoipPayload),
+    Event(EventPayload),
+    Control(ControlPayload),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -152,8 +171,7 @@ pub trait Repository: Send + Sync + Clone {
         recipient_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
-    async fn find_session_user_id(&self, session_token: &str)
-        -> Result<Option<i64>, DatabaseError>;
+    async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError>;
 
     async fn find_voip_participant(
         &self,
@@ -270,12 +288,10 @@ impl Repository for Postgre {
         Ok(result)
     }
 
-    async fn find_session_user_id(
-        &self,
-        session_token: &str,
-    ) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            r#"SELECT user_id FROM sessions WHERE session_token = $1"#,
+    async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Session,
+            r#"SELECT * FROM sessions WHERE session_token = $1"#,
             session_token
         )
         .fetch_optional(&self.pool)
@@ -386,17 +402,41 @@ enum SessionAction {
 }
 
 struct SubscriberSession {
-    user_id: Option<i64>,
+    may_user_id: Option<i64>,
     observer_tx: mpsc::Sender<ServerMessage>,
+    server_tx: mpsc::Sender<SubscriberMessage>,
+    server_rx: mpsc::Receiver<SubscriberMessage>,
     repository: Postgre,
+    connection: Connection,
 }
 
 impl SubscriberSession {
-    fn new(observer_tx: mpsc::Sender<ServerMessage>, repository: Postgre) -> Self {
+    fn new(
+        observer_tx: mpsc::Sender<ServerMessage>,
+        repository: Postgre,
+        conn: Connection,
+    ) -> Self {
+        let (server_tx, server_rx): (
+            mpsc::Sender<SubscriberMessage>,
+            mpsc::Receiver<SubscriberMessage>,
+        ) = mpsc::channel(10000);
         Self {
-            user_id: None,
+            may_user_id: None,
             observer_tx,
+            server_tx,
+            server_rx,
             repository,
+            connection: conn,
+        }
+    }
+
+    async fn close(&mut self, reason: String) {
+        if let Ok(serialized_event) =
+            rmp_serde::to_vec_named(&ConnectionMessage::Control(ControlPayload::Close(reason)))
+        {
+            self.connection
+                .send_data_safe(serialized_event.into())
+                .await;
         }
     }
 
@@ -404,57 +444,93 @@ impl SubscriberSession {
         &mut self,
         msg: SubscriberMessage,
         server_tx: &mpsc::Sender<SubscriberMessage>,
-    ) -> SessionAction {
+    ) {
         match msg {
-            SubscriberMessage::Event(_payload) if self.user_id.is_some() => {
-                // Handle event - currently no implementation needed
-                SessionAction::Continue
+            SubscriberMessage::Event(payload) => {
+                if let Ok(serialized_event) =
+                    rmp_serde::to_vec_named(&ConnectionMessage::Event(payload))
+                {
+                    self.connection
+                        .send_data_safe(serialized_event.into())
+                        .await;
+                }
             }
-            SubscriberMessage::Voip(payload) if self.user_id.is_some() => {
-                self.handle_voip_message(payload).await;
-                SessionAction::Continue
+            SubscriberMessage::Voip(payload) => {
+                if let Ok(serialized_event) =
+                    rmp_serde::to_vec_named(&ConnectionMessage::Voip(payload))
+                {
+                    self.connection.send_data(serialized_event.into()).await;
+                }
             }
-            SubscriberMessage::Connect(token) => {
-                self.handle_connect(token, server_tx.clone()).await;
-                SessionAction::Continue
-            }
-            SubscriberMessage::Close(_reason) if self.user_id.is_some() => {
-                self.handle_close().await;
-                SessionAction::Close
-            }
-            _ => {
-                warn!("Received unexpected message or user not authenticated");
-                SessionAction::Close
+            SubscriberMessage::Close(reason) => {
+                if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control(
+                    ControlPayload::Close(reason),
+                )) {
+                    self.connection.send_data(serialized_event.into()).await;
+                }
             }
         }
     }
 
     async fn handle_connection_message(&mut self, msg: Message) -> SessionAction {
         match msg {
-            Message::Unsafe(_bytes) => {
-                // Handle unsafe message
-                SessionAction::Continue
+            Message::Unsafe(bytes) => {
+                if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
+                    return self.handle_voip_message(voip_msg).await;
+                }
+                SessionAction::Close
             }
-            Message::Safe(_bytes) => {
-                // Handle safe message
-                SessionAction::Continue
+            Message::Safe(bytes) => {
+                if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
+                    return self.handle_control_message(ctr_msg).await;
+                }
+                SessionAction::Close
             }
         }
     }
 
-    async fn handle_voip_message(&mut self, payload: VoipPayload) {
-        let Ok(Some(session)) = self
-            .repository
-            .find_voip_participant(self.user_id.unwrap())
-            .await
-        else {
-            return;
+    async fn handle_voip_message(&mut self, payload: VoipPayload) -> SessionAction {
+        let user_id = match self.may_user_id {
+            Some(id) => id,
+            None => return SessionAction::Close,
         };
 
-        if let Some(channel_id) = session.channel_id {
+        let voip_session = match self.repository.find_voip_participant(user_id).await {
+            Ok(Some(session)) => session,
+            _ => return SessionAction::Close,
+        };
+
+        if let Some(channel_id) = voip_session.channel_id {
             self.route_to_channel(payload, channel_id).await;
-        } else if let Some(recipient_id) = session.recipient_id {
+        } else if let Some(recipient_id) = voip_session.recipient_id {
             self.route_to_recipient(payload, recipient_id).await;
+        }
+
+        SessionAction::Continue
+    }
+    async fn handle_control_message(&mut self, payload: ControlPayload) -> SessionAction {
+        match payload {
+            ControlPayload::Connect(token) => {
+                if let Ok(Some(session)) = self.repository.find_session(&token).await {
+                    self.observer_tx
+                        .send(ServerMessage::Command(CommandPayload::Connect(
+                            session.user_id,
+                            self.server_tx.clone(),
+                        )));
+                    self.send_ordered(&ConnectionMessage::Control(ControlPayload::Answer(
+                        AnswerPayload::Accept,
+                    )))
+                    .await;
+                    return SessionAction::Continue;
+                }
+                self.send_ordered(&ConnectionMessage::Control(ControlPayload::Answer(
+                    AnswerPayload::Decline("Bad".to_string()),
+                )))
+                .await;
+                SessionAction::Close
+            }
+            ControlPayload::Answer(answer_payload) => SessionAction::Close,
+            ControlPayload::Close(reason) => SessionAction::Close,
         }
     }
 
@@ -478,35 +554,17 @@ impl SubscriberSession {
             ))
             .await;
     }
-
-    async fn handle_connect(&mut self, token: String, server_tx: mpsc::Sender<SubscriberMessage>) {
-        match self.repository.find_session_user_id(&token).await {
-            Ok(Some(id)) => {
-                info!("User {} connected", id);
-                self.user_id = Some(id);
-                let _ = self
-                    .observer_tx
-                    .send(ServerMessage::Command(CommandPayload::Connect(
-                        id, server_tx,
-                    )))
-                    .await;
-            }
-            Ok(None) => {
-                warn!("Invalid session token provided");
-            }
-            Err(e) => {
-                error!("Database error during authentication: {:?}", e);
-            }
+    async fn send_ordered<T>(&mut self, payload: T)
+    where
+        T: serde::Serialize,
+    {
+        if let Ok(serialized_data) = rmp_serde::to_vec_named(&payload) {
+            self.connection.send_data_safe(serialized_data.into()).await;
         }
     }
 
-    async fn handle_close(&mut self) {
-        if let Some(user_id) = self.user_id {
-            let _ = self
-                .observer_tx
-                .send(ServerMessage::Command(CommandPayload::Disconnect(user_id)))
-                .await;
-        }
+    async fn read_connection_message(&mut self) -> Option<Message> {
+        self.connection.read_message().await
     }
 }
 
@@ -582,7 +640,7 @@ impl RealtimeServer {
     async fn handle_voip(&self, payload: VoipPayload, policy: VoipRoutingPolicy) {
         self.route_voip(payload, policy).await;
     }
-    async fn handle_control(&self, payload: ControlPayload, policy: ControlRoutingPolicy) {
+    async fn handle_control(&self, payload: EventPayload, policy: ControlRoutingPolicy) {
         self.route_control(payload, policy).await;
     }
 
@@ -595,7 +653,7 @@ impl RealtimeServer {
         }
     }
 
-    async fn route_control(&self, payload: ControlPayload, policy: ControlRoutingPolicy) {
+    async fn route_control(&self, payload: EventPayload, policy: ControlRoutingPolicy) {
         for (_, subscriber) in &self.observers {
             let can_receive = match &policy {
                 ControlRoutingPolicy::GroupRights {
@@ -726,7 +784,7 @@ impl RealtimeServer {
 
         if let Some(ref user) = may_user {
             self.route_control(
-                ControlPayload::UserUpdated { user: user.clone() },
+                EventPayload::UserUpdated { user: user.clone() },
                 ControlRoutingPolicy::Broadcast,
             )
             .await;
@@ -734,10 +792,10 @@ impl RealtimeServer {
         may_user
     }
 
-    pub async fn get_user_from_session(&self, session_token: &str) -> Option<i64> {
+    pub async fn get_user_from_session(&self, session_token: &str) -> Option<Session> {
         let user_id = self
             .repository
-            .find_session_user_id(session_token)
+            .find_session(session_token)
             .await
             .unwrap_or(None);
         user_id
@@ -769,7 +827,7 @@ impl RealtimeServer {
                 }
             };
             self.route_control(
-                ControlPayload::VoipParticipantDeleted {
+                EventPayload::VoipParticipantDeleted {
                     user_id: participant.user_id,
                 },
                 policy,
@@ -788,22 +846,20 @@ impl RealtimeServer {
     }
 
     async fn handle_subscriber_session(
-        mut connection: Connection,
+        connection: Connection,
         repository: Postgre,
-        mut observer_tx: mpsc::Sender<ServerMessage>,
+        observer_tx: mpsc::Sender<ServerMessage>,
     ) {
-        let mut session = SubscriberSession::new(observer_tx, repository);
+        let mut session = SubscriberSession::new(observer_tx, repository, connection);
         let (server_tx, mut server_rx) = mpsc::channel(1000);
 
         loop {
             tokio::select! {
                 Some(msg) = server_rx.recv() => {
-                    match session.handle_server_message(msg, &server_tx).await {
-                        SessionAction::Continue => {}
-                        SessionAction::Close => break,
-                    }
+                    session.handle_server_message(msg, &server_tx).await;
+
                 }
-                Some(msg) = connection.read_message() => {
+                Some(msg) = session.read_connection_message() => {
                     match session.handle_connection_message(msg).await {
                         SessionAction::Continue => {}
                         SessionAction::Close => break,
