@@ -29,8 +29,8 @@ const AuthHandler: Component = () => {
       userDomain.setCurrentUser(maybeToken.value.userId);
 
       const connectResult = await connection.connect(maybeToken.value.sessionToken);
-      if (!connectResult) {
-        addToast("Failed to connect to server", "error");
+      if (!connectResult.ok) {
+        addToast(connectResult.error, "error");
         userDomain.setAppState({ type: 'connectionError' })
         return
       }
