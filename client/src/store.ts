@@ -19,7 +19,7 @@ import { ScreenShare } from './contexts/ScreenShareProvider'
 import { Camera } from './contexts/CameraProvider'
 import { VideoPlayback } from './contexts/VideoPlayback'
 import { OutputManager } from './contexts/OutputProvider'
-import { RTCPProtocol } from 'opencord-transport'
+import { TransportProvider } from './contexts/TransportProvider'
 
 export type AppState =
   | { type: 'loading' }
@@ -1150,65 +1150,74 @@ const certificateHash = {
   value: hexToUint8Array(import.meta.env.VITE_CERT_HASH)
 };
 
-export let connection = new RTCPProtocol(`https://${window.location.hostname}:4443/session`,
-  certificateHash,
-  (data: any) => {
-    let frame = decode(data) as VoipPayload
-    if (frame.type === "media") {
-      switch (frame.mediaType) {
-        case "voice": {
-          let packet = new EncodedAudioChunk({
-            type: frame.key,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
-          break
-        }
-        case "camera": {
-          let videoPacket = new EncodedVideoChunk({
-            type: frame.key as EncodedVideoChunkType,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
-          break
-        }
-        case "screen": {
-          let videoPacket = new EncodedVideoChunk({
-            type: frame.key as EncodedVideoChunkType,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
-          break
-        }
-        case "screenSound": {
-          let videoPacket = new EncodedAudioChunk({
-            type: frame.key as EncodedAudioChunkType,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'screenSound', videoPacket, frame.timestamp)
-        }
+export let connection = new TransportProvider({
+  url: `https://${window.location.hostname}:4443/session`,
+  certificateHash
+});
+
+// Set up VoIP data handler
+connection.onVoipDataReceived((frame: VoipPayload) => {
+  if (frame.type === "media") {
+    switch (frame.mediaType) {
+      case "voice": {
+        let packet = new EncodedAudioChunk({
+          type: frame.key,
+          timestamp: frame.realTimestamp,
+          duration: undefined,
+          data: new Uint8Array(frame.data)
+        })
+        voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
+        break
       }
-    } else if (frame.type === "speech") {
-      voipDomain.updateSpeakingState(frame.userId, frame.isSpeaking)
+      case "camera": {
+        let videoPacket = new EncodedVideoChunk({
+          type: frame.key as EncodedVideoChunkType,
+          timestamp: frame.realTimestamp,
+          duration: undefined,
+          data: new Uint8Array(frame.data)
+        })
+        voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
+        break
+      }
+      case "screen": {
+        let videoPacket = new EncodedVideoChunk({
+          type: frame.key as EncodedVideoChunkType,
+          timestamp: frame.realTimestamp,
+          duration: undefined,
+          data: new Uint8Array(frame.data)
+        })
+        voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
+        break
+      }
+      case "screenSound": {
+        let videoPacket = new EncodedAudioChunk({
+          type: frame.key as EncodedAudioChunkType,
+          timestamp: frame.realTimestamp,
+          duration: undefined,
+          data: new Uint8Array(frame.data)
+        })
+        voipDomain.streamMedia(frame.userId, 'screenSound', videoPacket, frame.timestamp)
+      }
     }
-  },
-  (data) => {
-    let maybeEvent = decode(data) as EventPayload
-    if (maybeEvent) {
-      handleServerEvent(maybeEvent)
-    }
-  },
-  () => { },
-  () => { console.log("on disconnect"); userDomain.setAppState({ type: "connectionError" }) },
-)
+  } else if (frame.type === "speech") {
+    voipDomain.updateSpeakingState(frame.userId, frame.isSpeaking)
+  }
+});
+
+// Set up server event handler
+connection.onServerEventReceived((event: EventPayload) => {
+  handleServerEvent(event);
+});
+
+// Set up connection handlers
+connection.onConnectionEstablished(() => {
+  // Connection established
+});
+
+connection.onConnectionLost(() => {
+  console.log("on disconnect");
+  userDomain.setAppState({ type: "connectionError" });
+});
 
 
 
@@ -1218,7 +1227,7 @@ microphone.onEncodedData((data) => {
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  connection.send(encode({
+  connection.sendVoip({
     type: "media",
     userId: user.userId,
     mediaType: "voice",
@@ -1226,18 +1235,17 @@ microphone.onEncodedData((data) => {
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as VoipPayload))
+  } as VoipPayload)
 })
 
 microphone.onSpeech((speech) => {
   let user = voipDomain.getCurrentParticipant()
   if (!user) return
-  connection.send(encode({
+  connection.sendVoip({
     type: "speech",
     userId: user.userId,
     isSpeaking: speech
-  } as VoipPayload))
-
+  } as VoipPayload)
 })
 
 export let screenShare = new ScreenShare();
@@ -1246,7 +1254,7 @@ screenShare.onEncodedVideoData((data) => {
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  connection.send(encode({
+  connection.sendVoip({
     type: "media",
     userId: user.userId,
     mediaType: "screen",
@@ -1254,7 +1262,7 @@ screenShare.onEncodedVideoData((data) => {
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as VoipPayload))
+  } as VoipPayload)
 })
 
 screenShare.onEncodedAudioData((data) => {
@@ -1262,7 +1270,7 @@ screenShare.onEncodedAudioData((data) => {
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  connection.send(encode({
+  connection.sendVoip({
     type: "media",
     userId: user.userId,
     mediaType: "screenSound",
@@ -1270,7 +1278,7 @@ screenShare.onEncodedAudioData((data) => {
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as VoipPayload))
+  } as VoipPayload)
 })
 
 export let camera = new Camera();
@@ -1279,7 +1287,7 @@ camera.onEncodedData((data) => {
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
-  connection.send(encode({
+  connection.sendVoip({
     type: "media",
     userId: user.userId,
     mediaType: "camera",
@@ -1287,8 +1295,7 @@ camera.onEncodedData((data) => {
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as VoipPayload))
-
+  } as VoipPayload)
 })
 
 export const outputManager = new OutputManager();
