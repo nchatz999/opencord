@@ -1,5 +1,6 @@
 import { RTCPProtocol } from 'opencord-transport'
 import { decode, encode } from '@msgpack/msgpack'
+import { Result, ok, err } from '../../utils/src/index'
 import type { ConnectionMessage, ControlPayload, EventPayload, VoipPayload } from '../store';
 
 export interface TransportConfig {
@@ -84,31 +85,47 @@ export class TransportProvider {
     }
   }
 
-  public async connect(token: string): Promise<boolean> {
-    await this.protocol.connect()
-    return new Promise((resolve, reject) => {
-      if (this.pendingConnection) {
-        reject(new Error('Connection already in progress'));
-        return;
-      }
-
-      this.pendingConnection = { resolve, reject };
-
-      const connectMessage: ControlPayload = {
-        type: 'connect',
-        token
-      };
-
-      this.protocol.sendSafe(encode(connectMessage));
-
-      // Set timeout for connection attempt
-      setTimeout(() => {
+  public async connect(token: string): Promise<Result<void, string>> {
+    try {
+      await this.protocol.connect()
+      
+      return new Promise((resolve) => {
         if (this.pendingConnection) {
-          this.pendingConnection.reject(new Error('Connection timeout'));
-          this.pendingConnection = null;
+          resolve(err('Connection already in progress'));
+          return;
         }
-      }, 10000); // 10 second timeout
-    });
+
+        this.pendingConnection = { 
+          resolve: (success: boolean) => {
+            if (success) {
+              resolve(ok(undefined));
+            } else {
+              resolve(err('Connection rejected by server'));
+            }
+          },
+          reject: (error: Error) => {
+            resolve(err(error.message));
+          }
+        };
+
+        const connectMessage: ControlPayload = {
+          type: 'connect',
+          token
+        };
+
+        this.protocol.sendSafe(encode(connectMessage));
+
+        // Set timeout for connection attempt
+        setTimeout(() => {
+          if (this.pendingConnection) {
+            this.pendingConnection.reject(new Error('Connection timeout'));
+            this.pendingConnection = null;
+          }
+        }, 10000); // 10 second timeout
+      });
+    } catch (error) {
+      return err(error instanceof Error ? error.message : 'Failed to establish connection');
+    }
   }
 
   public sendVoip(payload: VoipPayload): void {
