@@ -9,7 +9,6 @@ import {
   type VoipParticipant,
   UserStatusType,
   type GroupRoleRights,
-  type VoipDataMessage,
   type VoipParticipantWithUser,
 } from './model'
 import { decode, encode } from '@msgpack/msgpack'
@@ -100,7 +99,6 @@ const initialState: State = {
   subscribedStreams: [],
 }
 
-
 export type VoipType =
   | { type: 'Channel'; channel_id: number }
   | { type: 'Direct'; recipient_id: number }
@@ -109,106 +107,151 @@ export type MessageType =
   | { type: 'Channel'; channel_id: number }
   | { type: 'Direct'; recipient_id: number }
 
-// VoIP Data Types
-export enum VoipDataType {
-  Voice = 'voice',
-  Camera = 'camera',
-  Screen = 'screen',
-  ScreenSound = 'screenSound',
-}
+export type AnswerPayload =
+  | {
+    type: "accept";
+  }
+  | {
+    type: "decline";
+    reason: string;
+  };
 
-export enum KeyType {
-  Key = 'key',
-  Delta = 'delta',
-}
+export type ControlPayload =
+  | {
+    type: "connect";
+    token: string;
+  }
+  | {
+    type: "answer";
+    answer: AnswerPayload;
+  }
+  | {
+    type: "close";
+    reason: string;
+  };
 
-export interface SpeechPayload {
-  type: 'speech';
-  userId: number;
-  isSpeaking: boolean;
-}
+export type ConnectionMessage =
+  | {
+    type: "voip";
+    payload: VoipPayload;
+  }
+  | {
+    type: "event";
+    payload: EventPayload;
+  }
+  | {
+    type: "control";
+    payload: ControlPayload;
+  };
 
-export interface MediaPayload {
-  type: 'media';
-  userId: number;
-  mediaType: VoipDataType;
-  data: number[];
-  timestamp: number;
-  realTimestamp: number;
-  key: KeyType;
-}
+export type EventPayload =
+  | {
+    type: "channelUpdated";
+    channel: Channel;
+  }
+  | {
+    type: "channelDeleted";
+    channelId: number;
+  }
+  | {
+    type: "groupUpdated";
+    group: Group;
+  }
+  | {
+    type: "groupDeleted";
+    groupId: number;
+  }
+  | {
+    type: "roleUpdated";
+    role: Role;
+  }
+  | {
+    type: "roleDeleted";
+    roleId: number;
+  }
+  | {
+    type: "userUpdated";
+    user: User;
+  }
+  | {
+    type: "userDeleted";
+    userId: number;
+  }
+  | {
+    type: "groupRoleRightUpdated";
+    groupId: number;
+    roleId: number;
+    rights: number;
+  }
+  | {
+    type: "voipParticipantUpdated";
+    user: VoipParticipant;
+  }
+  | {
+    type: "voipParticipantDeleted";
+    userId: number;
+  }
+  | {
+    type: "messageCreated";
+    messageId: number;
+    senderId: number;
+    messageType: MessageType;
+    messageText: string;
+    replyToMessageId: number | null;
+    timestamp: string; // ISO8601 string
+    files: File[];
+  }
+  | {
+    type: "messageUpdated";
+    messageId: number;
+    messageText: string;
+  }
+  | {
+    type: "messageDeleted";
+    messageId: number;
+  }
+  | {
+    type: "groupReveal";
+    groupId: number;
+    groupName: string;
+    channels: Channel[];
+    voipParticipants: VoipParticipant[];
+  }
+  | {
+    type: "groupHide";
+    groupId: number;
+  }
+  | {
+    type: "voIPData";
+    channelId: number;
+    userId: number;
+    dataType: VoipDataType;
+    data: number[]; // or Uint8Array
+    timestamp: number;
+    key: string;
+  };
 
-export type VoipPayload = SpeechPayload | MediaPayload;
+// camelCase enum
+type VoipDataType = "voice" | "camera" | "screen" | "screenSound";
 
-// Control Message Types
-export enum AnswerType {
-  Accept = 'accept',
-  Decline = 'decline',
-}
+// camelCase enum
+type KeyType = "key" | "delta";
 
-export interface AcceptAnswer {
-  type: AnswerType.Accept;
-}
-
-export interface DeclineAnswer {
-  type: AnswerType.Decline;
-  reason: string;
-}
-
-export type AnswerPayload = AcceptAnswer | DeclineAnswer;
-
-export interface ConnectControl {
-  type: 'connect';
-  token: string;
-}
-
-export interface AnswerControl {
-  type: 'answer';
-  payload: AnswerPayload;
-}
-
-export interface CloseControl {
-  type: 'close';
-  reason: string;
-}
-
-export type ControlPayload = ConnectControl | AnswerControl | CloseControl;
-
-// Connection Message Types
-export interface VoipConnectionMessage {
-  type: 'voip';
-  payload: VoipPayload;
-}
-
-export interface EventConnectionMessage {
-  type: 'event';
-  payload: ServerEvent;
-}
-
-export interface ControlConnectionMessage {
-  type: 'control';
-  payload: ControlPayload;
-}
-
-export type ConnectionMessage = VoipConnectionMessage | EventConnectionMessage | ControlConnectionMessage;
-
-export type ServerEvent =
-  | { type: 'ChannelUpdated'; channel: Channel }
-  | { type: 'ChannelDeleted'; channel_id: number }
-  | { type: 'GroupUpdated'; group: Group }
-  | { type: 'GroupDeleted'; group_id: number }
-  | { type: 'RoleUpdated'; role: Role }
-  | { type: 'RoleDeleted'; role_id: number }
-  | { type: 'UserUpdated'; user: User }
-  | { type: 'UserDeleted'; user_id: number }
-  | { type: 'GroupRoleRightUpdated'; group_id: number; role_id: number; rights: number }
-  | { type: 'VoipParticipantUpdated'; user: VoipParticipant }
-  | { type: 'VoipParticipantDeleted'; user_id: number }
-  | { type: 'MessageCreated'; message_id: number; sender_id: number; message_type: MessageType; message_text: string; reply_to_message_id: number | null; timestamp: string; files: File[] }
-  | { type: 'MessageUpdated'; message_id: number; message_text: string }
-  | { type: 'MessageDeleted'; message_id: number }
-  | { type: 'GroupReveal'; group_id: number; group_name: string; channels: Channel[]; voip_participants: VoipParticipant[] }
-  | { type: 'GroupHide'; group_id: number }
+export type VoipPayload =
+  | {
+    type: "speech";
+    userId: number;
+    isSpeaking: boolean;
+  }
+  | {
+    type: "media";
+    userId: number;
+    mediaType: VoipDataType;
+    data: number[]; // or number[] if you prefer
+    timestamp: number;
+    realTimestamp: number;
+    key: KeyType;
+  };
 
 export const [state, setState] = createStore(initialState)
 
@@ -928,63 +971,63 @@ function logEvent(type: string, data: any): void {
   }));
 }
 
-export function handleServerEvent(event: ServerEvent): void {
+export function handleServerEvent(event: EventPayload): void {
   logEvent(event.type, event);
 
   switch (event.type) {
-    case 'ChannelUpdated':
+    case 'channelUpdated':
       channelDomain.update(event.channel.channelId, event.channel);
       break;
 
-    case 'ChannelDeleted':
-      channelDomain.delete(event.channel_id);
+    case 'channelDeleted':
+      channelDomain.delete(event.channelId);
       break;
 
-    case 'GroupUpdated':
+    case 'groupUpdated':
       groupDomain.update(event.group.groupId, event.group);
       break;
 
-    case 'GroupDeleted':
-      groupDomain.delete(event.group_id);
+    case 'groupDeleted':
+      groupDomain.delete(event.groupId);
       break;
 
-    case 'RoleUpdated':
+    case 'roleUpdated':
       roleDomain.update(event.role.roleId, event.role);
       break;
 
-    case 'RoleDeleted':
-      roleDomain.delete(event.role_id);
+    case 'roleDeleted':
+      roleDomain.delete(event.roleId);
       break;
 
-    case 'UserUpdated':
+    case 'userUpdated':
       userDomain.update(event.user.userId, event.user);
       break;
 
-    case 'UserDeleted':
-      userDomain.remove(event.user_id);
+    case 'userDeleted':
+      userDomain.remove(event.userId);
       break;
 
-    case 'GroupRoleRightUpdated':
-      aclDomain.grant(event.group_id, event.role_id, event.rights);
+    case 'groupRoleRightUpdated':
+      aclDomain.grant(event.groupId, event.roleId, event.rights);
       break;
 
-    case 'VoipParticipantUpdated':
+    case 'voipParticipantUpdated':
       voipDomain.update(event.user.userId, event.user);
       break;
 
-    case 'VoipParticipantDeleted':
-      voipDomain.delete(event.user_id);
+    case 'voipParticipantDeleted':
+      voipDomain.delete(event.userId);
       break;
 
-    case 'MessageCreated':
-      const messageType = event.message_type;
+    case 'messageCreated':
+      const messageType = event.messageType;
       const message: Message = {
-        id: event.message_id,
-        senderId: event.sender_id,
+        id: event.messageId,
+        senderId: event.senderId,
         channelId: messageType.type === 'Channel' ? messageType.channel_id : null,
         recipientId: messageType.type === 'Direct' ? messageType.recipient_id : null,
-        messageText: event.message_text,
-        replyToMessageId: event.reply_to_message_id,
+        messageText: event.messageText,
+        replyToMessageId: event.replyToMessageId,
         modifiedAt: event.timestamp,
         createdAt: event.timestamp
       };
@@ -996,21 +1039,21 @@ export function handleServerEvent(event: ServerEvent): void {
 
       break;
 
-    case 'MessageUpdated':
-      messageDomain.update(event.message_id, {
-        messageText: event.message_text,
+    case 'messageUpdated':
+      messageDomain.update(event.messageId, {
+        messageText: event.messageText,
       });
       break;
 
-    case 'MessageDeleted':
-      messageDomain.delete(event.message_id);
+    case 'messageDeleted':
+      messageDomain.delete(event.messageId);
       break;
 
-    case 'GroupReveal':
-      if (!groupDomain.findById(event.group_id)) {
+    case 'groupReveal':
+      if (!groupDomain.findById(event.groupId)) {
         groupDomain.add({
-          groupId: event.group_id,
-          groupName: event.group_name,
+          groupId: event.groupId,
+          groupName: event.groupName,
         });
       }
 
@@ -1020,15 +1063,15 @@ export function handleServerEvent(event: ServerEvent): void {
         }
       });
 
-      event.voip_participants.forEach(participant => {
+      event.voipParticipants.forEach(participant => {
         voipDomain.update(participant.userId, participant);
       });
       break;
 
-    case 'GroupHide':
-      groupDomain.delete(event.group_id);
+    case 'groupHide':
+      groupDomain.delete(event.groupId);
 
-      const channelsToRemove = channelDomain.list().filter((channel) => channel.groupId == event.group_id);
+      const channelsToRemove = channelDomain.list().filter((channel) => channel.groupId == event.groupId);
       channelsToRemove.forEach(channel => {
         channelDomain.delete(channel.channelId);
       });
@@ -1036,7 +1079,7 @@ export function handleServerEvent(event: ServerEvent): void {
       const messagesToRemove = messageDomain.list().filter((message) => {
         if (message.channelId === null) return false;
         const channel = channelDomain.findById(message.channelId);
-        return channel && channel.groupId === event.group_id;
+        return channel && channel.groupId === event.groupId;
       });
       messagesToRemove.forEach(message => {
         messageDomain.delete(message.id);
@@ -1045,7 +1088,7 @@ export function handleServerEvent(event: ServerEvent): void {
       const participantsToRemove = voipDomain.list().filter((participant) => {
         if (participant.channelId === null) return false;
         const channel = channelDomain.findById(participant.channelId);
-        return channel && channel.groupId === event.group_id;
+        return channel && channel.groupId === event.groupId;
       });
       participantsToRemove.forEach(participant => {
         voipDomain.delete(participant.user.userId);
@@ -1113,7 +1156,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
     let frame = decode(data) as VoipPayload
     if (frame.type === "media") {
       switch (frame.mediaType) {
-        case VoipDataType.Voice: {
+        case "voice": {
           let packet = new EncodedAudioChunk({
             type: frame.key,
             timestamp: frame.realTimestamp,
@@ -1123,7 +1166,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
           voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
           break
         }
-        case VoipDataType.Camera: {
+        case "camera": {
           let videoPacket = new EncodedVideoChunk({
             type: frame.key as EncodedVideoChunkType,
             timestamp: frame.realTimestamp,
@@ -1133,7 +1176,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
           voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
           break
         }
-        case VoipDataType.Screen: {
+        case "screen": {
           let videoPacket = new EncodedVideoChunk({
             type: frame.key as EncodedVideoChunkType,
             timestamp: frame.realTimestamp,
@@ -1143,7 +1186,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
           voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
           break
         }
-        case VoipDataType.ScreenSound: {
+        case "screenSound": {
           let videoPacket = new EncodedAudioChunk({
             type: frame.key as EncodedAudioChunkType,
             timestamp: frame.realTimestamp,
@@ -1158,7 +1201,7 @@ export let connection = new RTCPProtocol(`https://${window.location.hostname}:44
     }
   },
   (data) => {
-    let maybeEvent = decode(data) as ServerEvent
+    let maybeEvent = decode(data) as EventPayload
     if (maybeEvent) {
       handleServerEvent(maybeEvent)
     }
@@ -1178,12 +1221,12 @@ microphone.onEncodedData((data) => {
   connection.send(encode({
     type: "media",
     userId: user.userId,
-    mediaType: VoipDataType.Voice,
+    mediaType: "voice",
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as MediaPayload))
+  } as VoipPayload))
 })
 
 microphone.onSpeech((speech) => {
@@ -1193,7 +1236,7 @@ microphone.onSpeech((speech) => {
     type: "speech",
     userId: user.userId,
     isSpeaking: speech
-  } as SpeechPayload))
+  } as VoipPayload))
 
 })
 
@@ -1206,12 +1249,12 @@ screenShare.onEncodedVideoData((data) => {
   connection.send(encode({
     type: "media",
     userId: user.userId,
-    mediaType: VoipDataType.Screen,
+    mediaType: "screen",
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as MediaPayload))
+  } as VoipPayload))
 })
 
 screenShare.onEncodedAudioData((data) => {
@@ -1222,12 +1265,12 @@ screenShare.onEncodedAudioData((data) => {
   connection.send(encode({
     type: "media",
     userId: user.userId,
-    mediaType: VoipDataType.ScreenSound,
+    mediaType: "screenSound",
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as MediaPayload))
+  } as VoipPayload))
 })
 
 export let camera = new Camera();
@@ -1239,12 +1282,12 @@ camera.onEncodedData((data) => {
   connection.send(encode({
     type: "media",
     userId: user.userId,
-    mediaType: VoipDataType.Camera,
+    mediaType: "camera",
     data: Array.from(new Uint8Array(buffer)),
     timestamp: Date.now(),
     realTimestamp: data.timestamp,
     key: data.type
-  } as MediaPayload))
+  } as VoipPayload))
 
 })
 
