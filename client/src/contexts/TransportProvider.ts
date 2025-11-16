@@ -34,7 +34,7 @@ export class TransportProvider {
       },
       (data: any) => {
         const event = decode(data) as ConnectionMessage;
-        this.handleControlMessage(event)
+        this.handleConnectionMessage(event)
       },
       () => {
         if (this.onConnect) {
@@ -49,14 +49,14 @@ export class TransportProvider {
     );
   }
 
-  private handleControlMessage(payload: ConnectionMessage): void {
+  private handleConnectionMessage(payload: ConnectionMessage): void {
     switch (payload.type) {
       case 'control':
-        this.handleControlPayload(payload.control);
+        this.handleControlPayload(payload.payload);
         break;
       case "event":
         if (this.onServerEvent)
-          this.onServerEvent(payload.event)
+          this.onServerEvent(payload.payload)
         break;
     }
   }
@@ -70,13 +70,13 @@ export class TransportProvider {
           this.pendingConnection = null;
         }
         break;
-      
+
       case 'close':
         if (this.onDisconnect) {
           this.onDisconnect();
         }
         break;
-      
+
       case 'connect':
         // Server shouldn't send connect messages to client
         console.warn('Received unexpected connect message from server');
@@ -85,6 +85,7 @@ export class TransportProvider {
   }
 
   public async connect(token: string): Promise<boolean> {
+    await this.protocol.connect()
     return new Promise((resolve, reject) => {
       if (this.pendingConnection) {
         reject(new Error('Connection already in progress'));
@@ -93,15 +94,12 @@ export class TransportProvider {
 
       this.pendingConnection = { resolve, reject };
 
-      const connectMessage: ConnectionMessage = {
-        type: 'control',
-        control: {
-          type: 'connect',
-          connect: token
-        }
+      const connectMessage: ControlPayload = {
+        type: 'connect',
+        token
       };
 
-      this.protocol.send(encode(connectMessage));
+      this.protocol.sendSafe(encode(connectMessage));
 
       // Set timeout for connection attempt
       setTimeout(() => {
@@ -148,7 +146,4 @@ export class TransportProvider {
     this.protocol.send(encode(closeMessage));
   }
 
-  public isConnected(): boolean {
-    return this.protocol.isConnected();
-  }
 }
