@@ -16,9 +16,7 @@ const AuthHandler: Component = () => {
     const appState = userDomain.getAppState();
 
     if (appState.type === 'loading') {
-
       const maybeToken = loadSession();
-
       if (!maybeToken.ok) {
         userDomain.setAppState({ type: 'unauthenticated' });
         return;
@@ -29,6 +27,7 @@ const AuthHandler: Component = () => {
       userDomain.setCurrentUser(maybeToken.value.userId);
 
       const connectResult = await connection.connect(maybeToken.value.sessionToken);
+      console.log("sindethika")
       if (!connectResult.ok) {
         addToast(connectResult.error, "error");
         userDomain.setAppState({ type: 'connectionError' })

@@ -67,8 +67,8 @@ impl Server {
     }
 }
 pub enum Message {
-    Safe(Bytes),
-    Unsafe(Bytes),
+    Ordered(Bytes),
+    Unordered(Bytes),
 }
 
 enum SessionCommand {
@@ -132,7 +132,7 @@ impl Connection {
         self.message_receiver.recv().await
     }
 
-    pub async fn send_data_safe(&mut self, data: Bytes) {
+    pub async fn send_ordered(&mut self, data: Bytes) {
         if let Some(sender) = &self.outgoing_sender_safe {
             sender.send(data.into()).await.unwrap();
         } else {
@@ -155,7 +155,7 @@ impl Connection {
         }
     }
 
-    pub async fn send_data(&mut self, data: Bytes) {
+    pub async fn send_unordered(&mut self, data: Bytes) {
         if let Some(sender) = &self.outgoing_sender {
             sender.send(data.into()).await.unwrap();
         } else {
@@ -289,7 +289,7 @@ impl ConnectionRunner {
                             match recv_stream.read_to_end(1000).await {
                                 Ok(data) => {
                                     let message = Bytes::from(data);
-                                    if let Err(_) = self.message_sender.send(Message::Safe(message)).await {
+                                    if let Err(_) = self.message_sender.send(Message::Ordered(message)).await {
                                         break;
                                     }
                                 }
@@ -425,7 +425,7 @@ impl ConnectionRunner {
                     if frame.is_complete() {
                         let packet = frame.reconstruct_data().unwrap();
                         msg_sender
-                            .send(Message::Unsafe(packet.into()))
+                            .send(Message::Unordered(packet.into()))
                             .await
                             .unwrap();
                     }
@@ -478,7 +478,7 @@ impl ConnectionRunner {
                         if frame.is_complete() {
                             let packet = frame.reconstruct_data().unwrap();
                             msg_sender
-                                .send(Message::Unsafe(packet.into()))
+                                .send(Message::Unordered(packet.into()))
                                 .await
                                 .unwrap();
                         }

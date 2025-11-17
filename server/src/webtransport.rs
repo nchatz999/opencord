@@ -69,6 +69,7 @@ pub enum VoipRoutingPolicy {
     Recipient(i64, Option<i64>),
 }
 
+#[derive(Debug, Clone)]
 pub enum CommandPayload {
     Connect(i64, mpsc::Sender<SubscriberMessage>), //comes from subscribers with token
     Timeout(i64),                                  //when a subscriber times out
@@ -89,23 +90,29 @@ pub enum SubscriberMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum AnswerPayload {
     Accept,
-    Decline(String),
+    Decline { reason: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum ControlPayload {
-    Connect(String),
-    Answer(AnswerPayload),
-    Close(String),
+    Connect { token: String },
+    Answer { answer: AnswerPayload },
+    Close { reason: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum ConnectionMessage {
-    Voip(VoipPayload),
-    Event(EventPayload),
-    Control(ControlPayload),
+    Voip { payload: VoipPayload },
+    Event { payload: EventPayload },
+    Control { payload: ControlPayload },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -126,29 +133,18 @@ pub enum KeyType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
-pub struct SpeechPayload {
-    user_id: u64,
-    is_speaking: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
-pub struct MediaPayload {
-    user_id: u64,
-    media_type: VoipDataType,
-    data: Vec<u8>,
-    timestamp: u64,
-    real_timestamp: u64,
-    key: KeyType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
 pub enum VoipPayload {
     #[serde(rename_all = "camelCase")]
-    Speech(SpeechPayload),
+    Speech { user_id: u64, is_speaking: bool },
     #[serde(rename_all = "camelCase")]
-    Media(MediaPayload),
+    Media {
+        user_id: u64,
+        media_type: VoipDataType,
+        data: Vec<u8>,
+        timestamp: u64,
+        real_timestamp: u64,
+        key: KeyType,
+    },
 }
 
 pub trait Repository: Send + Sync + Clone {
@@ -526,41 +522,43 @@ impl SubscriberSession {
     }
 
     async fn close(&mut self, reason: String) {
-        if let Ok(serialized_event) =
-            rmp_serde::to_vec_named(&ConnectionMessage::Control(ControlPayload::Close(reason)))
-        {
-            self.connection
-                .send_data_safe(serialized_event.into())
-                .await;
+        if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control {
+            payload: ControlPayload::Close { reason },
+        }) {
+            self.connection.send_ordered(serialized_event.into()).await;
         }
     }
 
-    async fn handle_server_message(&mut self, msg: SubscriberMessage) {
+    async fn handle_server_message(&mut self, msg: SubscriberMessage) -> Result<(), SessionError> {
         match msg {
             SubscriberMessage::Event(payload) => {
                 if let Ok(serialized_event) =
-                    rmp_serde::to_vec_named(&ConnectionMessage::Event(payload))
+                    rmp_serde::to_vec_named(&ConnectionMessage::Event { payload })
                 {
-                    self.connection
-                        .send_data_safe(serialized_event.into())
-                        .await;
+                    self.connection.send_ordered(serialized_event.into()).await;
                 }
             }
             SubscriberMessage::Voip(payload) => {
                 if let Ok(serialized_event) =
-                    rmp_serde::to_vec_named(&ConnectionMessage::Voip(payload))
+                    rmp_serde::to_vec_named(&ConnectionMessage::Voip { payload })
                 {
-                    self.connection.send_data(serialized_event.into()).await;
+                    self.connection
+                        .send_unordered(serialized_event.into())
+                        .await;
                 }
             }
             SubscriberMessage::Close(reason) => {
-                if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control(
-                    ControlPayload::Close(reason),
-                )) {
-                    self.connection.send_data(serialized_event.into()).await;
+                if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control {
+                    payload: ControlPayload::Close { reason },
+                }) {
+                    self.connection
+                        .send_unordered(serialized_event.into())
+                        .await;
+                    return Err(SessionError::BadRequest("Close".to_string()));
                 }
             }
         }
+        Ok(())
     }
 
     async fn handle_connection_message(&mut self, msg: Message) -> Result<(), SessionError> {
@@ -588,7 +586,6 @@ impl SubscriberSession {
         let user_id = self
             .may_user_id
             .ok_or_else(|| SessionError::BadRequest("No user authenticated".to_string()))?;
-
         let session = self
             .service
             .get_voip_participant(user_id)
@@ -610,7 +607,7 @@ impl SubscriberSession {
         payload: ControlPayload,
     ) -> Result<(), SessionError> {
         match payload {
-            ControlPayload::Connect(token) => {
+            ControlPayload::Connect { token } => {
                 match self.service.authenticate_session(&token).await? {
                     Some(session) => {
                         self.may_user_id = Some(session.user_id);
@@ -620,9 +617,11 @@ impl SubscriberSession {
                         )))
                         .await;
                         self.send_to_connection(
-                            ConnectionMessage::Control(ControlPayload::Answer(
-                                AnswerPayload::Accept,
-                            )),
+                            ConnectionMessage::Control {
+                                payload: ControlPayload::Answer {
+                                    answer: AnswerPayload::Accept,
+                                },
+                            },
                             true,
                         )
                         .await;
@@ -630,9 +629,13 @@ impl SubscriberSession {
                     }
                     None => {
                         self.send_to_connection(
-                            ConnectionMessage::Control(ControlPayload::Answer(
-                                AnswerPayload::Decline("Bad Credentials".to_string()),
-                            )),
+                            ConnectionMessage::Control {
+                                payload: ControlPayload::Answer {
+                                    answer: AnswerPayload::Decline {
+                                        reason: "Bad Credentials".to_string(),
+                                    },
+                                },
+                            },
                             true,
                         )
                         .await;
@@ -640,27 +643,46 @@ impl SubscriberSession {
                     }
                 }
             }
-            ControlPayload::Answer(_answer_payload) => Err(SessionError::BadRequest(
+            ControlPayload::Answer { answer: anser } => Err(SessionError::BadRequest(
                 "Unexpected answer payload".to_string(),
             )),
-            ControlPayload::Close(reason) => Err(SessionError::BadRequest(format!(
-                "Connection closed: {}",
-                reason
-            ))),
+            ControlPayload::Close { reason } => {
+                self.observer_tx
+                    .send(ServerMessage::Command(CommandPayload::Disconnect(
+                        self.may_user_id.unwrap(),
+                    )))
+                    .await;
+                return Err(SessionError::BadRequest("Session End".to_string()));
+            }
         }
     }
 
-    async fn route_to_channel(&mut self, payload: VoipPayload, channel_id: i64, sender_id: i64) {
-        let except = if matches!(payload, VoipPayload::Media(_)) {
-            Some(sender_id)
-        } else {
-            None
-        };
-        self.send_to_server(ServerMessage::Voip(
-            payload,
-            VoipRoutingPolicy::Channel(channel_id, except),
-        ))
-        .await;
+    async fn route_to_channel(
+        &mut self,
+        payload: VoipPayload,
+        channel_id: i64,
+        sender_id: i64,
+    ) -> Result<(), SessionError> {
+        match self
+            .service
+            .get_user_rights_in_channel(sender_id, channel_id)
+            .await
+        {
+            Ok(Some(right)) if right > 2 => {
+                let except = if matches!(payload, VoipPayload::Media { .. }) {
+                    Some(sender_id)
+                } else {
+                    None
+                };
+                self.send_to_server(ServerMessage::Voip(
+                    payload,
+                    VoipRoutingPolicy::Channel(channel_id, except),
+                ))
+                .await;
+                Ok(())
+            }
+            _ => Err(SessionError::BadRequest("no rights".to_string())),
+        }
     }
 
     async fn route_to_recipient(
@@ -669,7 +691,7 @@ impl SubscriberSession {
         recipient_id: i64,
         sender_id: i64,
     ) {
-        let except = if matches!(payload, VoipPayload::Media(_)) {
+        let except = if matches!(payload, VoipPayload::Media { .. }) {
             Some(sender_id)
         } else {
             None
@@ -681,15 +703,16 @@ impl SubscriberSession {
         ))
         .await;
     }
+
     async fn send_to_connection<T>(&mut self, payload: T, ordered: bool)
     where
         T: serde::Serialize,
     {
         if let Ok(serialized_data) = rmp_serde::to_vec_named(&payload) {
             if ordered {
-                self.connection.send_data_safe(serialized_data.into()).await;
+                self.connection.send_ordered(serialized_data.into()).await;
             } else {
-                self.connection.send_data(serialized_data.into()).await;
+                self.connection.send_unordered(serialized_data.into()).await;
             }
         }
     }
@@ -718,15 +741,17 @@ impl RealtimeServer {
             sender: server_tx,
         }
     }
-    async fn handle_timeout(&mut self, user_id: i64) {
+    async fn handle_timeout(&mut self, user_id: i64) -> Result<(), ServerError> {
+        println!("handle timeout");
         let _ = self
             .handle_user_status_update(user_id, UserStatusType::Offline)
-            .await;
+            .await?;
 
-        let _ = self.handle_voip_participant_removal(user_id).await;
+        let _ = self.handle_voip_participant_removal(user_id).await?;
 
         self.observers
             .retain(|_, subscriber| subscriber.user_id() != user_id);
+        Ok(())
     }
 
     async fn handle_connect(
@@ -746,6 +771,7 @@ impl RealtimeServer {
         let _ = self
             .handle_user_status_update(user_id, UserStatusType::Online)
             .await;
+        let _ = self.handle_voip_participant_removal(user_id).await;
         let subscriber = SubscriberHandler { user_id, sender };
         self.observers
             .insert(subscriber.user_id().to_string(), subscriber);
@@ -757,6 +783,12 @@ impl RealtimeServer {
             .await?;
 
         self.handle_voip_participant_removal(user_id).await?;
+
+        if let Some(observer) = self.observers.get(&user_id.to_string()) {
+            observer
+                .send(SubscriberMessage::Close("disconrect".to_string()))
+                .await;
+        }
 
         self.observers
             .retain(|_, subscriber| subscriber.user_id() != user_id);
@@ -772,6 +804,7 @@ impl RealtimeServer {
         if let Some(observer) = self.observers.get(&user_id.to_string()) {
             observer.send(SubscriberMessage::Close(reason)).await;
         }
+
         self.observers
             .retain(|_, subscriber| subscriber.user_id() != user_id);
         Ok(())
@@ -799,7 +832,9 @@ impl RealtimeServer {
             CommandPayload::Connect(user_id, sender) => {
                 self.handle_connect(user_id, sender).await?
             }
-            CommandPayload::Timeout(_) => todo!(),
+            CommandPayload::Timeout(user_id) => {
+                self.handle_timeout(user_id).await?;
+            }
             CommandPayload::Disconnect(user_id) => self.handle_disconnect(user_id).await?,
             CommandPayload::Remove(user_id, reason) => self.handle_removal(user_id, reason).await?,
         }
@@ -995,13 +1030,29 @@ impl RealtimeServer {
         loop {
             tokio::select! {
                 Some(msg) = session.server_rx.recv() => {
-                    session.handle_server_message(msg).await;
+                    if let Err(e) = session.handle_server_message(msg).await{
+                        break;
+                    }
 
                 }
-                Some(msg) = session.connection.read_message() => {
-                    if let Err(e) = session.handle_connection_message(msg).await {
-                        session.close("sadf".to_string()).await;
-                        break;
+                may_msg = session.connection.read_message() => {
+                    match  may_msg {
+                        Some(msg) => {
+                            if let Err(e) = session.handle_connection_message(msg).await {
+                                println!("{:?}",e);
+                                session.close("sadf".to_string()).await;
+                                break;
+                            }
+                        }
+                        None =>{
+                            if let Some(user_id) = session.may_user_id {
+                               session
+                                   .observer_tx
+                                   .send(ServerMessage::Command(CommandPayload::Timeout(user_id)))
+                                   .await;
+                            }
+
+                        },
                     }
                 }
             }

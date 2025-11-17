@@ -268,7 +268,13 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::GroupDeleted { group_id };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(Some(deleted))
     }
@@ -415,8 +421,8 @@ pub struct UpdateGroupRequest {
     pub name: String,
 }
 
-use axum::http::StatusCode;
 use axum::Json;
+use axum::http::StatusCode;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
@@ -431,7 +437,7 @@ impl From<DomainError> for ApiError {
     }
 }
 
-use crate::middleware::{authorize, AuthorizeService};
+use crate::middleware::{AuthorizeService, authorize};
 use axum::{
     extract::{Extension, Path, State},
     middleware::from_fn_with_state,

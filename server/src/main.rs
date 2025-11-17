@@ -14,23 +14,22 @@ mod user;
 mod voip;
 mod webtransport;
 
-use acl::{acl_routes, AclService};
-use auth::{auth_routes, AuthService};
-use channel::{channel_routes, ChannelService};
+use acl::{AclService, acl_routes};
+use auth::{AuthService, auth_routes};
+use channel::{ChannelService, channel_routes};
 use db::Postgre;
-use dotenv::dotenv;
-use group::{group_routes, GroupService};
+use group::{GroupService, group_routes};
 use http::{HeaderValue, Method};
 use managers::{
     DefaultLockoutManager, DefaultNotifierManager, DefaultPasswordValidator, DefaultTotpManager,
     LocalFileManager,
 };
-use message::{message_routes, MessageService};
+use message::{MessageService, message_routes};
 use middleware::AuthorizeService;
-use role::{role_routes, RoleService};
-use user::{user_routes, UserService};
-use voip::{voip_routes, VoipService};
-use webtransport::WebTransportService;
+use role::{RoleService, role_routes};
+use user::{UserService, user_routes};
+use voip::{VoipService, voip_routes};
+use webtransport::Service;
 
 use std::net::SocketAddr;
 use tower_http::cors::{AllowHeaders, CorsLayer};
@@ -38,6 +37,8 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
 use utoipa_swagger_ui::SwaggerUi;
+
+use crate::webtransport::RealtimeServer;
 
 pub const CHANNEL_TAG: &str = "channel";
 pub const AUTH_TAG: &str = "auth";
@@ -71,10 +72,11 @@ async fn main() -> Result<(), sqlx::Error> {
     sqlx::migrate!("./migrations").run(&db).await?;
 
     let postgre = Postgre { pool: db.clone() };
+    let mut server = RealtimeServer::new(postgre.clone());
 
     let file_manager = LocalFileManager::default();
     let avatar_manager = LocalFileManager::new("./avatars");
-    let (notifier_manager, notification_receiver) = DefaultNotifierManager::new();
+    let notifier_manager = DefaultNotifierManager::new(server.subscribe_channel().await);
     let totp_manager = DefaultTotpManager::new();
     let lockout_manager = DefaultLockoutManager::default();
     let password_validator = DefaultPasswordValidator::default();
@@ -97,7 +99,6 @@ async fn main() -> Result<(), sqlx::Error> {
     let group_service = GroupService::new(postgre.clone(), notifier_manager.clone());
     let user_service = UserService::new(postgre.clone(), avatar_manager, notifier_manager.clone());
     let voip_service = VoipService::new(postgre.clone(), notifier_manager.clone());
-    let webtransport_service = WebTransportService::new(postgre.clone());
 
     let allowed_origin = "http://localhost:5173".parse::<HeaderValue>().unwrap();
     let cors = CorsLayer::new()
@@ -112,11 +113,8 @@ async fn main() -> Result<(), sqlx::Error> {
         .allow_headers(AllowHeaders::any());
 
     tokio::spawn(async move {
-        if let Err(e) =
-            webtransport::start_webtransport_server(webtransport_service, notification_receiver)
-                .await
-        {
-            eprintln!("WebTransport server error: {}", e);
+        if let Err(e) = server.run().await {
+            println!("failed")
         }
     });
 

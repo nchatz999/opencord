@@ -1,21 +1,11 @@
-
-
-
-
-
-
-
-
-
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 use std::{error::Error, fmt};
-use thiserror::Error;
 use utoipa::ToSchema;
 
 #[derive(Debug, ToSchema, Clone, PartialEq, Eq)]
@@ -44,21 +34,20 @@ use sqlx::Error as SqlxError;
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub enum DatabaseError {
-    
     PrimaryKeyViolation { key: String, value: String },
-    
+
     UniqueConstraintViolation { column: String },
-    
+
     ForeignKeyViolation { column: String },
-    
+
     CheckConstraintViolation { constraint_name: String },
-    
+
     InternalServerError { message: String },
-    
+
     RowNotFound,
-    
+
     TransactionAlreadyStarted,
-    
+
     NoActiveTransaction,
 }
 
@@ -72,11 +61,8 @@ impl From<SqlxError> for DatabaseError {
                 let message = db_error.message();
 
                 match error_code.as_ref() {
-                    
                     "23505" => {
-                        
                         if let Some(constraint) = db_error.constraint() {
-                            
                             let column = constraint
                                 .strip_prefix("unique_")
                                 .or_else(|| constraint.strip_suffix("_key"))
@@ -92,9 +78,7 @@ impl From<SqlxError> for DatabaseError {
                     }
 
                     "23503" => {
-                        
                         if let Some(constraint) = db_error.constraint() {
-                            
                             let column = constraint
                                 .strip_prefix("fk_")
                                 .or_else(|| constraint.strip_suffix("_fkey"))
@@ -110,7 +94,6 @@ impl From<SqlxError> for DatabaseError {
                     }
 
                     "23514" => {
-                        
                         let constraint_name = db_error
                             .constraint()
                             .unwrap_or("unknown_constraint")
@@ -120,9 +103,7 @@ impl From<SqlxError> for DatabaseError {
                     }
 
                     "23000" => {
-                        
                         if message.contains("duplicate key") && message.contains("primary key") {
-                            
                             let key = "primary_key".to_string();
                             let value = "duplicate".to_string();
 
@@ -197,10 +178,6 @@ impl fmt::Display for DatabaseError {
 impl Error for DatabaseError {}
 
 impl DatabaseError {
-    
-    
-    
-    
     #[deprecated(since = "0.1.0", note = "Use From trait implementation instead")]
     pub fn from_sqlx_error(error: SqlxError) -> Self {
         error.into()

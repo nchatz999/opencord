@@ -21,7 +21,7 @@ import {
   Calendar,
   Settings,
 } from "lucide-solid";
-import { connection, microphone, modalDomain, outputManager, userDomain, camera, screenShare } from "../store";
+import { connection, microphone, modalDomain, outputManager, userDomain, camera, screenShare, resetStore } from "../store";
 import { Input } from "../components/Input";
 import Button from "../components/Button";
 import Select from "../components/Select";
@@ -29,7 +29,7 @@ import Slider from "../components/Slider";
 import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
 import { fetchApi } from "../utils";
-import { clearSession } from "../contexts/Session";
+import { clearSession, loadSession } from "../contexts/Session";
 import { UserStatusType } from "../model";
 import { useToaster } from "../components/Toaster";
 import { match } from "opencord-utils";
@@ -87,48 +87,26 @@ const UserSettingsModal: Component = () => {
   });
 
   const loadSessions = async () => {
-    setLoadingSessions(true);
-    try {
-      const result = await fetchApi<any[]>("/auth/sessions", {
-        method: "GET",
-      });
+    const result = await fetchApi<any[]>("/auth/sessions", {
+      method: "GET",
+    });
 
-      if (!result.ok) {
-        console.error("Failed to load sessions:", result.error);
-        addToast("Failed to load sessions", "error");
-      }
-    } catch (error) {
-      console.error("Error loading sessions:", error);
-      addToast("Error loading sessions", "error");
-    } finally {
-      setLoadingSessions(false);
+    if (!result.ok) {
+      addToast(result.error.reason, "error");
     }
   };
 
   const terminateSession = async (sessionToken: string) => {
-    setLoadingSessions(true);
-    try {
-      const result = await fetchApi("/auth/logout", {
-        method: "POST",
-        body: { session_token: sessionToken },
-      });
+    const result = await fetchApi("/auth/logout", {
+      method: "POST",
+      body: { session_token: sessionToken },
+    });
 
-      match(result, {
-        ok: () => {
-          setSessions(sessions().filter(session => session.sessionToken !== sessionToken));
-          addToast("Session terminated successfully", "success");
-        },
-        err: (error) => {
-          const message = (error as any)?.reason || "Failed to terminate session";
-          addToast(message, "error");
-        },
-      });
-    } catch (error) {
-      console.error("Error terminating session:", error);
-      addToast("Error terminating session", "error");
-    } finally {
-      setLoadingSessions(false);
+    if (!result.ok) {
+      addToast(result.error.reason, "error");
     }
+
+    setSessions(sessions().filter(session => session.sessionToken !== sessionToken));
   };
 
   const formatDate = (dateString: string) => {
@@ -198,11 +176,8 @@ const UserSettingsModal: Component = () => {
 
   const handleAvatarUpload = async () => {
     if (!avatarFile()) return;
-
     setAvatarPreview(null);
     setAvatarFile(null);
-
-    console.log("Avatar uploaded successfully");
   };
 
   const tabItems = createMemo(() => [
@@ -618,7 +593,15 @@ const UserSettingsModal: Component = () => {
         <Tabs items={tabItems()} />
         <div class="mt-6 flex justify-end space-x-2">
           <Button onClick={async () => {
-            clearSession()
+            await microphone.stop()
+            let session = loadSession()
+            if (session.isOk()) {
+              await fetchApi("/auth/logout", {
+                method: "POST",
+                body: { session_token: session.value.sessionToken },
+              });
+              clearSession()
+            }
             await connection.disconnect()
             userDomain.setAppState({ type: "unauthenticated" })
 

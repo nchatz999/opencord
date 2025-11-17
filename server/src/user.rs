@@ -46,7 +46,7 @@ pub struct UserStatus {
 }
 
 use crate::managers::{FileError, LocalFileManager};
-use crate::middleware::{authorize, AuthorizeService};
+use crate::middleware::{AuthorizeService, authorize};
 
 use crate::{error::DatabaseError, managers::FileManager};
 
@@ -116,7 +116,7 @@ pub trait UserRepository: Send + Sync + Clone {
 use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -176,7 +176,13 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(updated_user)
     }
@@ -228,7 +234,13 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(updated_user)
     }
@@ -283,7 +295,13 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let event = EventPayload::UserUpdated {
             user: updated_user.clone(),
         };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(())
     }
@@ -566,10 +584,10 @@ impl From<DomainError> for ApiError {
 }
 
 use axum::{
+    Json,
     extract::{Extension, Path, State},
     middleware::from_fn_with_state,
     response::IntoResponse,
-    Json,
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 

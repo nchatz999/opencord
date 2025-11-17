@@ -1,7 +1,9 @@
 import { RTCPProtocol } from 'opencord-transport'
 import { decode, encode } from '@msgpack/msgpack'
-import { Result, ok, err } from '../../utils/src/index'
 import type { ConnectionMessage, ControlPayload, EventPayload, VoipPayload } from '../store';
+import type { Result } from 'opencord-utils';
+import { err } from 'opencord-utils';
+import { ok } from 'opencord-utils';
 
 export interface TransportConfig {
   url: string;
@@ -20,44 +22,40 @@ export class TransportProvider {
 
   private onVoipData?: (data: VoipPayload) => void;
   private onServerEvent?: (event: EventPayload) => void;
-  private onConnect?: () => void;
-  private onDisconnect?: () => void;
+  private onDisconnect?: (reason: string) => void;
 
   constructor(config: TransportConfig) {
     this.protocol = new RTCPProtocol(
       config.url,
       config.certificateHash,
       (data: any) => {
-        const message = decode(data) as VoipPayload;
-        if (this.onVoipData) {
-          this.onVoipData(message);
-        }
+        const event = decode(data) as ConnectionMessage;
+        this.handleConnectionMessage(event)
       },
       (data: any) => {
         const event = decode(data) as ConnectionMessage;
         this.handleConnectionMessage(event)
       },
       () => {
-        if (this.onConnect) {
-          this.onConnect();
-        }
-      },
-      () => {
         if (this.onDisconnect) {
-          this.onDisconnect();
+          this.onDisconnect("Connection Lost");
         }
       }
     );
   }
 
-  private handleConnectionMessage(payload: ConnectionMessage): void {
-    switch (payload.type) {
+  private handleConnectionMessage(message: ConnectionMessage): void {
+    switch (message.type) {
+      case "voip":
+        if (this.onVoipData)
+          this.onVoipData(message.payload)
+        break
       case 'control':
-        this.handleControlPayload(payload.payload);
+        this.handleControlPayload(message.payload);
         break;
       case "event":
         if (this.onServerEvent)
-          this.onServerEvent(payload.payload)
+          this.onServerEvent(message.payload)
         break;
     }
   }
@@ -74,58 +72,54 @@ export class TransportProvider {
 
       case 'close':
         if (this.onDisconnect) {
-          this.onDisconnect();
+          if (this.onDisconnect) {
+            this.onDisconnect(payload.reason);
+          }
         }
         break;
 
       case 'connect':
-        // Server shouldn't send connect messages to client
         console.warn('Received unexpected connect message from server');
         break;
     }
   }
 
   public async connect(token: string): Promise<Result<void, string>> {
-    try {
-      await this.protocol.connect()
-      
-      return new Promise((resolve) => {
-        if (this.pendingConnection) {
-          resolve(err('Connection already in progress'));
-          return;
+    await this.protocol.connect()
+
+    return new Promise((resolve) => {
+      if (this.pendingConnection) {
+        resolve(err('Connection already in progress'));
+        return;
+      }
+
+      this.pendingConnection = {
+        resolve: (success: boolean) => {
+          if (success) {
+            resolve(ok(undefined));
+          } else {
+            resolve(err('Connection rejected by server'));
+          }
+        },
+        reject: (error: Error) => {
+          resolve(err(error.message));
         }
+      };
 
-        this.pendingConnection = { 
-          resolve: (success: boolean) => {
-            if (success) {
-              resolve(ok(undefined));
-            } else {
-              resolve(err('Connection rejected by server'));
-            }
-          },
-          reject: (error: Error) => {
-            resolve(err(error.message));
-          }
-        };
+      const connectMessage: ControlPayload = {
+        type: 'connect',
+        token
+      };
 
-        const connectMessage: ControlPayload = {
-          type: 'connect',
-          token
-        };
+      this.protocol.sendSafe(encode(connectMessage));
 
-        this.protocol.sendSafe(encode(connectMessage));
-
-        // Set timeout for connection attempt
-        setTimeout(() => {
-          if (this.pendingConnection) {
-            this.pendingConnection.reject(new Error('Connection timeout'));
-            this.pendingConnection = null;
-          }
-        }, 10000); // 10 second timeout
-      });
-    } catch (error) {
-      return err(error instanceof Error ? error.message : 'Failed to establish connection');
-    }
+      setTimeout(() => {
+        if (this.pendingConnection) {
+          this.pendingConnection.reject(new Error('Connection timeout'));
+          this.pendingConnection = null;
+        }
+      }, 10000);
+    });
   }
 
   public sendVoip(payload: VoipPayload): void {
@@ -144,15 +138,11 @@ export class TransportProvider {
     this.onServerEvent = callback;
   }
 
-  public onConnectionEstablished(callback: () => void): void {
-    this.onConnect = callback;
-  }
-
-  public onConnectionLost(callback: () => void): void {
+  public onConnectionLost(callback: (reason: string) => void): void {
     this.onDisconnect = callback;
   }
 
-  public disconnect(): void {
+  public async disconnect() {
     const closeMessage: ConnectionMessage = {
       type: 'control',
       payload: {
@@ -161,6 +151,7 @@ export class TransportProvider {
       }
     };
     this.protocol.send(encode(closeMessage));
+    await this.protocol.disconnect()
   }
 
 }

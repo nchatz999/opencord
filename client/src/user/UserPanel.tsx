@@ -129,21 +129,21 @@ const UserPanel: Component = () => {
 
       try {
 
+        if (microphone.isRecording()) {
+          microphone.stop()
+        }
+        if (screenShare.isRecording()) {
+          screenShare.stop()
+        }
+        if (camera.isRecording()) {
+          camera.stop()
+        }
+
         const result = await fetchApi('/voip/leave', { method: 'POST' })
 
         if (result.isOk()) {
           console.log('Successfully left VoIP channel')
 
-
-          if (microphone.isRecording()) {
-            microphone.stop()
-          }
-          if (screenShare.isRecording()) {
-            screenShare.stop()
-          }
-          if (camera.isRecording()) {
-            camera.stop()
-          }
         } else {
           console.error('Failed to leave VoIP channel:', result.error)
         }

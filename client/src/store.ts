@@ -11,7 +11,6 @@ import {
   type GroupRoleRights,
   type VoipParticipantWithUser,
 } from './model'
-import { decode, encode } from '@msgpack/msgpack'
 import { fetchApi } from './utils'
 import { Microphone } from './contexts/MicrophoneProvider'
 import { AudioPlayback, createSharedAudioContext } from './contexts/AudioPlayback'
@@ -179,9 +178,7 @@ export type EventPayload =
   }
   | {
     type: "groupRoleRightUpdated";
-    groupId: number;
-    roleId: number;
-    rights: number;
+    right: GroupRoleRights;
   }
   | {
     type: "voipParticipantUpdated";
@@ -198,7 +195,7 @@ export type EventPayload =
     messageType: MessageType;
     messageText: string;
     replyToMessageId: number | null;
-    timestamp: string; // ISO8601 string
+    timestamp: string;
     files: File[];
   }
   | {
@@ -216,6 +213,7 @@ export type EventPayload =
     groupName: string;
     channels: Channel[];
     voipParticipants: VoipParticipant[];
+    right: GroupRoleRights;
   }
   | {
     type: "groupHide";
@@ -226,15 +224,13 @@ export type EventPayload =
     channelId: number;
     userId: number;
     dataType: VoipDataType;
-    data: number[]; // or Uint8Array
+    data: number[];
     timestamp: number;
     key: string;
   };
 
-// camelCase enum
 type VoipDataType = "voice" | "camera" | "screen" | "screenSound";
 
-// camelCase enum
 type KeyType = "key" | "delta";
 
 export type VoipPayload =
@@ -247,7 +243,7 @@ export type VoipPayload =
     type: "media";
     userId: number;
     mediaType: VoipDataType;
-    data: number[]; // or number[] if you prefer
+    data: number[];
     timestamp: number;
     realTimestamp: number;
     key: KeyType;
@@ -1008,7 +1004,7 @@ export function handleServerEvent(event: EventPayload): void {
       break;
 
     case 'groupRoleRightUpdated':
-      aclDomain.grant(event.groupId, event.roleId, event.rights);
+      aclDomain.grant(event.right.groupId, event.right.roleId, event.right.rights);
       break;
 
     case 'voipParticipantUpdated':
@@ -1066,6 +1062,7 @@ export function handleServerEvent(event: EventPayload): void {
       event.voipParticipants.forEach(participant => {
         voipDomain.update(participant.userId, participant);
       });
+      aclDomain.grant(event.right.groupId, event.right.roleId, event.right.rights)
       break;
 
     case 'groupHide':
@@ -1155,7 +1152,6 @@ export let connection = new TransportProvider({
   certificateHash
 });
 
-// Set up VoIP data handler
 connection.onVoipDataReceived((frame: VoipPayload) => {
   if (frame.type === "media") {
     switch (frame.mediaType) {
@@ -1204,19 +1200,12 @@ connection.onVoipDataReceived((frame: VoipPayload) => {
   }
 });
 
-// Set up server event handler
 connection.onServerEventReceived((event: EventPayload) => {
   handleServerEvent(event);
 });
 
-// Set up connection handlers
-connection.onConnectionEstablished(() => {
-  // Connection established
-});
-
-connection.onConnectionLost(() => {
-  console.log("on disconnect");
-  userDomain.setAppState({ type: "connectionError" });
+connection.onConnectionLost((reason) => {
+  //userDomain.setAppState({ type: "connectionError" });
 });
 
 
@@ -1300,31 +1289,14 @@ camera.onEncodedData((data) => {
 
 export const outputManager = new OutputManager();
 
-export function resetStore(): void {
+export async function resetStore() {
+  await microphone.stop()
+  await camera.stop()
+  await screenShare.stop()
   setState(() => ({
-    appState: { type: 'loading' },
     modal: { type: 'close', id: 0 },
-    status: "disconnected",
-    sessionId: null,
     activeContext: undefined,
-    roles: [],
-    users: [],
-    channels: [],
-    groups: [],
-    messages: [],
-    currentUser: null,
-    groupRoleRights: [],
-    voipState: [],
-    speakingStates: {},
-    audio: createSharedAudioContext(),
-    files: [],
-    eventLog: [],
-    notification: {},
-    context: undefined,
     voipContext: undefined,
-    channelsVisited: [],
-    dmsVisited: [],
-    subscribedStreams: [],
   }));
 }
 

@@ -100,10 +100,10 @@ pub trait ChannelRepository: Send + Sync + Clone {
     ) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
-use crate::middleware::{authorize, AuthorizeService};
+use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::middleware::{AuthorizeService, authorize};
 
-use crate::model::ControlPayload;
+use crate::model::EventPayload;
 
 #[derive(Clone)]
 pub struct ChannelService<R: ChannelRepository, N: NotifierManager> {
@@ -183,19 +183,19 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::ChannelUpdated {
+        let event = EventPayload::ChannelUpdated {
             channel: channel.clone(),
         };
 
         let _ = self
             .notifier
-            .notify(
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::GroupRights {
+                ControlRoutingPolicy::GroupRights {
                     group_id: channel.group_id,
-                    minimum_rights: 1,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(channel)
@@ -271,18 +271,18 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::ChannelUpdated {
+        let event = EventPayload::ChannelUpdated {
             channel: updated_channel.clone(),
         };
-        let _ = self
-            .notifier
-            .notify(
+
+        self.notifier
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::ChannelRights {
-                    channel_id,
-                    minimum_rights: 1,
+                ControlRoutingPolicy::ChannelRights {
+                    channel_id: updated_channel.channel_id,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(())
@@ -326,18 +326,18 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::ChannelUpdated {
+        let event = EventPayload::ChannelUpdated {
             channel: updated_channel,
         };
-        let _ = self
-            .notifier
-            .notify(
+
+        self.notifier
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::ChannelRights {
+                ControlRoutingPolicy::ChannelRights {
                     channel_id,
-                    minimum_rights: 1,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(())
@@ -371,16 +371,16 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = ControlPayload::ChannelDeleted { channel_id };
-        let _ = self
-            .notifier
-            .notify(
+        let event = EventPayload::ChannelDeleted { channel_id };
+
+        self.notifier
+            .notify(ServerMessage::Control(
                 event,
-                RecipientType::GroupRights {
+                ControlRoutingPolicy::GroupRights {
                     group_id: deleted.group_id,
-                    minimum_rights: 1,
+                    minimun_rights: 1,
                 },
-            )
+            ))
             .await;
 
         Ok(Some(deleted))
@@ -388,6 +388,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 }
 
 use crate::db::Postgre;
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 pub struct PgChannelTransaction {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
@@ -633,8 +634,8 @@ pub struct UpdateChannelGroupRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RevealChannelData {}
 
-use axum::http::StatusCode;
 use axum::Json;
+use axum::http::StatusCode;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {

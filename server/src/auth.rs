@@ -136,9 +136,9 @@ pub trait AuthRepository: Send + Sync + Clone {
 
 use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 use crate::user::User;
-use bcrypt::{hash, verify, DEFAULT_COST};
+use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use bcrypt::{DEFAULT_COST, hash, verify};
 use time::Duration;
 use uuid::Uuid;
 
@@ -212,7 +212,13 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         let event = EventPayload::UserUpdated { user: user.clone() };
 
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(user)
     }
@@ -308,12 +314,21 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     pub async fn logout(&self, user_id: i64, session_token: &str) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
+        println!("sadf edo asdfasf");
         tx.remove_user_session(session_token, user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
                 "Session {} not found",
                 session_token
             )))?;
+
+        println!("edo asdfasf");
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Command(
+                crate::webtransport::CommandPayload::Disconnect(user_id),
+            ))
+            .await;
 
         self.repository.commit(tx).await?;
 
@@ -909,11 +924,11 @@ impl From<DomainError> for ApiError {
 }
 
 use crate::managers::{DefaultLockoutManager, DefaultPasswordValidator};
-use crate::middleware::{authorize, AuthorizeService};
+use crate::middleware::{AuthorizeService, authorize};
 use axum::{
+    Json,
     extract::{Extension, State},
     middleware::from_fn_with_state,
-    Json,
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 

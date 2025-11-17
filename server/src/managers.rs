@@ -213,7 +213,7 @@ impl Default for DefaultTotpManager {
 impl TotpManager for DefaultTotpManager {
     fn generate_secret(&self) -> Result<String, TotpError> {
         let mut rng = rand::thread_rng();
-        let secret: [u8; 20] = rng.gen();
+        let secret: [u8; 20] = rng.r#gen();
         Ok(base32::encode(
             base32::Alphabet::Rfc4648 { padding: false },
             &secret,
@@ -629,7 +629,7 @@ impl PasswordValidator for DefaultPasswordValidator {
     }
 }
 
-use crate::model::ControlPayload;
+use crate::webtransport::ServerMessage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -670,50 +670,27 @@ pub enum RecipientType {
 }
 
 pub trait NotifierManager: Send + Sync + Clone {
-    async fn notify(
-        &self,
-        event: ControlPayload,
-        recipients: RecipientType,
-    ) -> Result<(), NotifierError>;
+    async fn notify(&self, event: ServerMessage) -> Result<(), NotifierError>;
 }
 
 use tokio::sync::mpsc;
 
-#[derive(Debug, Clone)]
-pub struct NotificationMessage {
-    pub event: ControlPayload,
-    pub recipients: RecipientType,
-}
-
 #[derive(Clone)]
 pub struct DefaultNotifierManager {
-    sender: mpsc::UnboundedSender<NotificationMessage>,
+    sender: mpsc::Sender<ServerMessage>,
 }
 
 impl DefaultNotifierManager {
-    pub fn new() -> (Self, mpsc::UnboundedReceiver<NotificationMessage>) {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        (Self { sender }, receiver)
-    }
-}
-
-impl Default for DefaultNotifierManager {
-    fn default() -> Self {
-        let (manager, _) = Self::new();
-        manager
+    pub fn new(sender: mpsc::Sender<ServerMessage>) -> Self {
+        Self { sender }
     }
 }
 
 impl NotifierManager for DefaultNotifierManager {
-    async fn notify(
-        &self,
-        event: ControlPayload,
-        recipients: RecipientType,
-    ) -> Result<(), NotifierError> {
-        let message = NotificationMessage { event, recipients };
-
+    async fn notify(&self, event: ServerMessage) -> Result<(), NotifierError> {
         self.sender
-            .send(message)
+            .send(event)
+            .await
             .map_err(|_| NotifierError::SendFailed)?;
 
         Ok(())

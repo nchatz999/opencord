@@ -185,9 +185,11 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                 .unwrap_or(0);
 
             let event = EventPayload::GroupRoleRightUpdated {
-                group_id: acl.group_id,
-                role_id: acl.role_id,
-                rights: acl.rights,
+                right: GroupRoleRights {
+                    group_id: acl.group_id,
+                    role_id: acl.role_id,
+                    rights: acl.rights,
+                },
             };
             let _ = self
                 .notifier
@@ -230,6 +232,11 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
                     group_name: group.group_name,
                     channels,
                     voip_participants,
+                    right: GroupRoleRights {
+                        group_id: acl.group_id,
+                        role_id: acl.role_id,
+                        rights: acl.rights,
+                    },
                 };
                 let _ = self
                     .notifier
