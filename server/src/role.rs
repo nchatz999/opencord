@@ -38,10 +38,6 @@ use crate::error::{ApiError, DatabaseError};
 pub trait RoleTransaction: Send + Sync {
     async fn create(&mut self, name: &str) -> Result<Role, DatabaseError>;
 
-    async fn find_by_id(&mut self, role_id: i64) -> Result<Option<Role>, DatabaseError>;
-
-    async fn list_all(&mut self) -> Result<Vec<Role>, DatabaseError>;
-
     async fn update_name(
         &mut self,
         role_id: i64,
@@ -49,8 +45,6 @@ pub trait RoleTransaction: Send + Sync {
     ) -> Result<Option<Role>, DatabaseError>;
 
     async fn delete(&mut self, role_id: i64) -> Result<Option<Role>, DatabaseError>;
-
-    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
 pub trait RoleRepository: Send + Sync + Clone {
@@ -69,7 +63,7 @@ pub trait RoleRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::middleware::{authorize, AuthorizeService};
+use crate::middleware::{AuthorizeService, authorize};
 
 use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
@@ -114,7 +108,7 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
             DatabaseError::UniqueConstraintViolation { .. } => {
                 return RoleError::NameTaken {
                     name: trimmed_name.to_string(),
-                }
+                };
             }
             other => RoleError::DatabaseError(other),
         })?;
@@ -122,7 +116,13 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::RoleUpdated { role: role.clone() };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(role)
     }
@@ -176,7 +176,13 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         self.repository.commit(tx).await?;
 
         let event = EventPayload::RoleUpdated { role: updated_role };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(())
     }
@@ -206,7 +212,13 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         let event = EventPayload::RoleDeleted {
             role_id: deleted.role_id,
         };
-        let _ = self.notifier.notify(ServerMessage::Control(event, ControlRoutingPolicy::Broadcast)).await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
 
         Ok(Some(deleted))
     }
@@ -231,29 +243,6 @@ impl RoleTransaction for PgRoleTransaction {
             role_id,
             role_name: name.to_string(),
         })
-    }
-
-    async fn find_by_id(&mut self, role_id: i64) -> Result<Option<Role>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Role,
-            "SELECT role_id, role_name FROM roles WHERE role_id = $1",
-            role_id
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
-    async fn list_all(&mut self) -> Result<Vec<Role>, DatabaseError> {
-        let results = sqlx::query_as!(
-            Role,
-            "SELECT role_id, role_name FROM roles ORDER BY role_id"
-        )
-        .fetch_all(&mut *self.transaction)
-        .await?;
-
-        Ok(results)
     }
 
     async fn update_name(
@@ -281,13 +270,6 @@ impl RoleTransaction for PgRoleTransaction {
         )
         .fetch_optional(&mut *self.transaction)
         .await?;
-        Ok(result)
-    }
-
-    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!("SELECT role_id FROM users WHERE user_id = $1", user_id)
-            .fetch_optional(&mut *self.transaction)
-            .await?;
         Ok(result)
     }
 }
@@ -363,8 +345,8 @@ pub struct UsersSQL {
     pub role_id: i64,
 }
 
-use axum::http::StatusCode;
 use axum::Json;
+use axum::http::StatusCode;
 
 impl From<RoleError> for ApiError {
     fn from(err: RoleError) -> Self {
