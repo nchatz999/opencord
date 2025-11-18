@@ -10,27 +10,15 @@ pub struct Role {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RoleError {
-    #[error("Role not found: {role_id}")]
-    RoleNotFound { role_id: i64 },
+pub enum DomainError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
-    #[error("Role name '{name}' is already taken")]
-    NameTaken { name: String },
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
-    #[error("Role name '{name}' is invalid")]
-    InvalidName { name: String },
-
-    #[error("Permission denied")]
-    PermissionDenied,
-
-    #[error("Cannot modify system role")]
-    SystemRole,
-
-    #[error("Internal server error")]
-    ServerError,
-
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    #[error("Internal error")]
+    InternalError(#[from] DatabaseError),
 }
 
 use crate::error::{ApiError, DatabaseError};
@@ -83,34 +71,36 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         }
     }
 
-    pub async fn create_role(&self, name: String, user_id: i64) -> Result<Role, RoleError> {
+    pub async fn create_role(&self, name: String, user_id: i64) -> Result<Role, DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
             .await?
-            .ok_or(RoleError::PermissionDenied)?;
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
         if role_id != 0 && role_id != 1 {
-            return Err(RoleError::PermissionDenied);
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to create role".to_string(),
+            ));
         }
 
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
-            return Err(RoleError::InvalidName { name });
+            return Err(DomainError::BadRequest(
+                "Role name cannot be empty".to_string(),
+            ));
         }
         if trimmed_name.len() > 255 {
-            return Err(RoleError::InvalidName { name });
+            return Err(DomainError::BadRequest("Role name too long".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
 
         let role = tx.create(trimmed_name).await.map_err(|e| match e {
             DatabaseError::UniqueConstraintViolation { .. } => {
-                return RoleError::NameTaken {
-                    name: trimmed_name.to_string(),
-                };
+                DomainError::BadRequest(format!("Role name '{}' is already taken", trimmed_name))
             }
-            other => RoleError::DatabaseError(other),
+            other => DomainError::InternalError(other),
         })?;
 
         self.repository.commit(tx).await?;
@@ -127,18 +117,20 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         Ok(role)
     }
 
-    pub async fn get_role(&self, role_id: i64) -> Result<Role, RoleError> {
+    pub async fn get_role(&self, role_id: i64) -> Result<Role, DomainError> {
         let role_data = self
             .repository
             .find_by_id(role_id)
-            .await
-            .map_err(|_| RoleError::ServerError)?
-            .ok_or(RoleError::RoleNotFound { role_id })?;
+            .await?
+            .ok_or(DomainError::BadRequest(format!(
+                "Role {} not found",
+                role_id
+            )))?;
 
         Ok(role_data)
     }
 
-    pub async fn list_all_roles(&self) -> Result<Vec<Role>, RoleError> {
+    pub async fn list_all_roles(&self) -> Result<Vec<Role>, DomainError> {
         let roles = self.repository.list_all().await?;
 
         Ok(roles)
@@ -149,29 +141,44 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         role_id: i64,
         new_name: String,
         user_role_id: i64,
-    ) -> Result<(), RoleError> {
+    ) -> Result<(), DomainError> {
         if user_role_id != 0 && user_role_id != 1 {
-            return Err(RoleError::PermissionDenied);
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to update role".to_string(),
+            ));
         }
 
         if role_id == 0 || (role_id == 1 && user_role_id != 0) {
-            return Err(RoleError::SystemRole);
+            return Err(DomainError::PermissionDenied(
+                "Cannot modify system role".to_string(),
+            ));
         }
 
         let trimmed_name = new_name.trim();
         if trimmed_name.is_empty() {
-            return Err(RoleError::InvalidName { name: new_name });
+            return Err(DomainError::BadRequest(
+                "Role name cannot be empty".to_string(),
+            ));
         }
         if trimmed_name.len() > 255 {
-            return Err(RoleError::InvalidName { name: new_name });
+            return Err(DomainError::BadRequest("Role name too long".to_string()));
         }
 
         let mut tx = self.repository.begin().await?;
 
         let updated_role = tx
             .update_name(role_id, trimmed_name)
-            .await?
-            .ok_or(RoleError::RoleNotFound { role_id })?;
+            .await
+            .map_err(|e| match e {
+                DatabaseError::UniqueConstraintViolation { .. } => DomainError::BadRequest(
+                    format!("Role name '{}' is already taken", trimmed_name),
+                ),
+                other => DomainError::InternalError(other),
+            })?
+            .ok_or(DomainError::BadRequest(format!(
+                "Role {} not found",
+                role_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -191,13 +198,17 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         &self,
         role_id: i64,
         user_role_id: i64,
-    ) -> Result<Option<Role>, RoleError> {
+    ) -> Result<Option<Role>, DomainError> {
         if user_role_id != 0 && user_role_id != 1 {
-            return Err(RoleError::PermissionDenied);
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to delete role".to_string(),
+            ));
         }
 
         if role_id == 0 || role_id == 1 {
-            return Err(RoleError::SystemRole);
+            return Err(DomainError::PermissionDenied(
+                "Cannot modify system role".to_string(),
+            ));
         }
 
         let mut tx = self.repository.begin().await?;
@@ -205,7 +216,10 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         let deleted = tx
             .delete(role_id)
             .await?
-            .ok_or(RoleError::RoleNotFound { role_id })?;
+            .ok_or(DomainError::BadRequest(format!(
+                "Role {} not found",
+                role_id
+            )))?;
 
         self.repository.commit(tx).await?;
 
@@ -348,26 +362,13 @@ pub struct UsersSQL {
 use axum::Json;
 use axum::http::StatusCode;
 
-impl From<RoleError> for ApiError {
-    fn from(err: RoleError) -> Self {
+impl From<DomainError> for ApiError {
+    fn from(err: DomainError) -> Self {
         match err {
-            RoleError::RoleNotFound { role_id } => {
-                ApiError::UnprocessableEntity(format!("Role {} not found", role_id))
-            }
-            RoleError::NameTaken { name } => {
-                ApiError::UnprocessableEntity(format!("Role name '{}' is already taken", name))
-            }
-            RoleError::InvalidName { name } => {
-                ApiError::UnprocessableEntity(format!("Invalid role name: '{}'", name))
-            }
-            RoleError::PermissionDenied => {
-                ApiError::UnprocessableEntity("Permission denied".to_string())
-            }
-            RoleError::SystemRole => {
-                ApiError::UnprocessableEntity("Cannot modify system role".to_string())
-            }
-            RoleError::DatabaseError(e) => ApiError::InternalServerError(e.to_string()),
-            RoleError::ServerError => {
+            DomainError::BadRequest(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
+            DomainError::InternalError(db_err) => {
+                tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
         }
@@ -411,7 +412,7 @@ pub fn role_routes(
 async fn list_roles_handler(
     State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
 ) -> Result<Json<Vec<Role>>, ApiError> {
-    let roles = service.list_all_roles().await?;
+    let roles = service.list_all_roles().await.map_err(ApiError::from)?;
     Ok(Json(roles))
 }
 
@@ -437,7 +438,7 @@ async fn get_role_by_id_handler(
     State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
     Path(id): Path<i64>,
 ) -> Result<Json<Role>, ApiError> {
-    let role_data = service.get_role(id).await?;
+    let role_data = service.get_role(id).await.map_err(ApiError::from)?;
     Ok(Json(role_data))
 }
 
@@ -460,7 +461,10 @@ async fn create_role_handler(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateRoleRequest>,
 ) -> Result<(StatusCode, Json<CreateRoleResponse>), ApiError> {
-    let role = service.create_role(payload.name.clone(), user_id).await?;
+    let role = service
+        .create_role(payload.name.clone(), user_id)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok((
         StatusCode::CREATED,
@@ -498,7 +502,8 @@ async fn update_role_name_handler(
 ) -> Result<StatusCode, ApiError> {
     service
         .update_role_name(id, payload.name.clone(), user.role_id)
-        .await?;
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -526,7 +531,10 @@ async fn delete_role_handler(
     Extension(user): Extension<i64>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    service.delete_role(id, user).await?;
+    service
+        .delete_role(id, user)
+        .await
+        .map_err(ApiError::from)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
