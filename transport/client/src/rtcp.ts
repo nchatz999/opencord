@@ -198,6 +198,7 @@ export class RTCPProtocol {
       const mtu = this.mtu - 200;
       let currentTime = BigInt(Date.now());
       let fecGroup: RTPPacket[] = [];
+      const frameId = this.outFrame++;
       for (let i = 0; i < data.length; i += mtu) {
         const chunk = data.slice(i, i + mtu);
         const last = i + mtu >= data.length;
@@ -205,7 +206,7 @@ export class RTCPProtocol {
           type: PacketType.RTP,
           sequenceNumber: this.outSeq++,
           timestamp: currentTime,
-          frameId: this.outFrame,
+          frameId,
           fragmentNumber: Math.floor(i / mtu),
           totalFragments: Math.ceil(data.length / mtu),
           markerBit: last,
@@ -220,10 +221,8 @@ export class RTCPProtocol {
           fecGroup = [];
         }
       }
-      this.outFrame += 1n;
     } catch (e) {
       this.onDisconnect();
-      console.log("send error")
       await this.disconnect()
     }
   }

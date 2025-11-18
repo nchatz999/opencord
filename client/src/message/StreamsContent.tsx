@@ -12,16 +12,16 @@ import Slider from "../components/Slider";
 const StreamsContent: Component = () => {
 
   const getCurrentParticipants = () => {
-    const context = voipDomain.getCurrentContext();
+    const voipSession = voipDomain.getCurrent();
 
-    if (!context) {
+    if (!voipSession) {
       return [] as VoipParticipantWithUser[];
     }
 
-    if (context.type === 'channel') {
-      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && part.channelId == context.id || part.user.userId == context.id);
-    } else if (context.type === 'dm') {
-      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && part.recipientId == context.id || part.user.userId == context.id);
+    if (voipSession.channelId) {
+      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && part.channelId == voipSession.channelId);
+    } else if (voipSession.recipientId) {
+      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && (part.recipientId == voipSession.recipientId || part.user.userId == voipSession.userId));
     }
 
     return [] as VoipParticipantWithUser[];
@@ -68,7 +68,7 @@ const StreamsContent: Component = () => {
 
   return (
     <Show
-      when={voipDomain.getCurrentParticipant()}
+      when={voipDomain.getCurrent()}
       fallback={
         <div class="flex-1 flex items-center justify-center text-[#949ba4]">
           <div class="text-center">
@@ -94,7 +94,6 @@ const StreamsContent: Component = () => {
         }
       >
         <div class="flex-1 flex flex-col min-h-0">
-          {}
           <div class="flex items-center justify-between px-4 py-3 border-b border-[#1e1f22] bg-[#313338] shrink-0">
             <div class="flex items-center gap-2">
               <Video size={20} class="text-[#949ba4]" />

@@ -3,13 +3,39 @@ import { For, Show } from "solid-js";
 import { Hash, Volume2 } from "lucide-solid";
 
 import { VoipChannelMember } from "./VoipChannelMember";
-import type { Channel } from "../model";
-import { modalDomain, voipDomain } from "../store";
+import { ChannelType, type Channel } from "../model";
+import { messageDomain, microphone, modalDomain, voipDomain } from "../store";
+import { fetchApi } from "../utils";
+import { useToaster } from "../components/Toaster";
 
 export const ChannelEntry: Component<{
   channel: Channel;
-  onClick: () => void;
 }> = (props) => {
+
+  const { addToast } = useToaster();
+
+  const handleChannelClick = async (channel: Channel) => {
+
+    if (channel.channelType === ChannelType.Text) {
+      messageDomain.setContext({ type: "channel", id: channel.channelId })
+    }
+
+    if (channel.channelType === ChannelType.VoIP) {
+
+      await microphone.start()
+      await voipDomain.resume()
+      const result = await fetchApi(
+        `/voip/channel/${channel.channelId}/join/${microphone.getMuted()}/false`,
+        {
+          method: "POST",
+        }
+      )
+      if (result.isErr()) {
+        addToast(`Failed to join channel: ${result.error.reason}`, "error");
+        return
+      }
+    }
+  };
 
 
   const joinedUsers = () => voipDomain.findByChannel(props.channel.channelId);
@@ -22,7 +48,7 @@ export const ChannelEntry: Component<{
   return (
     <div>
       <button
-        onClick={props.onClick}
+        onClick={async () => await handleChannelClick(props.channel)}
         onContextMenu={handleContextMenu}
         class="flex items-center gap-2 w-full px-2 py-1 rounded text-[#949ba4] hover:text-[#DBDEE1] hover:bg-[#383a40] transition-all group"
       >

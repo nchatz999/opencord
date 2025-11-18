@@ -62,16 +62,12 @@ pub trait AuthTransaction: Send + Sync {
         password_hash: &str,
     ) -> Result<Auth, DatabaseError>;
 
-    async fn find_auth(&mut self, user_id: i64) -> Result<Option<Auth>, DatabaseError>;
-
     async fn create_session(
         &mut self,
         session_token: &str,
         user_id: i64,
         expires_at: Option<OffsetDateTime>,
     ) -> Result<Session, DatabaseError>;
-
-    async fn create_user(&mut self, username: &str) -> Result<User, DatabaseError>;
 
     async fn create_user_with_role(
         &mut self,
@@ -85,18 +81,11 @@ pub trait AuthTransaction: Send + Sync {
         password_hash: &str,
     ) -> Result<Option<Auth>, DatabaseError>;
 
-    async fn remove_session(
-        &mut self,
-        session_token: &str,
-    ) -> Result<Option<Session>, DatabaseError>;
-
     async fn remove_user_session(
         &mut self,
         session_token: &str,
         user_id: i64,
     ) -> Result<Option<Session>, DatabaseError>;
-
-    async fn find_sessions(&mut self, user_id: i64) -> Result<Vec<Session>, DatabaseError>;
 
     async fn create_invite(
         &mut self,
@@ -105,8 +94,6 @@ pub trait AuthTransaction: Send + Sync {
         role_id: i64,
     ) -> Result<Invite, DatabaseError>;
 
-    async fn find_invite(&mut self, code: &str) -> Result<Option<Invite>, DatabaseError>;
-
     async fn update_invite_registrations(
         &mut self,
         invite_id: i64,
@@ -114,10 +101,6 @@ pub trait AuthTransaction: Send + Sync {
     ) -> Result<Option<Invite>, DatabaseError>;
 
     async fn delete_invite(&mut self, invite_id: i64) -> Result<Option<Invite>, DatabaseError>;
-
-    async fn find_all_invites(&mut self) -> Result<Vec<Invite>, DatabaseError>;
-
-    async fn find_user(&mut self, user_id: i64) -> Result<Option<User>, DatabaseError>;
 }
 
 pub trait AuthRepository: Send + Sync + Clone {
@@ -129,9 +112,19 @@ pub trait AuthRepository: Send + Sync + Clone {
 
     async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
 
+    async fn find_auth(&self, user_id: i64) -> Result<Option<Auth>, DatabaseError>;
+
     async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError>;
 
     async fn find_user_by_username(&self, username: &str) -> Result<Option<User>, DatabaseError>;
+
+    async fn find_all_invites(&self) -> Result<Vec<Invite>, DatabaseError>;
+
+    async fn find_user(&self, user_id: i64) -> Result<Option<User>, DatabaseError>;
+
+    async fn find_invite(&self, code: &str) -> Result<Option<Invite>, DatabaseError>;
+
+    async fn find_sessions(&self, user_id: i64) -> Result<Vec<Session>, DatabaseError>;
 }
 
 use crate::managers::{DefaultNotifierManager, NotifierManager};
@@ -168,7 +161,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     }
 
     pub async fn register_user(
-        &self,
+        &mut self,
         username: &str,
         password: &str,
         invite_code: &str,
@@ -182,7 +175,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         let mut tx = self.repository.begin().await?;
 
-        let invite = tx
+        let invite = self
+            .repository
             .find_invite(invite_code)
             .await?
             .ok_or(DomainError::BadRequest("Invalid invite code".to_string()))?;
@@ -223,7 +217,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         Ok(user)
     }
 
-    pub async fn login(&self, username: &str, password: &str) -> Result<Session, DomainError> {
+    pub async fn login(&mut self, username: &str, password: &str) -> Result<Session, DomainError> {
         if let Some(remaining_seconds) = self.lockout_manager.is_locked_out(username) {
             return Err(DomainError::BadRequest(format!(
                 "Account locked for {} seconds",
@@ -242,7 +236,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
                 DomainError::BadRequest("Invalid credentials".to_string())
             })?;
 
-        let auth = tx
+        let auth = self
+            .repository
             .find_auth(user.user_id)
             .await?
             .ok_or(DomainError::BadRequest("Invalid credentials".to_string()))?;
@@ -269,7 +264,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     }
 
     pub async fn change_password(
-        &self,
+        &mut self,
         user_id: i64,
         current_password: &str,
         new_password: &str,
@@ -280,7 +275,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         let mut tx = self.repository.begin().await?;
 
-        let auth = tx
+        let auth = self
+            .repository
             .find_auth(user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
@@ -333,18 +329,13 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         Ok(())
     }
 
-    pub async fn get_user_sessions(&self, user_id: i64) -> Result<Vec<Session>, DomainError> {
-        let mut tx = self.repository.begin().await?;
-
-        let sessions = tx.find_sessions(user_id).await?;
-
-        self.repository.commit(tx).await?;
-
+    pub async fn get_user_sessions(&mut self, user_id: i64) -> Result<Vec<Session>, DomainError> {
+        let sessions = self.repository.find_sessions(user_id).await?;
         Ok(sessions)
     }
 
     pub async fn create_invite(
-        &self,
+        &mut self,
         user_id: i64,
         code: &str,
         available_registrations: i32,
@@ -352,7 +343,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     ) -> Result<Invite, DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let user = tx
+        let user = self
+            .repository
             .find_user(user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
@@ -363,6 +355,12 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         if user.role_id != 0 && user.role_id != 1 {
             return Err(DomainError::PermissionDenied(
                 "Insufficient permissions to create invite".to_string(),
+            ));
+        }
+
+        if role_id == 0 {
+            return Err(DomainError::PermissionDenied(
+                "You can't create invide for Owner role".to_string(),
             ));
         }
 
@@ -385,10 +383,11 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         Ok(invite)
     }
 
-    pub async fn delete_invite(&self, user_id: i64, invite_id: i64) -> Result<(), DomainError> {
+    pub async fn delete_invite(&mut self, user_id: i64, invite_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let user = tx
+        let user = self
+            .repository
             .find_user(user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
@@ -414,10 +413,9 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         Ok(())
     }
 
-    pub async fn get_all_invites(&self, user_id: i64) -> Result<Vec<Invite>, DomainError> {
-        let mut tx = self.repository.begin().await?;
-
-        let user = tx
+    pub async fn get_all_invites(&mut self, user_id: i64) -> Result<Vec<Invite>, DomainError> {
+        let user = self
+            .repository
             .find_user(user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
@@ -431,9 +429,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             ));
         }
 
-        let invites = tx.find_all_invites().await?;
-
-        self.repository.commit(tx).await?;
+        let invites = self.repository.find_all_invites().await?;
 
         Ok(invites)
     }
@@ -467,22 +463,6 @@ impl AuthTransaction for PgAuthTransaction {
         Ok(result)
     }
 
-    async fn find_auth(&mut self, user_id: i64) -> Result<Option<Auth>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Auth,
-            r#"SELECT
-                   user_id,
-                   password_hash
-               FROM auth
-               WHERE user_id = $1"#,
-            user_id
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
     async fn create_session(
         &mut self,
         session_token: &str,
@@ -502,31 +482,6 @@ impl AuthTransaction for PgAuthTransaction {
             session_token,
             user_id,
             expires_at
-        )
-        .fetch_one(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
-    async fn create_user(&mut self, username: &str) -> Result<User, DatabaseError> {
-        let result = sqlx::query_as!(
-            User,
-            r#"INSERT INTO users (username, avatar_file_id, role_id)
-               VALUES ($1, 1, 2)
-               RETURNING
-                   user_id,
-                   username,
-                   created_at,
-                   avatar_file_id,
-                   role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
-                   server_deafen,
-                   server_mute"#,
-            username
         )
         .fetch_one(&mut *self.transaction)
         .await?;
@@ -586,48 +541,6 @@ impl AuthTransaction for PgAuthTransaction {
         Ok(result)
     }
 
-    async fn remove_session(
-        &mut self,
-        session_token: &str,
-    ) -> Result<Option<Session>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Session,
-            r#"DELETE FROM sessions
-               WHERE session_token = $1
-               RETURNING
-                   session_id,
-                   session_token,
-                   user_id,
-                   created_at,
-                   expires_at"#,
-            session_token
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
-    async fn find_sessions(&mut self, user_id: i64) -> Result<Vec<Session>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Session,
-            r#"SELECT
-                   session_id,
-                   session_token,
-                   user_id,
-                   created_at,
-                   expires_at
-               FROM sessions
-               WHERE user_id = $1
-               ORDER BY created_at DESC"#,
-            user_id
-        )
-        .fetch_all(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
     async fn remove_user_session(
         &mut self,
         session_token: &str,
@@ -678,25 +591,6 @@ impl AuthTransaction for PgAuthTransaction {
         Ok(result)
     }
 
-    async fn find_invite(&mut self, code: &str) -> Result<Option<Invite>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Invite,
-            r#"SELECT
-                   invite_id,
-                   code,
-                   available_registrations,
-                   role_id,
-                   created_at
-               FROM invites
-               WHERE code = $1"#,
-            code
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
     async fn update_invite_registrations(
         &mut self,
         invite_id: i64,
@@ -740,49 +634,6 @@ impl AuthTransaction for PgAuthTransaction {
 
         Ok(result)
     }
-
-    async fn find_all_invites(&mut self) -> Result<Vec<Invite>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Invite,
-            r#"SELECT
-                   invite_id,
-                   code,
-                   available_registrations,
-                   role_id,
-                   created_at
-               FROM invites
-               ORDER BY created_at DESC"#
-        )
-        .fetch_all(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
-
-    async fn find_user(&mut self, user_id: i64) -> Result<Option<User>, DatabaseError> {
-        let result = sqlx::query_as!(
-            User,
-            r#"SELECT
-                   user_id,
-                   username,
-                   created_at,
-                   avatar_file_id,
-                   role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
-                   server_deafen,
-                   server_mute
-               FROM users
-               WHERE user_id = $1"#,
-            user_id
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(result)
-    }
 }
 
 impl AuthRepository for Postgre {
@@ -801,6 +652,22 @@ impl AuthRepository for Postgre {
     async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError> {
         transaction.transaction.rollback().await?;
         Ok(())
+    }
+
+    async fn find_auth(&self, user_id: i64) -> Result<Option<Auth>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Auth,
+            r#"SELECT
+                   user_id,
+                   password_hash
+               FROM auth
+               WHERE user_id = $1"#,
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
     }
 
     async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError> {
@@ -842,6 +709,88 @@ impl AuthRepository for Postgre {
             username
         )
         .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_all_invites(&self) -> Result<Vec<Invite>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Invite,
+            r#"SELECT
+                   invite_id,
+                   code,
+                   available_registrations,
+                   role_id,
+                   created_at
+               FROM invites
+               ORDER BY created_at DESC"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_user(&self, user_id: i64) -> Result<Option<User>, DatabaseError> {
+        let result = sqlx::query_as!(
+            User,
+            r#"SELECT
+                   user_id,
+                   username,
+                   created_at,
+                   avatar_file_id,
+                   role_id,
+                   COALESCE(
+                       NULLIF(manual_status, 'Offline'::user_status_type),
+                       status
+                   ) as "status!: UserStatusType",
+                   server_deafen,
+                   server_mute
+               FROM users
+               WHERE user_id = $1"#,
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_invite(&self, code: &str) -> Result<Option<Invite>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Invite,
+            r#"SELECT
+                   invite_id,
+                   code,
+                   available_registrations,
+                   role_id,
+                   created_at
+               FROM invites
+               WHERE code = $1"#,
+            code
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_sessions(&self, user_id: i64) -> Result<Vec<Session>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Session,
+            r#"SELECT
+                   session_id,
+                   session_token,
+                   user_id,
+                   created_at,
+                   expires_at
+               FROM sessions
+               WHERE user_id = $1
+               ORDER BY created_at DESC"#,
+            user_id
+        )
+        .fetch_all(&self.pool)
         .await?;
 
         Ok(result)
@@ -969,7 +918,7 @@ pub fn auth_routes(
     )
 )]
 async fn register_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,
@@ -1001,7 +950,7 @@ async fn register_handler(
     )
 )]
 async fn login_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,
@@ -1038,7 +987,7 @@ async fn login_handler(
     security(("api_key" = []))
 )]
 async fn change_password_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,
@@ -1099,7 +1048,7 @@ async fn logout_handler(
     security(("api_key" = []))
 )]
 async fn get_sessions_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,
@@ -1129,7 +1078,7 @@ async fn get_sessions_handler(
     security(("api_key" = []))
 )]
 async fn create_invite_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,
@@ -1166,7 +1115,7 @@ async fn create_invite_handler(
     security(("api_key" = []))
 )]
 async fn delete_invite_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,
@@ -1195,7 +1144,7 @@ async fn delete_invite_handler(
     security(("api_key" = []))
 )]
 async fn get_invites_handler(
-    State(service): State<
+    State(mut service): State<
         AuthService<
             Postgre,
             DefaultLockoutManager,

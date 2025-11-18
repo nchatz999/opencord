@@ -67,7 +67,6 @@ export interface State {
   eventLog: EventLogEntry[]
   notification: Record<number, boolean>
   context: { type: 'channel' | 'dm'; id: number } | undefined
-  voipContext: { type: 'channel' | 'dm'; id: number } | undefined
   activeContext: 'channel' | 'dm'
   channelsVisited: number[]
   dmsVisited: number[]
@@ -92,7 +91,6 @@ const initialState: State = {
   eventLog: [],
   notification: {},
   context: undefined,
-  voipContext: undefined,
   channelsVisited: [],
   dmsVisited: [],
   subscribedStreams: [],
@@ -708,10 +706,6 @@ export class VoipDomain {
     return state.audio
   }
 
-  getCurrentContext(): { type: 'channel' | 'dm'; id: number } | undefined {
-    return state.voipContext
-  }
-
 
   list(): VoipParticipantWithUser[] {
     return state.voipState.flatMap((participant) => {
@@ -740,7 +734,7 @@ export class VoipDomain {
     return undefined
   }
 
-  getCurrentParticipant(): VoipParticipant | undefined {
+  getCurrent(): VoipParticipant | undefined {
     return state.voipState.find(p => p.userId === userDomain.getCurrent().userId);
   }
 
@@ -835,11 +829,6 @@ export class VoipDomain {
       })
     );
     this.clearSpeakingState(userId);
-  }
-
-
-  switchContext(ctx: { type: 'channel' | 'dm'; id: number } | undefined) {
-    setState("voipContext", ctx)
   }
 
   async resume() {
@@ -1205,14 +1194,14 @@ connection.onServerEventReceived((event: EventPayload) => {
 });
 
 connection.onConnectionLost((reason) => {
-  //userDomain.setAppState({ type: "connectionError" });
+  userDomain.setAppState({ type: "connectionError" });
 });
 
 
 
 export let microphone = new Microphone();
 microphone.onEncodedData((data) => {
-  let user = voipDomain.getCurrentParticipant()
+  let user = voipDomain.getCurrent()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
@@ -1228,7 +1217,7 @@ microphone.onEncodedData((data) => {
 })
 
 microphone.onSpeech((speech) => {
-  let user = voipDomain.getCurrentParticipant()
+  let user = voipDomain.getCurrent()
   if (!user) return
   connection.sendVoip({
     type: "speech",
@@ -1239,7 +1228,7 @@ microphone.onSpeech((speech) => {
 
 export let screenShare = new ScreenShare();
 screenShare.onEncodedVideoData((data) => {
-  let user = voipDomain.getCurrentParticipant()
+  let user = voipDomain.getCurrent()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
@@ -1255,7 +1244,7 @@ screenShare.onEncodedVideoData((data) => {
 })
 
 screenShare.onEncodedAudioData((data) => {
-  let user = voipDomain.getCurrentParticipant()
+  let user = voipDomain.getCurrent()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
@@ -1272,7 +1261,7 @@ screenShare.onEncodedAudioData((data) => {
 
 export let camera = new Camera();
 camera.onEncodedData((data) => {
-  let user = voipDomain.getCurrentParticipant()
+  let user = voipDomain.getCurrent()
   const buffer = new ArrayBuffer(data.byteLength);
   data.copyTo(buffer);
   if (!user) return
@@ -1296,7 +1285,6 @@ export async function resetStore() {
   setState(() => ({
     modal: { type: 'close', id: 0 },
     activeContext: undefined,
-    voipContext: undefined,
   }));
 }
 

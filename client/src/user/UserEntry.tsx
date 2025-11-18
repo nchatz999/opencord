@@ -1,11 +1,15 @@
 import { type Component } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
 import { UserStatusType, type User } from "../model";
-import { userDomain, voipDomain, microphone } from "../store";
+import { userDomain, voipDomain, microphone, messageDomain } from "../store";
 import { fetchApi } from "../utils";
 
+const handleUserClick = async (user: User) => {
+  messageDomain.setContext({ type: "dm", id: user.userId })
 
-export const UserEntry: Component<{ user: User; onClick: () => void }> = (
+};
+
+export const UserEntry: Component<{ user: User; }> = (
   props
 ) => {
 
@@ -28,8 +32,6 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
         return "Away";
       case UserStatusType.DoNotDisturb:
         return "Do Not Disturb";
-      case UserStatusType.Invisible:
-        return "Invisible";
       default:
         return "Offline";
     }
@@ -54,7 +56,6 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
 
       await microphone.start()
       await voipDomain.resume()
-      voipDomain.switchContext({ type: "dm", id: props.user.userId })
       console.log('Joined private call with', props.user.username);
     } else {
       console.error('Failed to join private call:', result.error);
@@ -62,7 +63,7 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
   };
   return (
     <button
-      onClick={props.onClick}
+      onClick={async () => await handleUserClick(props.user)}
       class={`flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-[#383a40] transition-all group ${isOffline() ? "opacity-60" : ""
         }`}
     >
@@ -94,9 +95,9 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
         <div
           class="p-1 hover:bg-[#2e3035] rounded"
           title="Send Message"
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
-            props.onClick();
+            await handleUserClick(props.user)
           }}
         >
           <MessageCircle

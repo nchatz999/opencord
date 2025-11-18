@@ -155,6 +155,12 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
             ));
         }
 
+        if new_role_id == 0 {
+            return Err(DomainError::PermissionDenied(
+                "There is only one owner".to_string(),
+            ));
+        }
+
         let updated_user = tx
             .update_user_role(user_id, new_role_id)
             .await
@@ -538,20 +544,8 @@ pub struct UpdateUserRoleRequest {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateUserStatusRequest {
-    pub status: UserStatusType,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateManualUserStatusRequest {
     pub manual_status: UserStatusType,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AllUserStatusResponse {
-    pub users: Vec<UserStatus>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

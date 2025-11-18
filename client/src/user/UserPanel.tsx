@@ -27,7 +27,7 @@ const UserPanel: Component = () => {
 
     const privateCallInfo = () => {
 
-      let isInPrivateCall = voipDomain.getCurrentParticipant();
+      let isInPrivateCall = voipDomain.getCurrent();
       if (!isInPrivateCall) return null
       if (!isInPrivateCall.recipientId) return null
 
@@ -155,7 +155,7 @@ const UserPanel: Component = () => {
     return (
       <div class="flex items-center gap-1">
         {}
-        <Show when={voipDomain.getCurrentParticipant()}>
+        <Show when={voipDomain.getCurrent()}>
           {(voip) => (
             <Button
               variant='ghost'
@@ -211,7 +211,7 @@ const UserPanel: Component = () => {
         </Show>
 
         {}
-        <Show when={voipDomain.getCurrentParticipant()}>
+        <Show when={voipDomain.getCurrent()}>
           {(voip) => (
             <button
               onClick={async () => {
@@ -267,7 +267,7 @@ const UserPanel: Component = () => {
         </Show>
 
         {}
-        <Show when={voipDomain.getCurrentParticipant()}>
+        <Show when={voipDomain.getCurrent()}>
           <button
             onClick={handleLeaveCall}
             class="p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
@@ -298,7 +298,7 @@ const UserPanel: Component = () => {
     }
     const handleMuteToggle = async () => {
       microphone.setMuted(!microphone.getMuted())
-      if (!voipDomain.getCurrentParticipant()) return
+      if (!voipDomain.getCurrent()) return
       await fetchApi("/voip/mute", {
         method: "PUT",
         body: {
@@ -309,7 +309,7 @@ const UserPanel: Component = () => {
 
     const handleDeafenToggle = async () => {
       outputManager.setDeafened(!outputManager.getDeafened())
-      if (!voipDomain.getCurrentParticipant()) return
+      if (!voipDomain.getCurrent()) return
       await fetchApi("/voip/deafen", {
         method: "PUT",
         body: {

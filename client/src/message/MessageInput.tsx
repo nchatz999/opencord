@@ -8,43 +8,37 @@ import { channelDomain, userDomain } from "../store";
 import { fetchApi, toBase64 } from "../utils";
 import Button from "../components/Button";
 
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+const formatContent = (text: string) => {
+  if (!text) return <></>;
+  return (
+    <>
+      {text.split(URL_REGEX).map((part, i) =>
+        i % 2 === 1 ? (
+          <a
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-[#00A8FC] hover:underline"
+            onClick={(e) => e.preventDefault()}
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+};
+
 const MessageInput: Component<{
   context: { type: "channel" | "dm"; id: number };
 }> = (props) => {
   const [content, setContent] = createSignal("");
-
-  const formatContent = (text: string) => {
-    if (!text) return <></>;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-    return (
-      <>
-        {parts.map((part, i) =>
-          i % 2 === 1 ? (
-            <a
-              href={part}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-[#00A8FC] hover:underline"
-              onClick={(e) => e.preventDefault()}
-            >
-              {part}
-            </a>
-          ) : (
-            part
-          )
-        )}
-      </>
-    );
-  };
-
-  const handleInput = (e: string) => {
-    setContent(e);
-  };
-
   const [files, setFiles] = createSignal<File[]>([]);
   const [isDragging, setIsDragging] = createSignal(false);
-  const [isSending, setIsSending] = createSignal(false);
 
   let textareaRef: HTMLDivElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
@@ -61,11 +55,10 @@ const MessageInput: Component<{
   const placeholder = createMemo(() => {
     if (props.context.type === "dm") {
       return dmUser() ? `Message @${dmUser()!.username}` : "Send a message...";
-    } else {
-      return channel()
-        ? `Message #${channel()!.channelName}`
-        : "Select a channel to start messaging";
     }
+    return channel()
+      ? `Message #${channel()!.channelName}`
+      : "Select a channel to start messaging";
   });
 
   createEffect(() => {
@@ -76,43 +69,34 @@ const MessageInput: Component<{
   });
 
   const handleSubmit = async () => {
-    setIsSending(true);
+    const fileUploads = await Promise.all(
+      files().map(async (file) => ({
+        fileName: file.name,
+        contentType: file.type,
+        data: await toBase64(file),
+      }))
+    );
 
-    try {
-      const fileUploads = await Promise.all(
-        files().map(async (file) => ({
-          fileName: file.name,
-          contentType: file.type,
-          data: await toBase64(file),
-        }))
-      );
-
-      const messageData = {
-        messageText: content().trim() || undefined,
-        files: fileUploads,
-      };
-      const endpoint = `/message/${props.context.type}/${props.context.id}/messages`
-
-      const result = await fetchApi(endpoint, {
+    const result = await fetchApi(
+      `/message/${props.context.type}/${props.context.id}/messages`,
+      {
         method: "POST",
-        body: messageData,
-      });
-
-      if (result.ok) {
-        setContent("");
-        setFiles([]);
-        if (textareaRef) {
-          textareaRef.innerText = "";
-          textareaRef.style.height = "";
-        }
-      } else {
-        addToast(`Failed to send message: ${result.error.reason}`, "error");
+        body: {
+          messageText: content().trim() || undefined,
+          files: fileUploads,
+        },
       }
-    } catch (error) {
-      addToast("Error sending message", "error");
-    } finally {
-      setIsSending(false);
-      textareaRef?.focus();
+    );
+
+    if (result.ok) {
+      setContent("");
+      setFiles([]);
+      if (textareaRef) {
+        textareaRef.innerText = "";
+        textareaRef.style.height = "";
+      }
+    } else {
+      addToast(`Failed to send message: ${result.error.reason}`, "error");
     }
   };
 
@@ -129,10 +113,7 @@ const MessageInput: Component<{
     if (selectedFiles.length === 0) return;
 
     setFiles((prev) => [...prev, ...selectedFiles]);
-
-    if (fileInputRef) {
-      fileInputRef.value = "";
-    }
+    if (fileInputRef) fileInputRef.value = "";
   };
 
   const handleRemoveFile = (fileName: string) => {
@@ -146,10 +127,7 @@ const MessageInput: Component<{
 
   const handleDragLeave = (e: DragEvent) => {
     e.preventDefault();
-    if (
-      !e.currentTarget ||
-      !(e.currentTarget as Element).contains(e.relatedTarget as Node)
-    ) {
+    if (!e.currentTarget || !(e.currentTarget as Element).contains(e.relatedTarget as Node)) {
       setIsDragging(false);
     }
   };
@@ -159,19 +137,18 @@ const MessageInput: Component<{
     setIsDragging(false);
 
     const droppedFiles = Array.from(e.dataTransfer?.files || []);
-    if (droppedFiles.length === 0) return;
-
-    setFiles((prev) => [...prev, ...droppedFiles]);
+    if (droppedFiles.length > 0) {
+      setFiles((prev) => [...prev, ...droppedFiles]);
+    }
   };
 
   return (
     <Show when={props.context}>
       <div class="p-4 bg-[#313338]">
-
         <Show when={files().length > 0}>
           <div class="mb-3 flex flex-wrap gap-2 p-3 bg-[#1e1f22] rounded-lg border border-[#383a40]">
             <For each={files()}>
-              {(file, _index) => (
+              {(file) => (
                 <FilePreview
                   file={file}
                   onRemove={() => handleRemoveFile(file.name)}
@@ -182,10 +159,7 @@ const MessageInput: Component<{
         </Show>
 
         <div
-          class={`relative flex items-center gap-3 py-3 px-1 bg-[#383a40] rounded-lg transition-colors ${isDragging()
-            ? "bg-[#404249] border-2 border-dashed border-[#00A8FC]"
-            : ""
-            }`}
+          class={`relative flex items-center gap-3 py-3 px-1 bg-[#383a40] rounded-lg transition-colors ${isDragging() ? "bg-[#404249] border-2 border-dashed border-[#00A8FC]" : ""}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -204,7 +178,7 @@ const MessageInput: Component<{
               contentEditable
               editable
               textContent={content()}
-              onTextContent={handleInput}
+              onTextContent={setContent}
               onKeyDown={handleKeyDown}
               data-placeholder={placeholder()}
               class="w-full bg-transparent text-[#DBDEE1] placeholder-[#6c7177] resize-none outline-none max-h-[120px] min-h-[24px] empty:before:content-[attr(data-placeholder)] empty:before:text-[#6c7177] overflow-y-auto whitespace-pre-wrap break-words p-2 flex items-center"
@@ -212,21 +186,14 @@ const MessageInput: Component<{
             />
           </div>
 
-          <Button
-            variant="ghost"
-            title="Add emoji"
-            disabled
-          >
+          <Button variant="ghost" title="Add emoji" disabled>
             <Smile size={20} />
           </Button>
 
           <Button
             variant="ghost"
             onClick={handleSubmit}
-            disabled={
-              content().trim().length == 0
-            }
-            title={isSending() ? "Sending..." : "Send message"}
+            disabled={content().trim().length == 0}
           >
             <Send size={20} />
           </Button>
@@ -247,12 +214,8 @@ const MessageInput: Component<{
               <div class="w-16 h-16 flex items-center justify-center rounded-full border-4 border-[#00A8FC] border-dashed mb-4">
                 <Paperclip size={32} class="text-[#00A8FC]" />
               </div>
-              <h2 class="text-xl font-semibold text-[#f2f3f5] mb-2">
-                Drop to Upload
-              </h2>
-              <p class="text-[#b5bac1]">
-                Files will be uploaded to this channel
-              </p>
+              <h2 class="text-xl font-semibold text-[#f2f3f5] mb-2">Drop to Upload</h2>
+              <p class="text-[#b5bac1]">Files will be uploaded to this channel</p>
             </div>
           </div>
         </Show>

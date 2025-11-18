@@ -65,18 +65,6 @@ pub trait ChannelTransaction: Send + Sync {
 
     async fn delete(&mut self, channel_id: i64) -> Result<Option<Channel>, DatabaseError>;
 
-    async fn find_user_group_rights(
-        &mut self,
-        group_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError>;
-
-    async fn find_user_channel_rights(
-        &mut self,
-        channel_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError>;
-
     async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
@@ -275,7 +263,8 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             channel: updated_channel.clone(),
         };
 
-        self.notifier
+        let _ = self
+            .notifier
             .notify(ServerMessage::Control(
                 event,
                 ControlRoutingPolicy::ChannelRights {
@@ -330,7 +319,8 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             channel: updated_channel,
         };
 
-        self.notifier
+        let _ = self
+            .notifier
             .notify(ServerMessage::Control(
                 event,
                 ControlRoutingPolicy::ChannelRights {
@@ -373,7 +363,8 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
 
         let event = EventPayload::ChannelDeleted { channel_id };
 
-        self.notifier
+        let _ = self
+            .notifier
             .notify(ServerMessage::Control(
                 event,
                 ControlRoutingPolicy::GroupRights {
@@ -477,43 +468,6 @@ impl ChannelTransaction for PgChannelTransaction {
         .fetch_optional(&mut *self.transaction)
         .await
         ?;
-        Ok(result)
-    }
-
-    async fn find_user_group_rights(
-        &mut self,
-        group_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            r#"SELECT grr.rights 
-            FROM group_role_rights grr
-            INNER JOIN users u ON u.role_id = grr.role_id
-            WHERE grr.group_id = $1 AND u.user_id = $2"#,
-            group_id,
-            user_id
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-        Ok(result)
-    }
-
-    async fn find_user_channel_rights(
-        &mut self,
-        channel_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            r#"SELECT grr.rights 
-            FROM group_role_rights grr
-            INNER JOIN channels c ON c.group_id = grr.group_id
-            INNER JOIN users u ON u.role_id = grr.role_id
-            WHERE c.channel_id = $1 AND u.user_id = $2"#,
-            channel_id,
-            user_id
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
         Ok(result)
     }
 
@@ -630,9 +584,6 @@ pub struct UpdateChannelRequest {
 pub struct UpdateChannelGroupRequest {
     pub group_id: i64,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RevealChannelData {}
 
 use axum::Json;
 use axum::http::StatusCode;

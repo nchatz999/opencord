@@ -20,11 +20,6 @@ pub enum DomainError {
 use crate::error::{ApiError, DatabaseError};
 
 pub trait AclTransaction: Send + Sync {
-    async fn find_group_role_rights(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<GroupRoleRights>, DatabaseError>;
-
     async fn set_group_role_rights(
         &mut self,
         group_id: i64,
@@ -264,29 +259,6 @@ pub struct PgAclTransaction {
 }
 
 impl AclTransaction for PgAclTransaction {
-    async fn find_group_role_rights(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<GroupRoleRights>, DatabaseError> {
-        let results = sqlx::query_as!(
-            GroupRoleRights,
-            r#"SELECT DISTINCT
-                grr.group_id,
-                grr.role_id,
-                grr.rights
-            FROM group_role_rights grr
-            INNER JOIN groups g ON g.group_id = grr.group_id
-            INNER JOIN group_role_rights user_grr ON user_grr.group_id = grr.group_id
-            INNER JOIN users u ON u.role_id = user_grr.role_id
-            WHERE u.user_id = $1 AND user_grr.rights >= 1
-            ORDER BY grr.group_id, grr.role_id"#,
-            user_id
-        )
-        .fetch_all(&mut *self.transaction)
-        .await?;
-
-        Ok(results)
-    }
     async fn set_group_role_rights(
         &mut self,
         group_id: i64,

@@ -112,44 +112,29 @@ const CreateChannelModal: Component = () => {
     if (!name().trim()) return
 
     setIsCreating(true)
-    try {
-      if (!group()) {
-        addToast('No group selected', 'error')
-        return
-      }
+    if (!group()) {
+      addToast('No group selected', 'error')
+      return
+    }
 
+    const createResult = await fetchApi('/channel', {
+      method: 'POST',
+      body: {
+        name: name().trim(),
+        groupId: group(),
+        type: type(),
+      },
+    })
 
-      const createResult = await fetchApi('/channel', {
-        method: 'POST',
-        body: {
-          name: name().trim(),
-          groupId: group(),
-          type: type(),
-        },
-      })
-
-      if (createResult.isErr()) {
-        addToast(
-          `Failed to create channel: ${createResult.error.reason}`,
-          'error'
-        )
-        return
-      }
-
-
-      addToast(`Channel "${name().trim()}" created successfully!`, 'success')
-
-
-      modalDomain.open({ type: "close", id: 0 })
-    } catch (error) {
+    if (createResult.isErr()) {
       addToast(
-        `Error creating channel: ${error instanceof Error ? error.message : 'Unknown error'
-        }`,
+        `Failed to create channel: ${createResult.error.reason}`,
         'error'
       )
-    } finally {
-      setIsCreating(false)
+      return
     }
+
+    modalDomain.open({ type: "close", id: 0 })
   }
 
   return (

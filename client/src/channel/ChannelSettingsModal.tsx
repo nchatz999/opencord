@@ -2,7 +2,7 @@ import type { Component } from "solid-js";
 import { createSignal, createMemo, createEffect, For } from "solid-js";
 import { Hash, Volume2, X } from "lucide-solid";
 import { ChannelType, RIGHTS, type Channel } from "../model";
-import { aclDomain, modalDomain, roleDomain, userDomain } from "../store";
+import { aclDomain, modalDomain, roleDomain } from "../store";
 import { useToaster } from "../components/Toaster";
 import Button from "../components/Button";
 import { Tabs } from "../components/Tabs";
@@ -16,15 +16,8 @@ interface ChannelSettingsProps {
 }
 
 const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
-  const user = userDomain.getCurrent();
   const { addToast } = useToaster();
 
-  const [isUpdating, setIsUpdating] = createSignal(false);
-  const [isDeleting, setIsDeleting] = createSignal(false);
-
-  if (!user) {
-    return null;
-  }
 
   const [name, setName] = createSignal(props.channel.channelName);
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>({});
@@ -101,9 +94,6 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   const handleSave = async () => {
     if (!name().trim()) return;
 
-    setIsUpdating(true);
-
-
     if (name() !== props.channel.channelName) {
       const updateResult = await fetchApi(`/channel/${props.channel.channelId}`, {
         method: 'PUT',
@@ -115,14 +105,9 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
           `Failed to update channel: ${updateResult.error.reason}`,
           "error"
         );
-        setIsUpdating(false);
         return;
       }
     }
-
-    addToast(`Channel "${name().trim()}" updated successfully!`, "success");
-    setIsUpdating(false);
-
     modalDomain.open({ type: "close", id: 0 });
   };
 
@@ -130,19 +115,15 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
     if (!confirm(`Are you sure you want to delete the channel "${name()}"?`)) {
       return;
     }
-
-    setIsDeleting(true);
     const result = await fetchApi(`/channel/${props.channel.channelId}`, {
       method: 'DELETE'
     });
 
     if (result.isErr()) {
       addToast(`Failed to delete channel: ${result.error.reason}`, "error");
-      setIsDeleting(false);
       return;
     }
 
-    addToast(`Channel "${name()}" deleted successfully!`, "success");
     modalDomain.open({ type: "close", id: 0 });
   };
 
@@ -168,21 +149,20 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
         <div class="mt-6 flex justify-between items-center">
           <Button
             onClick={handleDelete}
-            disabled={isDeleting()}
             variant="destructive"
           >
-            {isDeleting() ? "Deleting..." : "Delete Channel"}
+            Delete Channel
           </Button>
           <div class="flex space-x-2">
             <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
               Cancel
             </Button>
             <Button
-              disabled={isUpdating() || !name().trim()}
+              disabled={!name().trim()}
               onClick={handleSave}
               variant="primary"
             >
-              {isUpdating() ? "Updating..." : "Save Changes"}
+              Save Changes
             </Button>
           </div>
         </div>

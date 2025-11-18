@@ -99,11 +99,7 @@ pub trait MessageTransaction: Send + Sync {
         user_id: i64,
     ) -> Result<Option<Message>, DatabaseError>;
 
-    async fn delete_message(
-        &mut self,
-        message_id: i64,
-        user_id: i64,
-    ) -> Result<Option<Message>, DatabaseError>;
+    async fn delete_message(&mut self, message_id: i64) -> Result<Option<Message>, DatabaseError>;
 }
 
 pub trait MessageRepository: Send + Sync + Clone {
@@ -130,11 +126,7 @@ pub trait MessageRepository: Send + Sync + Clone {
         limit: i64,
     ) -> Result<Vec<Message>, DatabaseError>;
 
-    async fn find_file_by_id(
-        &self,
-        file_id: i64,
-        user_id: i64,
-    ) -> Result<Option<FileAttachment>, DatabaseError>;
+    async fn find_file_by_id(&self, file_id: i64) -> Result<Option<FileAttachment>, DatabaseError>;
 
     async fn find_user_channel_rights(
         &mut self,
@@ -162,7 +154,7 @@ pub trait MessageRepository: Send + Sync + Clone {
     ) -> Result<Vec<File>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager, RecipientType};
+use crate::managers::{DefaultNotifierManager, NotifierManager};
 use crate::model::EventPayload;
 use tracing::{error, warn};
 
@@ -526,13 +518,13 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
 
         let files = tx.delete_message_files(message_id).await?;
 
-        let message =
-            tx.delete_message(message_id, user_id)
-                .await?
-                .ok_or(DomainError::BadRequest(format!(
-                    "Message {} not found",
-                    message_id
-                )))?;
+        let message = tx
+            .delete_message(message_id)
+            .await?
+            .ok_or(DomainError::BadRequest(format!(
+                "Message {} not found",
+                message_id
+            )))?;
 
         if message.sender_id != user_id {
             if let Some(channel_id) = message.channel_id {
@@ -609,14 +601,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
         user_id: i64,
         file_id: i64,
     ) -> Result<(FileAttachment, Vec<u8>), DomainError> {
-        let file = self
-            .repository
-            .find_file_by_id(file_id, user_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!(
-                "File {} not found",
-                file_id
-            )))?;
+        let file =
+            self.repository
+                .find_file_by_id(file_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "File {} not found",
+                    file_id
+                )))?;
 
         let message = self
             .repository
@@ -740,11 +732,7 @@ impl MessageTransaction for PgMessageTransaction {
         Ok(result)
     }
 
-    async fn delete_message(
-        &mut self,
-        message_id: i64,
-        user_id: i64,
-    ) -> Result<Option<Message>, DatabaseError> {
+    async fn delete_message(&mut self, message_id: i64) -> Result<Option<Message>, DatabaseError> {
         let deleted_message = sqlx::query_as!(
             Message,
             r#"DELETE FROM messages
@@ -889,11 +877,7 @@ impl MessageRepository for Postgre {
         Ok(messages)
     }
 
-    async fn find_file_by_id(
-        &self,
-        file_id: i64,
-        user_id: i64,
-    ) -> Result<Option<FileAttachment>, DatabaseError> {
+    async fn find_file_by_id(&self, file_id: i64) -> Result<Option<FileAttachment>, DatabaseError> {
         let result = sqlx::query_as!(
             FileAttachment,
             r#"SELECT f.file_id, f.file_uuid, f.message_id, f.file_name, f.file_type, f.file_size, f.file_hash, f.created_at
@@ -1029,14 +1013,6 @@ impl MessageRepository for Postgre {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct NewMessage {
-    pub sender_id: i64,
-    pub message_text: Option<String>,
-    pub message_type: MessageType,
-    pub reply_to_message_id: Option<i64>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FileAttachment {
@@ -1061,25 +1037,10 @@ pub struct NewFileAttachment {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct NewFile {
-    pub file_name: String,
-    pub content_type: String,
-    pub data: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct CreateMessageRequest {
     pub message_text: Option<String>,
     pub reply_to_message_id: Option<i64>,
     pub files: Vec<FileUpload>,
-}
-
-#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum MessageTypePath {
-    Dm,
-    Channel,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

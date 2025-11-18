@@ -12,7 +12,6 @@ import { Tabs } from "../components/Tabs";
 import { fetchApi } from "../utils";
 
 const CreateGroupModal: Component = () => {
-  const [isLoading, setIsLoading] = createSignal(false);
   const [name, setName] = createSignal<string>("");
   const [newChannelTitle, setNewChannelTitle] = createSignal("");
   const [newChannelType, setNewChannelType] = createSignal(ChannelType.Text);
@@ -49,64 +48,56 @@ const CreateGroupModal: Component = () => {
       return;
     }
 
-    setIsLoading(true);
-    try {
+    const createResult = await fetchApi('/group', {
+      method: 'POST',
+      body: { name: name().trim() }
+    });
 
-      const createResult = await fetchApi('/group', {
-        method: 'POST',
-        body: { name: name().trim() }
-      });
-
-      if (createResult.isErr()) {
-        alert(`Error creating group: ${createResult.error.reason}`);
-        return;
-      }
-
-      const groupId = createResult.value.groupId;
-
-
-      const aclResult = await fetchApi('/acl/group-role-rights', {
-        method: 'PUT',
-        body:
-          Array.from(Object.entries(roleRights())).map(
-            ([roleId, right]) => ({
-              groupId,
-              roleId: Number(roleId),
-              rights: right,
-            })
-          ),
-
-      });
-
-      if (aclResult.isErr()) {
-        alert(`Failed to set group permissions: ${aclResult.error.reason}`);
-
-      }
-
-
-      for (const channel of groupChannels()) {
-        const channelResult = await fetchApi('/channel', {
-          method: 'POST',
-          body: {
-            name: channel.name,
-            channel_id: groupId,
-            type: channel.type,
-          },
-        });
-
-        if (channelResult.isErr()) {
-          console.error(`Failed to create channel ${channel.name}:`, channelResult.error.reason);
-        }
-      }
-
-
-      modalDomain.open({ type: "close", id: 0 })
-
-    } catch (error) {
-      alert("Failed to create group");
-    } finally {
-      setIsLoading(false);
+    if (createResult.isErr()) {
+      alert(`Error creating group: ${createResult.error.reason}`);
+      return;
     }
+
+    const groupId = createResult.value.groupId;
+
+
+    const aclResult = await fetchApi('/acl/group-role-rights', {
+      method: 'PUT',
+      body:
+        Array.from(Object.entries(roleRights())).map(
+          ([roleId, right]) => ({
+            groupId,
+            roleId: Number(roleId),
+            rights: right,
+          })
+        ),
+
+    });
+
+    if (aclResult.isErr()) {
+      alert(`Failed to set group permissions: ${aclResult.error.reason}`);
+
+    }
+
+
+    for (const channel of groupChannels()) {
+      const channelResult = await fetchApi('/channel', {
+        method: 'POST',
+        body: {
+          name: channel.name,
+          channel_id: groupId,
+          type: channel.type,
+        },
+      });
+
+      if (channelResult.isErr()) {
+        console.error(`Failed to create channel ${channel.name}:`, channelResult.error.reason);
+      }
+    }
+
+
+    modalDomain.open({ type: "close", id: 0 })
+
   };
 
   const tabItems = createMemo(() => [
@@ -236,8 +227,8 @@ const CreateGroupModal: Component = () => {
           <Button variant="secondary" onClick={() => modalDomain.open({ type: "close", id: 0 })}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isLoading()}>
-            {isLoading() ? "Creating..." : "Create Group"}
+          <Button onClick={handleSave} >
+            Create Group
           </Button>
         </div>
       </div>

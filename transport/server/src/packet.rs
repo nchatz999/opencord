@@ -98,6 +98,10 @@ impl FrameBuffer {
             return Err("Packet does not belong to this frame");
         }
         if packet.total_fragments != self.expected_fragments {
+            println!(
+                "{:?}  sfas {:?}",
+                packet.total_fragments, self.expected_fragments
+            );
             return Err("Inconsistent fragment count");
         }
         self.packets.insert(packet.fragment_number, packet);
@@ -369,7 +373,7 @@ impl FecEncoder {
 
         let ref_packet = match available_packets.first() {
             Some(p) => p,
-            None => return None, 
+            None => return None,
         };
 
         let missing_sequence_number = match fec_packet
@@ -378,7 +382,7 @@ impl FecEncoder {
             .find(|&&seq| !available_packets.iter().any(|p| p.sequence_number == seq))
         {
             Some(&seq) => seq,
-            None => return None, 
+            None => return None,
         };
 
         let mut recovered_data = fec_packet.fec_data.clone();
@@ -390,7 +394,6 @@ impl FecEncoder {
             }
         }
 
-        
         let seq_diff = missing_sequence_number.wrapping_sub(ref_packet.sequence_number);
         let fragment_number = ref_packet.fragment_number.wrapping_add(seq_diff as u16);
         let total_fragments = ref_packet.total_fragments;

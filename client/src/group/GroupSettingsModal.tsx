@@ -19,9 +19,6 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const { addToast } = useToaster()
   const user = userDomain.getCurrent()
 
-  if (!user) {
-    return null
-  }
   const [name, setName] = createSignal(props.group.groupName)
   const [isDeleting, setIsDeleting] = createSignal(false)
 
@@ -162,7 +159,6 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       return
     }
 
-    setIsDeleting(true)
     const result = await fetchApi<void>(`/group/${props.group.groupId}`, {
       method: 'DELETE'
     })
@@ -173,7 +169,6 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       return
     }
 
-    addToast(`Group "${name()}" deleted successfully!`, 'success')
     modalDomain.open({ type: "close", id: 0 })
   }
 

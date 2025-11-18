@@ -172,7 +172,8 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let event = EventPayload::VoipParticipantUpdated { user: participant };
 
-        self.notifier
+        let _ = self
+            .notifier
             .notify(ServerMessage::Control(
                 event,
                 ControlRoutingPolicy::ChannelRights {
@@ -236,7 +237,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn leave_voip(&self, user_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let participant = tx
+        let _ = tx
             .remove_participant(user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(

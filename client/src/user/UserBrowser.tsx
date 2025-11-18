@@ -6,7 +6,6 @@ import type { User } from "../model";
 
 export const UserBrowser: Component<{
   users: User[];
-  onUserClick: (user: any) => void;
 }> = (props) => {
   return (
     <div class="p-2">
@@ -18,7 +17,7 @@ export const UserBrowser: Component<{
 
       <For each={props.users}>
         {(user) => (
-          <UserEntry user={user} onClick={() => props.onUserClick(user)} />
+          <UserEntry user={user} />
         )}
       </For>
     </div>
