@@ -33,7 +33,7 @@ pub struct Invite {
     pub created_at: OffsetDateTime,
 }
 
-use crate::managers::{LockoutManager, PasswordValidationError, PasswordValidator};
+use crate::managers::{LockoutManager, PasswordValidator};
 
 use crate::error::DatabaseError;
 
@@ -314,7 +314,6 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     pub async fn logout(&self, user_id: i64, session_token: &str) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        println!("sadf edo asdfasf");
         tx.remove_user_session(session_token, user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
@@ -322,11 +321,10 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
                 session_token
             )))?;
 
-        println!("edo asdfasf");
         let _ = self
             .notifier
             .notify(ServerMessage::Command(
-                crate::webtransport::CommandPayload::Disconnect(user_id),
+                crate::webtransport::CommandPayload::Disconnect(user_id, session_token.to_string()),
             ))
             .await;
 

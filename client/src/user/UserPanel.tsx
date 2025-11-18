@@ -14,7 +14,7 @@ import {
   Wifi,
   Circle,
 } from 'lucide-solid'
-import { microphone, screenShare, camera, modalDomain, userDomain, voipDomain } from '../store'
+import { microphone, screenShare, camera, modalDomain, userDomain, voipDomain, outputManager } from '../store'
 import { fetchApi } from '../utils'
 import { UserStatusType } from '../model'
 import Button from '../components/Button'
@@ -290,8 +290,6 @@ const UserPanel: Component = () => {
           return 'text-yellow-500'
         case UserStatusType.DoNotDisturb:
           return 'text-red-500'
-        case UserStatusType.Invisible:
-          return 'text-gray-500'
         case UserStatusType.Offline:
           return 'text-gray-500'
         default:
@@ -309,8 +307,15 @@ const UserPanel: Component = () => {
       })
     }
 
-    const handleDeafenToggle = () => {
-      console.log('Toggle deafen - not implemented')
+    const handleDeafenToggle = async () => {
+      outputManager.setDeafened(!outputManager.getDeafened())
+      if (!voipDomain.getCurrentParticipant()) return
+      await fetchApi("/voip/deafen", {
+        method: "PUT",
+        body: {
+          deafen: outputManager.getDeafened()
+        }
+      })
 
     }
 
@@ -363,8 +368,11 @@ const UserPanel: Component = () => {
 
           <button
             onClick={handleDeafenToggle}
-            class="p-2 rounded transition-colors bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1]"
-            title="Deafen (Not implemented)"
+            class={`p-2 rounded transition-colors ${outputManager.getDeafened()
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : 'bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1]'
+              }`}
+            title={microphone.getMuted() ? 'Undeafen' : 'Deafen'}
           >
             <Headphones size={16} />
           </button>

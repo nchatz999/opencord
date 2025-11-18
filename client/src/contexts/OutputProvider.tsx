@@ -13,17 +13,28 @@ export class OutputManager {
   private setDevicesSignal: (devices: AudioOutputDevice[]) => void;
   private getSelectedDeviceSignal: () => AudioOutputDevice | null;
   private setSelectedDeviceSignal: (device: AudioOutputDevice | null) => void;
+  private getDeafenedSignal: () => boolean;
+  private setDeafenedSignal: (deafen: boolean) => void;
+
+  private gainNode: GainNode;
   private audioContext: AudioContext;
 
   constructor() {
     const [devices, setDevices] = createSignal<AudioOutputDevice[]>([]);
     const [selectedDevice, setSelectedDevice] = createSignal<AudioOutputDevice | null>(null);
+    const [deafened, setDeafened] = createSignal<boolean>(false);
 
     this.getDevicesSignal = devices;
     this.setDevicesSignal = setDevices;
     this.getSelectedDeviceSignal = selectedDevice;
     this.setSelectedDeviceSignal = setSelectedDevice;
+    this.getDeafenedSignal = deafened
+    this.setDeafenedSignal = setDeafened
+
     this.audioContext = voipDomain.getAudioContext();
+    this.gainNode = this.audioContext.createGain();
+    this.gainNode.connect(this.audioContext.destination);
+
 
 
     this.loadDevices();
@@ -69,6 +80,20 @@ export class OutputManager {
 
   getSelectedOutput(): AudioOutputDevice | null {
     return this.getSelectedDeviceSignal();
+  }
+
+  setDeafened(deafen: boolean) {
+
+    if (deafen) {
+      this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+    } else {
+      this.gainNode.gain.setValueAtTime(1, this.audioContext.currentTime);
+    }
+    this.setDeafenedSignal(deafen)
+  }
+
+  getDeafened(): boolean {
+    return this.getDeafenedSignal()
   }
 
   async setOutput(device: AudioOutputDevice): Promise<boolean> {

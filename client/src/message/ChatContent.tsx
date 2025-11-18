@@ -24,12 +24,9 @@ const ChatContent: Component = () => {
   let messagesEndRef: HTMLDivElement | undefined;
   let messagesContainerRef: HTMLDivElement | undefined;
 
-
   const [isLoadingMore, setIsLoadingMore] = createSignal(false);
 
-
   const { addToast } = useToaster();
-
 
   const ctx = createMemo(() => messageDomain.getContext());
 

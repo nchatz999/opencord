@@ -14,7 +14,6 @@ export const UserEntry: Component<{ user: User; onClick: () => void }> = (
     [UserStatusType.Online]: "bg-green-500",
     [UserStatusType.Away]: "bg-yellow-500",
     [UserStatusType.DoNotDisturb]: "bg-red-500",
-    [UserStatusType.Invisible]: "bg-gray-500",
     [UserStatusType.Offline]: "bg-gray-500",
     0: "bg-gray-500",
   };

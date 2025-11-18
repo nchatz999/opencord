@@ -80,7 +80,6 @@ export enum UserStatusType {
   Online = "Online",
   Away = "Away",
   DoNotDisturb = "DoNotDisturb",
-  Invisible = "Invisible",
   Offline = "Offline",
 }
 

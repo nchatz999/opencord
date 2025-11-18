@@ -21,7 +21,7 @@ import {
   Calendar,
   Settings,
 } from "lucide-solid";
-import { connection, microphone, modalDomain, outputManager, userDomain, camera, screenShare, resetStore } from "../store";
+import { connection, microphone, modalDomain, outputManager, userDomain, camera, screenShare, voipDomain } from "../store";
 import { Input } from "../components/Input";
 import Button from "../components/Button";
 import Select from "../components/Select";
@@ -32,7 +32,6 @@ import { fetchApi } from "../utils";
 import { clearSession, loadSession } from "../contexts/Session";
 import { UserStatusType } from "../model";
 import { useToaster } from "../components/Toaster";
-import { match } from "opencord-utils";
 import type { AudioOutputDevice } from "../contexts/OutputProvider";
 
 const UserSettingsModal: Component = () => {
@@ -60,7 +59,6 @@ const UserSettingsModal: Component = () => {
     { value: UserStatusType.Online, label: 'Online', color: 'text-green-500' },
     { value: UserStatusType.Away, label: 'Away', color: 'text-yellow-500' },
     { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-red-500' },
-    { value: UserStatusType.Invisible, label: 'Invisible', color: 'text-gray-500' },
     { value: UserStatusType.Offline, label: 'Offline', color: 'text-gray-500' },
   ];
 
@@ -83,6 +81,7 @@ const UserSettingsModal: Component = () => {
   };
 
   onMount(async () => {
+    await voipDomain.resume()
     loadSessions();
   });
 

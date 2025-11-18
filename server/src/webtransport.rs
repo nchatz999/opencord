@@ -8,8 +8,8 @@ use crate::{
 };
 use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub enum DomainError {
@@ -71,10 +71,9 @@ pub enum VoipRoutingPolicy {
 
 #[derive(Debug, Clone)]
 pub enum CommandPayload {
-    Connect(i64, mpsc::Sender<SubscriberMessage>), //comes from subscribers with token
-    Timeout(i64),                                  //when a subscriber times out
-    Disconnect(i64),                               // can come from endpoint  and subscriber
-    Remove(i64, String),
+    Connect(i64, mpsc::Sender<SubscriberMessage>, String, String), //comes from subscribers with token
+    Timeout(i64, String),                                          //when a subscriber times out
+    Disconnect(i64, String), // can come from endpoint  and subscriber
 }
 
 pub enum ServerMessage {
@@ -162,17 +161,6 @@ pub trait Repository: Send + Sync + Clone {
         user_id: i64,
     ) -> Result<Option<i64>, DatabaseError>;
 
-    async fn find_voip_participants_for_channel(
-        &self,
-        channel_id: i64,
-    ) -> Result<Vec<VoipParticipant>, DatabaseError>;
-
-    async fn find_voip_participant_for_dm(
-        &self,
-        user_id: i64,
-        recipient_id: i64,
-    ) -> Result<Option<VoipParticipant>, DatabaseError>;
-
     async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError>;
 
     async fn find_voip_participant(
@@ -227,27 +215,6 @@ impl Service {
     ) -> Result<Option<i64>, DomainError> {
         self.repository
             .find_user_group_rights(group_id, user_id)
-            .await
-            .map_err(DomainError::from)
-    }
-
-    pub async fn get_channel_voip_participants(
-        &self,
-        channel_id: i64,
-    ) -> Result<Vec<VoipParticipant>, DomainError> {
-        self.repository
-            .find_voip_participants_for_channel(channel_id)
-            .await
-            .map_err(DomainError::from)
-    }
-
-    pub async fn get_dm_voip_participant(
-        &self,
-        user_id: i64,
-        recipient_id: i64,
-    ) -> Result<Option<VoipParticipant>, DomainError> {
-        self.repository
-            .find_voip_participant_for_dm(user_id, recipient_id)
             .await
             .map_err(DomainError::from)
     }
@@ -333,59 +300,6 @@ impl Repository for Postgre {
         )
         .fetch_optional(&self.pool)
         .await?;
-        Ok(result)
-    }
-
-    async fn find_voip_participants_for_channel(
-        &self,
-        channel_id: i64,
-    ) -> Result<Vec<VoipParticipant>, DatabaseError> {
-        let results = sqlx::query_as!(
-            VoipParticipant,
-            r#"SELECT 
-                   vp.user_id, 
-                   vp.channel_id, 
-                   vp.recipient_id, 
-                   vp.local_deafen, 
-                   vp.local_mute, 
-                   vp.publish_screen, 
-                   vp.publish_camera, 
-                   vp.created_at
-               FROM voip_participants vp
-               WHERE vp.channel_id = $1"#,
-            channel_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(results)
-    }
-
-    async fn find_voip_participant_for_dm(
-        &self,
-        user_id: i64,
-        recipient_id: i64,
-    ) -> Result<Option<VoipParticipant>, DatabaseError> {
-        let result = sqlx::query_as!(
-            VoipParticipant,
-            r#"SELECT 
-                   vp.user_id, 
-                   vp.channel_id, 
-                   vp.recipient_id, 
-                   vp.local_deafen, 
-                   vp.local_mute, 
-                   vp.publish_screen, 
-                   vp.publish_camera, 
-                   vp.created_at
-               FROM voip_participants vp
-               WHERE (vp.user_id = $1 AND vp.recipient_id = $2)
-                  OR (vp.user_id = $2 AND vp.recipient_id = $1)"#,
-            user_id,
-            recipient_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
         Ok(result)
     }
 
@@ -484,6 +398,8 @@ impl Repository for Postgre {
 pub struct SubscriberHandler {
     user_id: i64,
     sender: mpsc::Sender<SubscriberMessage>,
+    session_token: String,
+    identifier: String,
 }
 
 impl SubscriberHandler {
@@ -497,27 +413,34 @@ impl SubscriberHandler {
 }
 
 struct SubscriberSession {
-    may_user_id: Option<i64>,
+    may_session: Option<Session>,
     observer_tx: mpsc::Sender<ServerMessage>,
     server_tx: mpsc::Sender<SubscriberMessage>,
     pub server_rx: mpsc::Receiver<SubscriberMessage>,
     service: Service,
     pub connection: Connection,
+    identifier: String,
 }
 
 impl SubscriberSession {
-    fn new(observer_tx: mpsc::Sender<ServerMessage>, service: Service, conn: Connection) -> Self {
+    fn new(
+        observer_tx: mpsc::Sender<ServerMessage>,
+        service: Service,
+        conn: Connection,
+        token: String,
+    ) -> Self {
         let (server_tx, server_rx): (
             mpsc::Sender<SubscriberMessage>,
             mpsc::Receiver<SubscriberMessage>,
         ) = mpsc::channel(10000);
         Self {
-            may_user_id: None,
+            may_session: None,
             observer_tx,
             server_tx,
             server_rx,
             service,
             connection: conn,
+            identifier: token,
         }
     }
 
@@ -583,19 +506,22 @@ impl SubscriberSession {
     }
 
     async fn handle_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
-        let user_id = self
-            .may_user_id
+        let user_session = self
+            .may_session
+            .clone()
             .ok_or_else(|| SessionError::BadRequest("No user authenticated".to_string()))?;
-        let session = self
+        let voip_session = self
             .service
-            .get_voip_participant(user_id)
+            .get_voip_participant(user_session.user_id)
             .await?
             .ok_or_else(|| SessionError::BadRequest("No active VoIP session".to_string()))?;
 
-        if let Some(channel_id) = session.channel_id {
-            self.route_to_channel(payload, channel_id, user_id).await;
-        } else if let Some(recipient_id) = session.recipient_id {
-            self.route_to_recipient(payload, recipient_id, user_id)
+        if let Some(channel_id) = voip_session.channel_id {
+            let _ = self
+                .route_to_channel(payload, channel_id, user_session.user_id)
+                .await;
+        } else if let Some(recipient_id) = voip_session.recipient_id {
+            self.route_to_recipient(payload, recipient_id, user_session.user_id)
                 .await;
         }
 
@@ -609,11 +535,13 @@ impl SubscriberSession {
         match payload {
             ControlPayload::Connect { token } => {
                 match self.service.authenticate_session(&token).await? {
-                    Some(session) => {
-                        self.may_user_id = Some(session.user_id);
+                    Some(ref session) => {
+                        self.may_session = Some(session.clone());
                         self.send_to_server(ServerMessage::Command(CommandPayload::Connect(
-                            session.user_id,
+                            session.clone().user_id,
                             self.server_tx.clone(),
+                            self.identifier.clone(),
+                            session.clone().session_token,
                         )))
                         .await;
                         self.send_to_connection(
@@ -643,15 +571,10 @@ impl SubscriberSession {
                     }
                 }
             }
-            ControlPayload::Answer { answer: anser } => Err(SessionError::BadRequest(
+            ControlPayload::Answer { answer } => Err(SessionError::BadRequest(
                 "Unexpected answer payload".to_string(),
             )),
             ControlPayload::Close { reason } => {
-                self.observer_tx
-                    .send(ServerMessage::Command(CommandPayload::Disconnect(
-                        self.may_user_id.unwrap(),
-                    )))
-                    .await;
                 return Err(SessionError::BadRequest("Session End".to_string()));
             }
         }
@@ -681,7 +604,7 @@ impl SubscriberSession {
                 .await;
                 Ok(())
             }
-            _ => Err(SessionError::BadRequest("no rights".to_string())),
+            _ => Err(SessionError::BadRequest("No rights".to_string())),
         }
     }
 
@@ -718,12 +641,12 @@ impl SubscriberSession {
     }
 
     async fn send_to_server(&mut self, payload: ServerMessage) {
-        self.observer_tx.send(payload).await;
+        let _ = self.observer_tx.send(payload).await;
     }
 }
 
 pub struct RealtimeServer {
-    observers: HashMap<String, SubscriberHandler>,
+    observers: Vec<SubscriberHandler>,
     service: Service,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
@@ -735,22 +658,36 @@ impl RealtimeServer {
             mpsc::channel(1000);
 
         Self {
-            observers: HashMap::new(),
+            observers: vec![],
             service: Service::new(repository),
             receiver: server_rx,
             sender: server_tx,
         }
     }
-    async fn handle_timeout(&mut self, user_id: i64) -> Result<(), ServerError> {
-        println!("handle timeout");
-        let _ = self
-            .handle_user_status_update(user_id, UserStatusType::Offline)
-            .await?;
 
-        let _ = self.handle_voip_participant_removal(user_id).await?;
-
+    fn count_user_sessions(&self, user_id: i64) -> i64 {
         self.observers
-            .retain(|_, subscriber| subscriber.user_id() != user_id);
+            .iter()
+            .filter(|u| u.user_id == user_id)
+            .count() as i64
+    }
+
+    async fn handle_timeout(
+        &mut self,
+        user_id: i64,
+        identifier: String,
+    ) -> Result<(), ServerError> {
+        self.observers
+            .retain(|subscriber| subscriber.identifier != identifier);
+
+        if self.count_user_sessions(user_id) == 0 {
+            let _ = self
+                .handle_user_status_update(user_id, UserStatusType::Offline)
+                .await?;
+
+            let _ = self.handle_voip_participant_removal(user_id).await?;
+        }
+
         Ok(())
     }
 
@@ -758,55 +695,43 @@ impl RealtimeServer {
         &mut self,
         user_id: i64,
         sender: mpsc::Sender<SubscriberMessage>,
+        session_token: String,
+        identifier: String,
     ) -> Result<(), ServerError> {
-        for (_, existing_subscriber) in &self.observers {
-            if existing_subscriber.user_id() == user_id {
-                existing_subscriber
-                    .send(SubscriberMessage::Close("New session started".to_string()))
-                    .await;
-            }
-        }
-
-        self.observers.retain(|_, sub| sub.user_id() != user_id);
         let _ = self
             .handle_user_status_update(user_id, UserStatusType::Online)
             .await;
-        let _ = self.handle_voip_participant_removal(user_id).await;
-        let subscriber = SubscriberHandler { user_id, sender };
-        self.observers
-            .insert(subscriber.user_id().to_string(), subscriber);
+        self.handle_voip_participant_removal(user_id).await?;
+        let subscriber = SubscriberHandler {
+            user_id,
+            sender,
+            identifier,
+            session_token,
+        };
+        self.observers.push(subscriber);
         Ok(())
     }
 
-    async fn handle_disconnect(&mut self, user_id: i64) -> Result<(), ServerError> {
-        self.handle_user_status_update(user_id, UserStatusType::Offline)
-            .await?;
-
-        self.handle_voip_participant_removal(user_id).await?;
-
-        if let Some(observer) = self.observers.get(&user_id.to_string()) {
-            observer
-                .send(SubscriberMessage::Close("disconrect".to_string()))
+    async fn handle_disconnect(
+        &mut self,
+        user_id: i64,
+        session_token: String,
+    ) -> Result<(), ServerError> {
+        for o in self
+            .observers
+            .iter()
+            .filter(|o| o.session_token == session_token)
+        {
+            o.send(SubscriberMessage::Close("disconnect".to_string()))
                 .await;
         }
-
         self.observers
-            .retain(|_, subscriber| subscriber.user_id() != user_id);
-        Ok(())
-    }
-
-    async fn handle_removal(&mut self, user_id: i64, reason: String) -> Result<(), ServerError> {
-        self.handle_user_status_update(user_id, UserStatusType::Offline)
-            .await?;
-
-        self.handle_voip_participant_removal(user_id).await?;
-
-        if let Some(observer) = self.observers.get(&user_id.to_string()) {
-            observer.send(SubscriberMessage::Close(reason)).await;
+            .retain(|subscriber| subscriber.session_token != session_token);
+        if self.count_user_sessions(user_id) == 0 {
+            self.handle_user_status_update(user_id, UserStatusType::Offline)
+                .await?;
+            self.handle_voip_participant_removal(user_id).await?;
         }
-
-        self.observers
-            .retain(|_, subscriber| subscriber.user_id() != user_id);
         Ok(())
     }
 
@@ -818,6 +743,7 @@ impl RealtimeServer {
         self.route_voip(payload, policy).await?;
         Ok(())
     }
+
     async fn handle_control(
         &self,
         payload: EventPayload,
@@ -829,14 +755,16 @@ impl RealtimeServer {
 
     async fn handle_command(&mut self, payload: CommandPayload) -> Result<(), ServerError> {
         match payload {
-            CommandPayload::Connect(user_id, sender) => {
-                self.handle_connect(user_id, sender).await?
+            CommandPayload::Connect(user_id, sender, identifier, session_token) => {
+                self.handle_connect(user_id, sender, session_token, identifier)
+                    .await?
             }
-            CommandPayload::Timeout(user_id) => {
-                self.handle_timeout(user_id).await?;
+            CommandPayload::Timeout(user_id, token) => {
+                self.handle_timeout(user_id, token).await?;
             }
-            CommandPayload::Disconnect(user_id) => self.handle_disconnect(user_id).await?,
-            CommandPayload::Remove(user_id, reason) => self.handle_removal(user_id, reason).await?,
+            CommandPayload::Disconnect(user_id, session_token) => {
+                self.handle_disconnect(user_id, session_token).await?
+            }
         }
         Ok(())
     }
@@ -846,7 +774,7 @@ impl RealtimeServer {
         payload: EventPayload,
         policy: ControlRoutingPolicy,
     ) -> Result<(), ServerError> {
-        for (_, subscriber) in &self.observers {
+        for subscriber in &self.observers {
             let can_receive = match &policy {
                 ControlRoutingPolicy::GroupRights {
                     group_id,
@@ -903,7 +831,7 @@ impl RealtimeServer {
         event: VoipPayload,
         policy: VoipRoutingPolicy,
     ) -> Result<(), ServerError> {
-        for (_, subscriber) in &self.observers {
+        for subscriber in &self.observers {
             if let Some(participant) = self
                 .service
                 .get_voip_participant(subscriber.user_id())
@@ -1025,8 +953,8 @@ impl RealtimeServer {
         service: Service,
         observer_tx: mpsc::Sender<ServerMessage>,
     ) {
-        let mut session = SubscriberSession::new(observer_tx, service, connection);
-
+        let session_token = Uuid::new_v4().to_string();
+        let mut session = SubscriberSession::new(observer_tx, service, connection, session_token);
         loop {
             tokio::select! {
                 Some(msg) = session.server_rx.recv() => {
@@ -1045,10 +973,10 @@ impl RealtimeServer {
                             }
                         }
                         None =>{
-                            if let Some(user_id) = session.may_user_id {
-                               session
+                            if let Some(ref user_session) = session.may_session{
+                               let _ = session
                                    .observer_tx
-                                   .send(ServerMessage::Command(CommandPayload::Timeout(user_id)))
+                                   .send(ServerMessage::Command(CommandPayload::Timeout(user_session.user_id, session.identifier.clone())))
                                    .await;
                             }
 

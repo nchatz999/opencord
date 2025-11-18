@@ -34,7 +34,6 @@ pub enum UserStatusType {
     Online,
     Away,
     DoNotDisturb,
-    Invisible,
     Offline,
 }
 
