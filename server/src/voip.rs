@@ -387,6 +387,26 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         Ok(())
     }
+
+    pub async fn subscribe_to_media(
+        &self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<(), DomainError> {
+        let mut tx = self.repository.begin().await?;
+
+        let subscription = tx
+            .subscribe_to_media(user_id, publisher_id, media_type)
+            .await?
+            .ok_or(DomainError::BadRequest(
+                "Cannot subscribe to media - participants not in same session".to_string(),
+            ))?;
+
+        self.repository.commit(tx).await?;
+
+        Ok(())
+    }
 }
 
 use crate::db::Postgre;
@@ -690,6 +710,13 @@ pub struct SetPublishCameraRequest {
     pub publish: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscribeToMediaRequest {
+    pub publisher_id: i64,
+    pub media_type: MediaType,
+}
+
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
@@ -716,6 +743,7 @@ pub fn voip_routes(
         .routes(routes!(set_local_deafen_handler))
         .routes(routes!(set_publish_screen_handler))
         .routes(routes!(set_publish_camera_handler))
+        .routes(routes!(subscribe_to_media_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(voip_service)
 }
@@ -902,6 +930,30 @@ async fn set_publish_camera_handler(
 ) -> Result<(), ApiError> {
     service
         .set_publish_camera(user_id, payload.publish)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(())
+}
+
+#[utoipa::path(
+    post,
+    tag = "voip",
+    path = "/subscribe",
+    request_body = SubscribeToMediaRequest,
+    responses(
+        (status = 200, description = "Successfully subscribed to media"),
+        (status = 400, description = "Bad request - cannot subscribe", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn subscribe_to_media_handler(
+    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
+    Extension(user_id): Extension<i64>,
+    Json(payload): Json<SubscribeToMediaRequest>,
+) -> Result<(), ApiError> {
+    service
+        .subscribe_to_media(user_id, payload.publisher_id, payload.media_type)
         .await
         .map_err(ApiError::from)?;
     Ok(())
