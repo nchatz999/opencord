@@ -19,7 +19,7 @@ pub struct VoipParticipant {
     pub created_at: OffsetDateTime,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema)]
 #[sqlx(type_name = "media_type", rename_all = "lowercase")]
 pub enum MediaType {
     Screen,
