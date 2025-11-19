@@ -401,9 +401,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "user_id" => {
-                        DomainError::BadRequest(format!("User {} not found", user_id))
-                    }
+                    "user_id" => DomainError::BadRequest(format!("User {} not found", user_id)),
                     "publisher_id" => {
                         DomainError::BadRequest(format!("Publisher {} not found", publisher_id))
                     }
@@ -416,6 +414,24 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))?;
 
         self.repository.commit(tx).await?;
+
+        let event = EventPayload::MediaSubscription { subscription };
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event.clone(),
+                ControlRoutingPolicy::User { user_id },
+            ))
+            .await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::User {
+                    user_id: publisher_id,
+                },
+            ))
+            .await;
 
         Ok(())
     }
