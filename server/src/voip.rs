@@ -398,7 +398,19 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         let subscription = tx
             .subscribe_to_media(user_id, publisher_id, media_type)
-            .await?
+            .await
+            .map_err(|e| match &e {
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "user_id" => {
+                        DomainError::BadRequest(format!("User {} not found", user_id))
+                    }
+                    "publisher_id" => {
+                        DomainError::BadRequest(format!("Publisher {} not found", publisher_id))
+                    }
+                    _ => DomainError::InternalError(e),
+                },
+                _ => DomainError::InternalError(e),
+            })?
             .ok_or(DomainError::BadRequest(
                 "Cannot subscribe to media - participants not in same session".to_string(),
             ))?;
