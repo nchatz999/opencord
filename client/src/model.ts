@@ -21,6 +21,12 @@ export enum VoipDataType {
   ScreenSound = "ScreenSound"
 }
 
+export enum MediaType {
+  Screen = "screen",
+  Camera = "camera", 
+  Audio = "audio",
+}
+
 
 export interface Channel {
   channelId: number;
@@ -108,6 +114,13 @@ export interface GroupRoleRights {
   groupId: number;
   roleId: number;
   rights: number;
+}
+
+export interface Subscription {
+  userId: number;
+  publisherId: number;
+  mediaType: MediaType;
+  createdAt: string;
 }
 
 export type VoipDataMessage =

@@ -10,6 +10,8 @@ import {
   UserStatusType,
   type GroupRoleRights,
   type VoipParticipantWithUser,
+  type Subscription,
+  type MediaType,
 } from './model'
 import { fetchApi } from './utils'
 import { Microphone } from './contexts/MicrophoneProvider'
@@ -62,6 +64,7 @@ export interface State {
   speakingStates: Record<number, boolean>
   audio: AudioContext
   subscribedStreams: number[]
+  subscriptions: Subscription[]
   groupRoleRights: GroupRoleRights[]
 
   eventLog: EventLogEntry[]
@@ -94,6 +97,7 @@ const initialState: State = {
   channelsVisited: [],
   dmsVisited: [],
   subscribedStreams: [],
+  subscriptions: [],
 }
 
 export type VoipType =
@@ -704,6 +708,15 @@ export class VoipDomain {
 
   getAudioContext(): AudioContext {
     return state.audio
+  }
+
+  isSubscribedToMedia(publisherId: number, mediaType: MediaType): boolean {
+    const currentUserId = userDomain.getCurrent().userId;
+    return state.subscriptions?.some(
+      sub => sub.userId === currentUserId && 
+             sub.publisherId === publisherId && 
+             sub.mediaType === mediaType
+    ) || false;
   }
 
 
