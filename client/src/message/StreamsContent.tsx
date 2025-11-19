@@ -42,18 +42,14 @@ const StreamsContent: Component = () => {
   };
 
   const toggleSubscription = async (publisherId: number, mediaType: MediaType) => {
-    try {
-      await fetchApi('/voip/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          publisherId,
-          mediaType
-        })
-      });
-    } catch (error) {
-      console.error('Failed to toggle subscription:', error);
-    }
+    await fetchApi('/voip/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        publisherId,
+        mediaType
+      })
+    })
   };
 
   const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
@@ -182,8 +178,8 @@ const StreamsContent: Component = () => {
                               onClick={() => toggleSubscription(participant.user.userId, "camera" as MediaType)}
                               class="p-1 rounded-full bg-gray-600 bg-opacity-80 hover:bg-opacity-100 transition-all"
                             >
-                              {voipDomain.isSubscribedToMedia(participant.user.userId, "camera" as MediaType) ? 
-                                <Eye size={12} class="text-white" /> : 
+                              {voipDomain.isSubscribedToMedia(participant.user.userId, "camera" as MediaType) ?
+                                <Eye size={12} class="text-white" /> :
                                 <EyeOff size={12} class="text-white" />
                               }
                             </button>
@@ -241,8 +237,8 @@ const StreamsContent: Component = () => {
                               onClick={() => toggleSubscription(participant.user.userId, "screen" as MediaType)}
                               class="p-1 rounded-full bg-gray-600 bg-opacity-80 hover:bg-opacity-100 transition-all"
                             >
-                              {voipDomain.isSubscribedToMedia(participant.user.userId, "screen" as MediaType) ? 
-                                <Eye size={12} class="text-white" /> : 
+                              {voipDomain.isSubscribedToMedia(participant.user.userId, "screen" as MediaType) ?
+                                <Eye size={12} class="text-white" /> :
                                 <EyeOff size={12} class="text-white" />
                               }
                             </button>
