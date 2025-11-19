@@ -719,6 +719,42 @@ export class VoipDomain {
     ) || false;
   }
 
+  addSubscription(subscription: Subscription): void {
+    setState(
+      'subscriptions',
+      produce(subscriptions => {
+        const exists = subscriptions.some(
+          sub => sub.userId === subscription.userId && 
+                 sub.publisherId === subscription.publisherId && 
+                 sub.mediaType === subscription.mediaType
+        );
+        if (!exists) {
+          subscriptions.push(subscription);
+        }
+      })
+    );
+  }
+
+  removeSubscription(userId: number, publisherId: number, mediaType: MediaType): void {
+    setState(
+      'subscriptions',
+      produce(subscriptions => {
+        const index = subscriptions.findIndex(
+          sub => sub.userId === userId && 
+                 sub.publisherId === publisherId && 
+                 sub.mediaType === mediaType
+        );
+        if (index !== -1) {
+          subscriptions.splice(index, 1);
+        }
+      })
+    );
+  }
+
+  replaceAllSubscriptions(subscriptions: Subscription[]): void {
+    setState('subscriptions', subscriptions);
+  }
+
 
   list(): VoipParticipantWithUser[] {
     return state.voipState.flatMap((participant) => {
@@ -973,6 +1009,17 @@ export function handleServerEvent(event: EventPayload): void {
   logEvent(event.type, event);
 
   switch (event.type) {
+    case 'mediaSubscription':
+      voipDomain.addSubscription(event.subscription);
+      break;
+
+    case 'mediaUnsubscription':
+      voipDomain.removeSubscription(
+        event.subscription.userId, 
+        event.subscription.publisherId, 
+        event.subscription.mediaType
+      );
+      break;
     case 'channelUpdated':
       channelDomain.update(event.channel.channelId, event.channel);
       break;
@@ -1112,6 +1159,7 @@ export const getInitialData = async () => {
       groupRightsResult,
       usersResult,
       voipStatusResult,
+      subscriptionsResult,
     ] = await Promise.all([
       fetchApi<Group[]>('/group', { method: 'GET' }),
       fetchApi<Channel[]>('/channel', { method: 'GET' }),
@@ -1119,9 +1167,10 @@ export const getInitialData = async () => {
       fetchApi<GroupRoleRights[]>('/acl/group-role-rights', { method: 'GET' }),
       fetchApi<User[]>('/user', { method: 'GET' }),
       fetchApi<VoipParticipant[]>('/voip/participants', { method: 'GET' }),
+      fetchApi<Subscription[]>('/voip/subscriptions', { method: 'GET' }),
     ])
 
-    if (!groupsResult.ok || !channelsResult.ok || !rolesResult.ok || !usersResult.ok || !groupRightsResult.ok || !voipStatusResult.ok) {
+    if (!groupsResult.ok || !channelsResult.ok || !rolesResult.ok || !usersResult.ok || !groupRightsResult.ok || !voipStatusResult.ok || !subscriptionsResult.ok) {
       userDomain.setAppState({ type: 'unauthenticated' });
       return;
     }
@@ -1132,6 +1181,7 @@ export const getInitialData = async () => {
     userDomain.replaceAll(usersResult.value)
     aclDomain.replaceAll(groupRightsResult.value)
     voipDomain.replaceAll(voipStatusResult.value)
+    voipDomain.replaceAllSubscriptions(subscriptionsResult.value)
   } catch (error) {
     userDomain.setAppState({ type: 'unauthenticated' });
   }

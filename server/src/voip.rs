@@ -166,6 +166,18 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         Ok(participants)
     }
 
+    pub async fn get_voip_subscriptions(
+        &self,
+        requesting_user_id: i64,
+    ) -> Result<Vec<Subscription>, DomainError> {
+        let subscriptions = self
+            .repository
+            .find_voip_subscriptions(requesting_user_id)
+            .await?;
+
+        Ok(subscriptions)
+    }
+
     pub async fn join_channel_voip(
         &self,
         user_id: i64,
@@ -857,6 +869,7 @@ pub fn voip_routes(
         .routes(routes!(set_publish_camera_handler))
         .routes(routes!(subscribe_to_media_handler))
         .routes(routes!(unsubscribe_from_media_handler))
+        .routes(routes!(get_voip_subscriptions_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(voip_service)
 }
@@ -1094,4 +1107,25 @@ async fn unsubscribe_from_media_handler(
         .await
         .map_err(ApiError::from)?;
     Ok(())
+}
+
+#[utoipa::path(
+    get,
+    tag = "voip",
+    path = "/subscriptions",
+    responses(
+        (status = 200, description = "Successfully retrieved VoIP subscriptions", body = Vec<Subscription>),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn get_voip_subscriptions_handler(
+    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
+    Extension(user_id): Extension<i64>,
+) -> Result<Json<Vec<Subscription>>, ApiError> {
+    let subscriptions = service
+        .get_voip_subscriptions(user_id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(subscriptions))
 }

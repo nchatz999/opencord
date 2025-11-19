@@ -42,14 +42,25 @@ const StreamsContent: Component = () => {
   };
 
   const toggleSubscription = async (publisherId: number, mediaType: MediaType) => {
-    await fetchApi('/voip/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        publisherId,
-        mediaType
-      })
-    })
+    try {
+      const isCurrentlySubscribed = voipDomain.isSubscribedToMedia(publisherId, mediaType);
+      const endpoint = isCurrentlySubscribed ? '/voip/unsubscribe' : '/voip/subscribe';
+      
+      const result = await fetchApi(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          publisherId,
+          mediaType
+        })
+      });
+
+      if (!result.ok) {
+        console.error('Failed to toggle subscription:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to toggle subscription:', error);
+    }
   };
 
   const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
