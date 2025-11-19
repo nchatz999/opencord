@@ -1,9 +1,10 @@
 import type { Component } from "solid-js";
 import { For, Show } from "solid-js";
 
-import { Camera, Monitor, Users, Video, Volume2 } from "lucide-solid";
+import { Camera, Monitor, Users, Video, Volume2, Eye, EyeOff } from "lucide-solid";
 import { voipDomain, messageDomain } from "../store";
-import type { VoipParticipantWithUser } from "../model";
+import type { VoipParticipantWithUser, MediaType } from "../model";
+import { fetchApi } from "../utils";
 import ContextMenu from "../components/ContextMenu";
 import type { ContextMenuItem } from "../components/ContextMenu";
 import Slider from "../components/Slider";
@@ -38,6 +39,21 @@ const StreamsContent: Component = () => {
     if (totalStreams <= 4) return "grid-cols-2";
     if (totalStreams <= 6) return "grid-cols-3";
     return "grid-cols-4";
+  };
+
+  const toggleSubscription = async (publisherId: number, mediaType: MediaType) => {
+    try {
+      await fetchApi('/voip/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          publisherId,
+          mediaType
+        })
+      });
+    } catch (error) {
+      console.error('Failed to toggle subscription:', error);
+    }
   };
 
   const createVolumeMenuItems = (userId: number): ContextMenuItem[] => {
@@ -162,6 +178,15 @@ const StreamsContent: Component = () => {
                             <div class="p-1 rounded-full bg-blue-500 bg-opacity-80">
                               <Camera size={12} class="text-white" />
                             </div>
+                            <button
+                              onClick={() => toggleSubscription(participant.user.userId, "camera" as MediaType)}
+                              class="p-1 rounded-full bg-gray-600 bg-opacity-80 hover:bg-opacity-100 transition-all"
+                            >
+                              {voipDomain.isSubscribedToMedia(participant.user.userId, "camera" as MediaType) ? 
+                                <Eye size={12} class="text-white" /> : 
+                                <EyeOff size={12} class="text-white" />
+                              }
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -212,6 +237,15 @@ const StreamsContent: Component = () => {
                                 <Volume2 size={12} class="text-white" />
                               </div>
                             </Show>
+                            <button
+                              onClick={() => toggleSubscription(participant.user.userId, "screen" as MediaType)}
+                              class="p-1 rounded-full bg-gray-600 bg-opacity-80 hover:bg-opacity-100 transition-all"
+                            >
+                              {voipDomain.isSubscribedToMedia(participant.user.userId, "screen" as MediaType) ? 
+                                <Eye size={12} class="text-white" /> : 
+                                <EyeOff size={12} class="text-white" />
+                              }
+                            </button>
                           </div>
                         </div>
 
