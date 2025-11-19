@@ -1,6 +1,7 @@
 use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 use serde::{Deserialize, Serialize};
+use sqlx::Type;
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 
@@ -15,6 +16,22 @@ pub struct VoipParticipant {
     pub publish_screen: bool,
     pub publish_camera: bool,
     #[serde(with = "time::serde::iso8601")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "media_type", rename_all = "lowercase")]
+pub enum MediaType {
+    Screen,
+    Camera,
+    Audio,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Subscription {
+    pub user_id: i64,
+    pub publisher_id: i64,
+    pub media_type: MediaType,
     pub created_at: OffsetDateTime,
 }
 
@@ -48,6 +65,13 @@ pub trait VoipTransaction: Send + Sync {
         local_mute: bool,
         local_deafen: bool,
     ) -> Result<VoipParticipant, DatabaseError>;
+
+    async fn subscribe_to_media(
+        &mut self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<Option<Subscription>, DatabaseError>;
 
     async fn local_mute(
         &mut self,
@@ -92,6 +116,11 @@ pub trait VoipRepository: Send + Sync + Clone {
         &self,
         requesting_user_id: i64,
     ) -> Result<Vec<VoipParticipant>, DatabaseError>;
+
+    async fn find_voip_subscriptions(
+        &self,
+        requesting_user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError>;
 
     async fn find_user_channel_rights(
         &self,
@@ -412,6 +441,41 @@ impl VoipTransaction for PgVoipTransaction {
         Ok(participant)
     }
 
+    async fn subscribe_to_media(
+        &mut self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<Option<Subscription>, DatabaseError> {
+        let subscription = sqlx::query_as!(
+            Subscription,
+            r#"INSERT INTO subscriptions (user_id, publisher_id, media_type)
+            SELECT $1, $2, $3
+            WHERE EXISTS (
+                SELECT 1 
+                FROM voip_participants subscriber
+                JOIN voip_participants publisher ON (
+                    -- Same channel
+                    (subscriber.channel_id = publisher.channel_id 
+                     AND subscriber.channel_id IS NOT NULL)
+                    OR
+                    -- Private call (bidirectional)
+                    (subscriber.recipient_id = publisher.user_id 
+                     AND publisher.recipient_id = subscriber.user_id)
+                )
+                WHERE subscriber.user_id = $1 
+                    AND publisher.user_id = $2
+            )
+            RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
+            user_id,
+            publisher_id,
+            media_type as MediaType
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+
+        Ok(subscription)
+    }
     async fn local_mute(
         &mut self,
         user_id: i64,
@@ -547,6 +611,22 @@ impl VoipRepository for Postgre {
         .fetch_all(&self.pool)
         .await?;
 
+        Ok(results)
+    }
+
+    async fn find_voip_subscriptions(
+        &self,
+        requesting_user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError> {
+        let results = sqlx::query_as!(
+            Subscription,
+            r#"SELECT user_id, publisher_id, media_type as "media_type: MediaType", created_at
+            FROM subscriptions
+            WHERE user_id = $1 OR publisher_id = $1"#,
+            requesting_user_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
         Ok(results)
     }
 
