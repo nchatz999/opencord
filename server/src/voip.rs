@@ -73,6 +73,13 @@ pub trait VoipTransaction: Send + Sync {
         media_type: MediaType,
     ) -> Result<Option<Subscription>, DatabaseError>;
 
+    async fn unsubscribe_from_media(
+        &mut self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<Option<Subscription>, DatabaseError>;
+
     async fn local_mute(
         &mut self,
         user_id: i64,
@@ -435,6 +442,54 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         Ok(())
     }
+
+    pub async fn unsubscribe_from_media(
+        &self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<(), DomainError> {
+        let mut tx = self.repository.begin().await?;
+
+        let subscription = tx
+            .unsubscribe_from_media(user_id, publisher_id, media_type)
+            .await
+            .map_err(|e| match &e {
+                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
+                    "user_id" => DomainError::BadRequest(format!("User {} not found", user_id)),
+                    "publisher_id" => {
+                        DomainError::BadRequest(format!("Publisher {} not found", publisher_id))
+                    }
+                    _ => DomainError::InternalError(e),
+                },
+                _ => DomainError::InternalError(e),
+            })?
+            .ok_or(DomainError::BadRequest(
+                "Subscription not found".to_string(),
+            ))?;
+
+        self.repository.commit(tx).await?;
+
+        let event = EventPayload::MediaUnsubscription { subscription };
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event.clone(),
+                ControlRoutingPolicy::User { user_id },
+            ))
+            .await;
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::User {
+                    user_id: publisher_id,
+                },
+            ))
+            .await;
+
+        Ok(())
+    }
 }
 
 use crate::db::Postgre;
@@ -524,6 +579,28 @@ impl VoipTransaction for PgVoipTransaction {
 
         Ok(subscription)
     }
+
+    async fn unsubscribe_from_media(
+        &mut self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<Option<Subscription>, DatabaseError> {
+        let subscription = sqlx::query_as!(
+            Subscription,
+            r#"DELETE FROM subscriptions
+            WHERE user_id = $1 AND publisher_id = $2 AND media_type = $3
+            RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
+            user_id,
+            publisher_id,
+            media_type as MediaType
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+
+        Ok(subscription)
+    }
+
     async fn local_mute(
         &mut self,
         user_id: i64,
@@ -745,6 +822,13 @@ pub struct SubscribeToMediaRequest {
     pub media_type: MediaType,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnsubscribeFromMediaRequest {
+    pub publisher_id: i64,
+    pub media_type: MediaType,
+}
+
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
@@ -772,6 +856,7 @@ pub fn voip_routes(
         .routes(routes!(set_publish_screen_handler))
         .routes(routes!(set_publish_camera_handler))
         .routes(routes!(subscribe_to_media_handler))
+        .routes(routes!(unsubscribe_from_media_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(voip_service)
 }
@@ -982,6 +1067,30 @@ async fn subscribe_to_media_handler(
 ) -> Result<(), ApiError> {
     service
         .subscribe_to_media(user_id, payload.publisher_id, payload.media_type)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(())
+}
+
+#[utoipa::path(
+    post,
+    tag = "voip",
+    path = "/unsubscribe",
+    request_body = UnsubscribeFromMediaRequest,
+    responses(
+        (status = 200, description = "Successfully unsubscribed from media"),
+        (status = 400, description = "Bad request - subscription not found", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn unsubscribe_from_media_handler(
+    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
+    Extension(user_id): Extension<i64>,
+    Json(payload): Json<UnsubscribeFromMediaRequest>,
+) -> Result<(), ApiError> {
+    service
+        .unsubscribe_from_media(user_id, payload.publisher_id, payload.media_type)
         .await
         .map_err(ApiError::from)?;
     Ok(())
