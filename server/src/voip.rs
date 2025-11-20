@@ -27,7 +27,7 @@ pub enum MediaType {
     Audio,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Subscription {
     pub user_id: i64,
     pub publisher_id: i64,
@@ -482,7 +482,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = EventPayload::MediaUnsubscription { subscription };
+        let event = EventPayload::MediaSubscription { subscription };
         let _ = self
             .notifier
             .notify(ServerMessage::Control(
@@ -570,11 +570,9 @@ impl VoipTransaction for PgVoipTransaction {
                 SELECT 1 
                 FROM voip_participants subscriber
                 JOIN voip_participants publisher ON (
-                    -- Same channel
                     (subscriber.channel_id = publisher.channel_id 
                      AND subscriber.channel_id IS NOT NULL)
                     OR
-                    -- Private call (bidirectional)
                     (subscriber.recipient_id = publisher.user_id 
                      AND publisher.recipient_id = subscriber.user_id)
                 )

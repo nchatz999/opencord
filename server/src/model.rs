@@ -7,7 +7,7 @@ use crate::{
     message::{File, MessageType},
     role::Role,
     user::{User, UserStatusType},
-    voip::VoipParticipant,
+    voip::{Subscription, VoipParticipant},
     webtransport::VoipDataType,
 };
 
@@ -99,6 +99,11 @@ pub enum EventPayload {
     #[serde(rename = "groupHide")]
     #[serde(rename_all = "camelCase")]
     GroupHide { group_id: i64 },
+
+    #[serde(rename = "mediaSubscription")]
+    #[serde(rename_all = "camelCase")]
+    MediaSubscription { subscription: Subscription },
+
     #[serde(rename = "voipData")]
     #[serde(rename_all = "camelCase")]
     VoIPData {

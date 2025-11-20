@@ -118,14 +118,14 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
     }
 
     pub async fn get_role(&self, role_id: i64) -> Result<Role, DomainError> {
-        let role_data = self
-            .repository
-            .find_by_id(role_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!(
-                "Role {} not found",
-                role_id
-            )))?;
+        let role_data =
+            self.repository
+                .find_by_id(role_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Role {} not found",
+                    role_id
+                )))?;
 
         Ok(role_data)
     }

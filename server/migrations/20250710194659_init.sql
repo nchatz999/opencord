@@ -188,6 +188,49 @@ CREATE TABLE voip_participants (
     CHECK ( (channel_id IS NOT NULL AND recipient_id IS NULL) OR (channel_id IS NULL AND recipient_id IS NOT NULL) )
 );
 
+
+-- Create ENUM for media types
+CREATE TYPE media_type AS ENUM ('screen', 'camera', 'audio');
+
+-- Subscriptions table
+CREATE TABLE subscriptions(
+    user_id BIGINT NOT NULL,
+    publisher_id BIGINT NOT NULL,
+    media_type media_type NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, publisher_id, media_type),
+    FOREIGN KEY (user_id) REFERENCES voip_participants(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (publisher_id) REFERENCES voip_participants(user_id) ON DELETE CASCADE
+);
+
+-- Function to clean up subscriptions when publishing stops
+CREATE OR REPLACE FUNCTION cleanup_subscriptions_on_publish_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If publish_screen changed from TRUE to FALSE
+    IF OLD.publish_screen = TRUE AND NEW.publish_screen = FALSE THEN
+        DELETE FROM subscriptions 
+        WHERE publisher_id = NEW.user_id 
+        AND media_type = 'screen';
+    END IF;
+    
+    -- If publish_camera changed from TRUE to FALSE
+    IF OLD.publish_camera = TRUE AND NEW.publish_camera = FALSE THEN
+        DELETE FROM subscriptions 
+        WHERE publisher_id = NEW.user_id 
+        AND media_type = 'camera';
+    END IF;
+    
+    -- If local_mute changed from FALSE to TRUE (stops publishing audio)
+    IF OLD.local_mute = FALSE AND NEW.local_mute = TRUE THEN
+        DELETE FROM subscriptions 
+        WHERE publisher_id = NEW.user_id 
+        AND media_type = 'audio';
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 -- Indexes for VoIP participants
 CREATE INDEX idx_voip_participants_channel ON voip_participants(channel_id);
 CREATE INDEX idx_voip_participants_recipient ON voip_participants(recipient_id);
