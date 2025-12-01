@@ -1,4 +1,4 @@
-use crate::auth::AuthRepository;
+use crate::auth::{AuthRepository, Session};
 use crate::managers::RateLimiter;
 use axum::{
     extract::{Request, State},
@@ -17,7 +17,7 @@ impl<T: AuthRepository> AuthorizeService<T> {
         Self { auth_repo }
     }
 
-    pub async fn validate_session(&self, session_token: &str) -> Result<i64, StatusCode> {
+    pub async fn validate_session(&self, session_token: &str) -> Result<Session, StatusCode> {
         let result = self
             .auth_repo
             .find_session(session_token)
@@ -25,7 +25,7 @@ impl<T: AuthRepository> AuthorizeService<T> {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match result {
-            Some(row) => Ok(row.user_id),
+            Some(session) => Ok(session),
             None => Err(StatusCode::UNAUTHORIZED),
         }
     }
@@ -73,18 +73,14 @@ pub async fn authorize<T: AuthRepository + Clone + Send + Sync + 'static>(
 ) -> Result<Response, StatusCode> {
     let headers = request.headers();
 
-    
-    let session_id = auth_service
+    let session_token = auth_service
         .extract_session_from_headers(headers)
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    println!("{session_id}");
-    
-    let user_id = auth_service.validate_session(&session_id).await?;
 
-    
-    request.extensions_mut().insert(user_id);
+    let session = auth_service.validate_session(&session_token).await?;
 
-    println!("{user_id}");
+    request.extensions_mut().insert(session);
+
     Ok(next.run(request).await)
 }
 

@@ -44,6 +44,7 @@ pub struct UserStatus {
     pub status: UserStatusType,
 }
 
+use crate::auth::Session;
 use crate::managers::{FileError, LocalFileManager};
 use crate::middleware::{AuthorizeService, authorize};
 
@@ -112,7 +113,7 @@ pub trait UserRepository: Send + Sync + Clone {
     async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 use base64::{Engine as _, engine::general_purpose};
@@ -120,18 +121,20 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct UserService<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> {
+pub struct UserService<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager> {
     repository: R,
     file_manager: F,
     notifier: N,
+    logger: G,
 }
 
-impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserService<R, F, N> {
-    pub fn new(repository: R, file_manager: F, notifier: N) -> Self {
+impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager> UserService<R, F, N, G> {
+    pub fn new(repository: R, file_manager: F, notifier: N, logger: G) -> Self {
         Self {
             repository,
             file_manager,
             notifier,
+            logger,
         }
     }
 
@@ -140,6 +143,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         user_id: i64,
         new_role_id: i64,
         requester_user_id: i64,
+        session_id: i64,
     ) -> Result<User, DomainError> {
         let mut tx = self.repository.begin().await?;
 
@@ -189,6 +193,11 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("User role updated: user_id={}, session_id={}, target_user_id={}, new_role_id={}", requester_user_id, session_id, user_id, new_role_id),
+            "user".to_string(),
+        ).await;
+
         Ok(updated_user)
     }
 
@@ -196,6 +205,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         &self,
         user_id: i64,
         requester_id: i64,
+        session_id: i64,
         avatar_data: NewAvatarRequest,
     ) -> Result<User, DomainError> {
         if user_id != requester_id {
@@ -247,6 +257,11 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("User avatar updated: user_id={}, session_id={}, avatar_file_id={}", requester_id, session_id, avatar_file.file_id),
+            "user".to_string(),
+        ).await;
+
         Ok(updated_user)
     }
 
@@ -277,6 +292,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         &self,
         user_id: i64,
         requester_user_id: i64,
+        session_id: i64,
         manual_status: UserStatusType,
     ) -> Result<(), DomainError> {
         if user_id != requester_user_id {
@@ -288,7 +304,7 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
         let mut tx = self.repository.begin().await?;
 
         let updated_user = tx
-            .update_manual_user_status(user_id, manual_status)
+            .update_manual_user_status(user_id, manual_status.clone())
             .await?
             .ok_or(DomainError::BadRequest(format!(
                 "User {} not found",
@@ -307,6 +323,11 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager> UserS
                 ControlRoutingPolicy::Broadcast,
             ))
             .await;
+
+        let _ = self.logger.log_entry(
+            format!("User status updated: user_id={}, session_id={}, status={:?}", requester_user_id, session_id, manual_status),
+            "user".to_string(),
+        ).await;
 
         Ok(())
     }
@@ -585,7 +606,7 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 pub fn user_routes(
-    user_service: UserService<Postgre, LocalFileManager, DefaultNotifierManager>,
+    user_service: UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -615,13 +636,13 @@ pub fn user_routes(
     security(("api_key" = []))
 )]
 async fn update_user_role_handler(
-    State(mut service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(mut service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(target_user_id): Path<i64>,
     Json(payload): Json<UpdateUserRoleRequest>,
 ) -> Result<Json<User>, ApiError> {
     let updated_user = service
-        .update_user_role(target_user_id, payload.role_id, user_id)
+        .update_user_role(target_user_id, payload.role_id, session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(updated_user))
@@ -644,12 +665,12 @@ async fn update_user_role_handler(
     security(("api_key" = []))
 )]
 async fn update_user_avatar_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<NewAvatarRequest>,
 ) -> Result<Json<User>, ApiError> {
     let updated_user = service
-        .update_user_avatar(user_id, user_id, payload)
+        .update_user_avatar(session.user_id, session.user_id, session.session_id, payload)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(updated_user))
@@ -670,8 +691,8 @@ async fn update_user_avatar_handler(
     security(("api_key" = []))
 )]
 async fn get_user_avatar_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager>>,
-    Extension(_user): Extension<i64>,
+    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    Extension(_session): Extension<Session>,
     Path(avatar_id): Path<i64>,
 ) -> Result<impl IntoResponse, ApiError> {
     let (avatar_file, file_data) = service
@@ -707,13 +728,13 @@ async fn get_user_avatar_handler(
     security(("api_key" = []))
 )]
 async fn update_manual_user_status_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager>>,
-    Extension(requester_user_id): Extension<i64>,
+    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(user_id): Path<i64>,
     Json(payload): Json<UpdateManualUserStatusRequest>,
 ) -> Result<(), ApiError> {
     service
-        .update_manual_user_status(user_id, requester_user_id, payload.manual_status)
+        .update_manual_user_status(user_id, session.user_id, session.session_id, payload.manual_status)
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -731,8 +752,8 @@ async fn update_manual_user_status_handler(
     security(("api_key" = []))
 )]
 async fn get_all_users_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager>>,
-    Extension(_user_id): Extension<i64>,
+    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    Extension(_session): Extension<Session>,
 ) -> Result<Json<Vec<User>>, ApiError> {
     let users = service.get_all_users().await.map_err(ApiError::from)?;
     Ok(Json(users))

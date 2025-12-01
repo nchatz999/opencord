@@ -32,17 +32,20 @@ const UserPanel: Component = () => {
       if (!isInPrivateCall.recipientId) return null
 
       let currentUser = userDomain.getCurrent();
+      let currentUserVoip = voipDomain.findById(currentUser.userId);
       let otherUser = userDomain.findById(isInPrivateCall.recipientId)
       if (!otherUser) return null
-      let otherUserConnected = voipDomain.findById(otherUser.userId)
+      let otherUserVoip = voipDomain.findById(otherUser.userId)
 
       return {
-        currentUser: userDomain.getCurrent(),
+        currentUser,
+        currentUserVoip,
         otherUser,
+        otherUserVoip,
         currentUserConnected: true,
-        otherUserConnected: otherUserConnected
-          && otherUserConnected.recipientId
-          && otherUserConnected.recipientId == currentUser.userId
+        otherUserConnected: otherUserVoip
+          && otherUserVoip.recipientId
+          && otherUserVoip.recipientId == currentUser.userId
       }
 
     }
@@ -50,36 +53,52 @@ const UserPanel: Component = () => {
     return (
       <Show when={privateCallInfo()}>
         {(info) => (
-          <div class="bg-[#2b2d31] rounded-lg p-3 flex items-center gap-3">
-            <div class="flex items-center gap-2 flex-1">
-              {}
-              <div class="relative">
+          <div class="bg-[#2b2d31] rounded-lg p-2 flex items-center gap-2">
+            {/* Avatars stacked */}
+            <div class="flex -space-x-2">
+              <div class="relative z-10">
                 <img
                   src={`/api/user/${info().currentUser.avatarFileId}/avatar`}
                   alt={info().currentUser.username}
-                  class="w-8 h-8 rounded-full"
+                  class="w-6 h-6 rounded-full border-2 border-[#2b2d31]"
                 />
-                <div class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#2b2d31]  bg-green-500 
-                  }`} />
               </div>
-
-              {}
-              <div class="flex-1 text-center">
-                <div class="text-xs text-green-400 font-medium">
-                  {info().currentUserConnected && info().otherUserConnected ? 'Private Call' : 'Waiting...'}
-                </div>
-              </div>
-
-              {}
               <div class="relative">
                 <img
                   src={`/api/user/${info().otherUser.avatarFileId}/avatar`}
                   alt={info().otherUser.username}
-                  class="w-8 h-8 rounded-full"
+                  class="w-6 h-6 rounded-full border-2 border-[#2b2d31]"
                 />
-                <div class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#2b2d31] ${info().otherUserConnected ? 'bg-green-500' : 'bg-yellow-500'
-                  }`} />
+                <div class={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#2b2d31] ${info().otherUserConnected ? 'bg-green-500' : 'bg-yellow-500'}`} />
               </div>
+            </div>
+
+            {/* Call info */}
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1">
+                <span class="text-xs text-[#DBDEE1] truncate">
+                  {info().otherUser.username}
+                </span>
+                <span class={`text-[10px] ${info().otherUserConnected ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {info().otherUserConnected ? 'Connected' : 'Waiting'}
+                </span>
+              </div>
+            </div>
+
+            {/* Status indicators */}
+            <div class="flex items-center gap-0.5">
+              <Show when={info().currentUserVoip?.localMute}>
+                <MicOff size={12} class="text-red-400" />
+              </Show>
+              <Show when={info().currentUserVoip?.localDeafen}>
+                <Headphones size={12} class="text-red-400" />
+              </Show>
+              <Show when={info().currentUserVoip?.publishCamera || info().otherUserVoip?.publishCamera}>
+                <Video size={12} class="text-green-400" />
+              </Show>
+              <Show when={info().currentUserVoip?.publishScreen || info().otherUserVoip?.publishScreen}>
+                <Monitor size={12} class="text-green-400" />
+              </Show>
             </div>
           </div>
         )}

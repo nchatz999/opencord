@@ -220,6 +220,14 @@ export type EventPayload =
   | {
     type: "groupHide";
     groupId: number;
+  } |
+  {
+    type: "mediaSubscription"
+    subscription: Subscription
+  }
+  | {
+    type: "mediaUnsubscription"
+    subscription: Subscription
   }
   | {
     type: "voIPData";
@@ -543,14 +551,9 @@ export class MessageDomain {
   }
 
   insertMany(newMessages: Message[]): void {
-    setState(
-      'messages',
-      produce(messages => {
-        newMessages.forEach((message) => {
-          this.insert(message)
-        })
-      })
-    );
+    newMessages.forEach((message) => {
+      this.insert(message)
+    })
   }
 
   update(id: number, updates: Partial<Message>): void {
@@ -713,9 +716,9 @@ export class VoipDomain {
   isSubscribedToMedia(publisherId: number, mediaType: MediaType): boolean {
     const currentUserId = userDomain.getCurrent().userId;
     return state.subscriptions?.some(
-      sub => sub.userId === currentUserId && 
-             sub.publisherId === publisherId && 
-             sub.mediaType === mediaType
+      sub => sub.userId === currentUserId &&
+        sub.publisherId === publisherId &&
+        sub.mediaType === mediaType
     ) || false;
   }
 
@@ -724,9 +727,9 @@ export class VoipDomain {
       'subscriptions',
       produce(subscriptions => {
         const exists = subscriptions.some(
-          sub => sub.userId === subscription.userId && 
-                 sub.publisherId === subscription.publisherId && 
-                 sub.mediaType === subscription.mediaType
+          sub => sub.userId === subscription.userId &&
+            sub.publisherId === subscription.publisherId &&
+            sub.mediaType === subscription.mediaType
         );
         if (!exists) {
           subscriptions.push(subscription);
@@ -740,9 +743,9 @@ export class VoipDomain {
       'subscriptions',
       produce(subscriptions => {
         const index = subscriptions.findIndex(
-          sub => sub.userId === userId && 
-                 sub.publisherId === publisherId && 
-                 sub.mediaType === mediaType
+          sub => sub.userId === userId &&
+            sub.publisherId === publisherId &&
+            sub.mediaType === mediaType
         );
         if (index !== -1) {
           subscriptions.splice(index, 1);
@@ -1015,8 +1018,8 @@ export function handleServerEvent(event: EventPayload): void {
 
     case 'mediaUnsubscription':
       voipDomain.removeSubscription(
-        event.subscription.userId, 
-        event.subscription.publisherId, 
+        event.subscription.userId,
+        event.subscription.publisherId,
         event.subscription.mediaType
       );
       break;

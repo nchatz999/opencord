@@ -154,31 +154,35 @@ pub trait MessageRepository: Send + Sync + Clone {
     ) -> Result<Vec<File>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::auth::Session;
+use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::model::EventPayload;
 use tracing::{error, warn};
 
 #[derive(Clone)]
-pub struct MessageService<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager> {
+pub struct MessageService<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager> {
     repository: R,
     file_manager: F,
     notifier: N,
+    logger: G,
 }
 
-impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
-    MessageService<R, F, N>
+impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager>
+    MessageService<R, F, N, G>
 {
-    pub fn new(repository: R, file_manager: F, notifier: N) -> Self {
+    pub fn new(repository: R, file_manager: F, notifier: N, logger: G) -> Self {
         Self {
             repository,
             file_manager,
             notifier,
+            logger,
         }
     }
 
     pub async fn create_channel_message(
         &mut self,
         sender_id: i64,
+        session_id: i64,
         channel_id: i64,
         message_text: Option<String>,
         reply_to_message_id: Option<i64>,
@@ -247,12 +251,18 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Channel message created: user_id={}, session_id={}, message_id={}, channel_id={}", sender_id, session_id, message.id, channel_id),
+            "message".to_string(),
+        ).await;
+
         Ok((message, file_attachments))
     }
 
     pub async fn create_dm_message(
         &mut self,
         sender_id: i64,
+        session_id: i64,
         recipient_id: i64,
         message_text: Option<String>,
         reply_to_message_id: Option<i64>,
@@ -323,6 +333,11 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 ))
                 .await;
         }
+
+        let _ = self.logger.log_entry(
+            format!("DM message created: user_id={}, session_id={}, message_id={}, recipient_id={}", sender_id, session_id, message.id, recipient_id),
+            "message".to_string(),
+        ).await;
 
         Ok((message, file_attachments))
     }
@@ -455,6 +470,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
     pub async fn edit_message(
         &self,
         user_id: i64,
+        session_id: i64,
         message_id: i64,
         new_text: String,
     ) -> Result<Message, DomainError> {
@@ -506,12 +522,18 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 .await;
         }
 
+        let _ = self.logger.log_entry(
+            format!("Message edited: user_id={}, session_id={}, message_id={}", user_id, session_id, message_id),
+            "message".to_string(),
+        ).await;
+
         Ok(message)
     }
 
     pub async fn delete_message(
         &self,
         user_id: i64,
+        session_id: i64,
         message_id: i64,
     ) -> Result<Message, DomainError> {
         let mut tx = self.repository.begin().await?;
@@ -592,6 +614,11 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager>
                 ))
                 .await;
         }
+
+        let _ = self.logger.log_entry(
+            format!("Message deleted: user_id={}, session_id={}, message_id={}", user_id, session_id, message_id),
+            "message".to_string(),
+        ).await;
 
         Ok(message)
     }
@@ -1067,7 +1094,7 @@ use crate::error::ApiError;
 use axum::Json;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 
-type AppMessageService = MessageService<Postgre, LocalFileManager, DefaultNotifierManager>;
+type AppMessageService = MessageService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
@@ -1131,7 +1158,7 @@ pub fn message_routes(
 #[axum::debug_handler]
 async fn create_channel_message_handler(
     State(mut service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(channel_id): Path<i64>,
     Json(payload): Json<CreateMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
@@ -1147,7 +1174,8 @@ async fn create_channel_message_handler(
 
     service
         .create_channel_message(
-            user_id,
+            session.user_id,
+            session.session_id,
             channel_id,
             payload.message_text,
             payload.reply_to_message_id,
@@ -1179,7 +1207,7 @@ async fn create_channel_message_handler(
 #[axum::debug_handler]
 async fn create_dm_message_handler(
     State(mut service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(recipient_id): Path<i64>,
     Json(payload): Json<CreateMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
@@ -1195,7 +1223,8 @@ async fn create_dm_message_handler(
 
     service
         .create_dm_message(
-            user_id,
+            session.user_id,
+            session.session_id,
             recipient_id,
             payload.message_text,
             payload.reply_to_message_id,
@@ -1228,10 +1257,11 @@ async fn create_dm_message_handler(
 #[axum::debug_handler]
 async fn get_channel_messages_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(channel_id): Path<i64>,
     Query(query): Query<MessageQuery>,
 ) -> Result<Json<Vec<Message>>, ApiError> {
+    let user_id = session.user_id;
     let limit = query.limit.unwrap_or(50);
 
     let response = service
@@ -1263,10 +1293,11 @@ async fn get_channel_messages_handler(
 #[axum::debug_handler]
 async fn get_dm_messages_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(other_user_id): Path<i64>,
     Query(query): Query<MessageQuery>,
 ) -> Result<Json<Vec<Message>>, ApiError> {
+    let user_id = session.user_id;
     let limit = query.limit.unwrap_or(50);
 
     let response = service
@@ -1298,12 +1329,12 @@ async fn get_dm_messages_handler(
 #[axum::debug_handler]
 async fn edit_message_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(message_id): Path<i64>,
     Json(payload): Json<EditMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .edit_message(user_id, message_id, payload.message_text)
+        .edit_message(session.user_id, session.session_id, message_id, payload.message_text)
         .await
         .map_err(ApiError::from)?;
 
@@ -1330,11 +1361,11 @@ async fn edit_message_handler(
 #[axum::debug_handler]
 async fn delete_message_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(message_id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .delete_message(user_id, message_id)
+        .delete_message(session.user_id, session.session_id, message_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -1361,9 +1392,10 @@ async fn delete_message_handler(
 #[axum::debug_handler]
 async fn get_file_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(file_id): Path<i64>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let user_id = session.user_id;
     let file = service
         .get_file(user_id, file_id)
         .await
@@ -1409,10 +1441,11 @@ async fn get_file_handler(
 #[axum::debug_handler]
 async fn get_channel_files_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(channel_id): Path<i64>,
     Query(query): Query<MessageQuery>,
 ) -> Result<Json<Vec<File>>, ApiError> {
+    let user_id = session.user_id;
     let limit = query.limit.unwrap_or(50);
 
     let response = service
@@ -1444,10 +1477,11 @@ async fn get_channel_files_handler(
 #[axum::debug_handler]
 async fn get_dm_files_handler(
     State(service): State<AppMessageService>,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Path(other_user_id): Path<i64>,
     Query(query): Query<MessageQuery>,
 ) -> Result<Json<Vec<File>>, ApiError> {
+    let user_id = session.user_id;
     let limit = query.limit.unwrap_or(50);
 
     let response = service

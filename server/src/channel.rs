@@ -88,22 +88,25 @@ pub trait ChannelRepository: Send + Sync + Clone {
     ) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::auth::Session;
+use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::middleware::{AuthorizeService, authorize};
 
 use crate::model::EventPayload;
 
 #[derive(Clone)]
-pub struct ChannelService<R: ChannelRepository, N: NotifierManager> {
+pub struct ChannelService<R: ChannelRepository, N: NotifierManager, G: LogManager> {
     repository: R,
     notifier: N,
+    logger: G,
 }
 
-impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
-    pub fn new(repository: R, notifier: N) -> Self {
+impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, N, G> {
+    pub fn new(repository: R, notifier: N, logger: G) -> Self {
         Self {
             repository,
             notifier,
+            logger,
         }
     }
 
@@ -131,6 +134,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_type: ChannelType,
         group_id: i64,
         user_id: i64,
+        session_id: i64,
     ) -> Result<Channel, DomainError> {
         let mut tx = self.repository.begin().await?;
 
@@ -186,6 +190,11 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Channel created: user_id={}, session_id={}, channel_id={}, group_id={}, type={:?}", user_id, session_id, channel.channel_id, group_id, channel_type),
+            "channel".to_string(),
+        ).await;
+
         Ok(channel)
     }
 
@@ -219,6 +228,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_id: i64,
         new_name: String,
         user_id: i64,
+        session_id: i64,
     ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
@@ -274,6 +284,11 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Channel name updated: user_id={}, session_id={}, channel_id={}", user_id, session_id, channel_id),
+            "channel".to_string(),
+        ).await;
+
         Ok(())
     }
 
@@ -282,6 +297,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         channel_id: i64,
         new_group_id: i64,
         user_id: i64,
+        session_id: i64,
     ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
@@ -330,6 +346,11 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Channel group updated: user_id={}, session_id={}, channel_id={}, new_group_id={}", user_id, session_id, channel_id, new_group_id),
+            "channel".to_string(),
+        ).await;
+
         Ok(())
     }
 
@@ -337,6 +358,7 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
         &self,
         channel_id: i64,
         user_id: i64,
+        session_id: i64,
     ) -> Result<Option<Channel>, DomainError> {
         let mut tx = self.repository.begin().await?;
 
@@ -373,6 +395,11 @@ impl<R: ChannelRepository, N: NotifierManager> ChannelService<R, N> {
                 },
             ))
             .await;
+
+        let _ = self.logger.log_entry(
+            format!("Channel deleted: user_id={}, session_id={}, channel_id={}", user_id, session_id, channel_id),
+            "channel".to_string(),
+        ).await;
 
         Ok(Some(deleted))
     }
@@ -608,7 +635,7 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 pub fn channel_routes(
-    channel_service: ChannelService<Postgre, DefaultNotifierManager>,
+    channel_service: ChannelService<Postgre, DefaultNotifierManager, TextLogManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -637,9 +664,10 @@ pub fn channel_routes(
 )]
 #[axum::debug_handler]
 async fn list_channels_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<Channel>>, ApiError> {
+    let user = session.user_id;
     let channels = service
         .list_user_channels(user)
         .await
@@ -666,10 +694,11 @@ async fn list_channels_handler(
 )]
 #[axum::debug_handler]
 async fn get_channel_by_id_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
 ) -> Result<Json<Channel>, ApiError> {
+    let user = session.user_id;
     let channel_data = service
         .get_channel(id, user)
         .await
@@ -692,8 +721,8 @@ async fn get_channel_by_id_handler(
     security(("api_key" = []))
 )]
 async fn create_channel_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<CreateChannelRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelResponse>), ApiError> {
     let channel = service
@@ -701,7 +730,8 @@ async fn create_channel_handler(
             payload.name.clone(),
             payload.r#type.clone(),
             payload.group_id,
-            user,
+            session.user_id,
+            session.session_id,
         )
         .await
         .map_err(ApiError::from)?;
@@ -733,12 +763,12 @@ async fn create_channel_handler(
     )
 )]
 async fn delete_channel_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .delete_channel(id, user)
+        .delete_channel(id, session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -766,13 +796,13 @@ async fn delete_channel_handler(
     )
 )]
 async fn update_channel_name_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateChannelRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .update_channel_name(id, payload.name.clone(), user)
+        .update_channel_name(id, payload.name.clone(), session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -799,13 +829,13 @@ async fn update_channel_name_handler(
     )
 )]
 async fn update_channel_group_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateChannelGroupRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .update_channel_group(id, payload.group_id, user)
+        .update_channel_group(id, payload.group_id, session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 

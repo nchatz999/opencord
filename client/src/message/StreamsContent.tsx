@@ -1,16 +1,27 @@
 import type { Component } from "solid-js";
-import { For, Show } from "solid-js";
+import { For, Show, createSignal, onCleanup } from "solid-js";
 
 import { Camera, Monitor, Users, Video, Volume2, Eye, EyeOff } from "lucide-solid";
 import { voipDomain, messageDomain } from "../store";
-import type { VoipParticipantWithUser, MediaType } from "../model";
+import { type VoipParticipantWithUser, MediaType } from "../model";
 import { fetchApi } from "../utils";
 import ContextMenu from "../components/ContextMenu";
 import type { ContextMenuItem } from "../components/ContextMenu";
 import Slider from "../components/Slider";
+import Button from "../components/Button";
 
 
 const StreamsContent: Component = () => {
+  const [isFullscreen, setIsFullscreen] = createSignal(false);
+
+  const handleFullscreenChange = () => {
+    setIsFullscreen(!!document.fullscreenElement);
+  };
+
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  onCleanup(() => {
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  });
 
   const getCurrentParticipants = () => {
     const voipSession = voipDomain.getCurrent();
@@ -22,7 +33,7 @@ const StreamsContent: Component = () => {
     if (voipSession.channelId) {
       return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && part.channelId == voipSession.channelId);
     } else if (voipSession.recipientId) {
-      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && (part.recipientId == voipSession.recipientId || part.user.userId == voipSession.userId));
+      return voipDomain.list().filter((part) => (part.publishCamera || part.publishScreen) && (part.user.userId == voipSession.recipientId || part.recipientId == voipSession.userId));
     }
 
     return [] as VoipParticipantWithUser[];
@@ -44,14 +55,12 @@ const StreamsContent: Component = () => {
   const toggleSubscription = async (publisherId: number, mediaType: MediaType) => {
     const isCurrentlySubscribed = voipDomain.isSubscribedToMedia(publisherId, mediaType);
     const endpoint = isCurrentlySubscribed ? '/voip/unsubscribe' : '/voip/subscribe';
-
     const result = await fetchApi(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         publisherId,
         mediaType
-      })
+      }
     });
 
     if (!result.ok) {
@@ -136,7 +145,6 @@ const StreamsContent: Component = () => {
             </div>
           </div>
 
-          {}
           <div class="flex-1 min-h-0 overflow-auto">
             <div
               class={`grid gap-4 h-full p-4 ${getGridCols(getCurrentParticipants())}`}
@@ -170,28 +178,31 @@ const StreamsContent: Component = () => {
                           }}
                         />
 
-                        <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                          <div class="flex items-center gap-1 bg-black bg-opacity-50 rounded-full px-2 py-1">
-                            <span class="text-white text-xs font-medium truncate max-w-[100px]">
-                              {participant.user.username}
-                            </span>
-                          </div>
-
-                          <div class="flex items-center gap-1">
-                            <div class="p-1 rounded-full bg-blue-500 bg-opacity-80">
-                              <Camera size={12} class="text-white" />
+                        <Show when={!isFullscreen()}>
+                          <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                            <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
+                              <Camera size={14} class="text-blue-400" />
+                              <span class="text-white text-sm font-medium truncate max-w-[120px]">
+                                {participant.user.username}
+                              </span>
                             </div>
-                            <button
-                              onClick={() => toggleSubscription(participant.user.userId, "camera" as MediaType)}
-                              class="p-1 rounded-full bg-gray-600 bg-opacity-80 hover:bg-opacity-100 transition-all"
+
+                            <Button
+                              onClick={() => toggleSubscription(participant.user.userId, MediaType.Camera)}
+                              variant={voipDomain.isSubscribedToMedia(participant.user.userId, MediaType.Camera) ? 'primary' : 'secondary'}
+                              size="sm"
+                              class="flex items-center gap-1.5 rounded"
                             >
-                              {voipDomain.isSubscribedToMedia(participant.user.userId, "camera" as MediaType) ?
-                                <Eye size={12} class="text-white" /> :
-                                <EyeOff size={12} class="text-white" />
+                              {voipDomain.isSubscribedToMedia(participant.user.userId, MediaType.Camera) ?
+                                <Eye size={14} /> :
+                                <EyeOff size={14} />
                               }
-                            </button>
+                              <span>
+                                {voipDomain.isSubscribedToMedia(participant.user.userId, MediaType.Camera) ? 'Watching' : 'Paused'}
+                              </span>
+                            </Button>
                           </div>
-                        </div>
+                        </Show>
                       </div>
                     </Show>
 
@@ -224,39 +235,40 @@ const StreamsContent: Component = () => {
                         />
 
 
-                        <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                          <div class="flex items-center gap-1 bg-black bg-opacity-50 rounded-full px-2 py-1">
-                            <span class="text-white text-xs font-medium truncate max-w-[100px]">
-                              {participant.user.username}
-                            </span>
-                          </div>
-
-                          <div class="flex items-center gap-1">
-                            <div class="p-1 rounded-full bg-blue-500 bg-opacity-80">
-                              <Monitor size={12} class="text-white" />
+                        <Show when={!isFullscreen()}>
+                          <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                            <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
+                              <Monitor size={14} class="text-blue-400" />
+                              <span class="text-white text-sm font-medium truncate max-w-[120px]">
+                                {participant.user.username}
+                              </span>
+                              <Show when={voipDomain.getScreenAudioVolume(participant.user.userId) === 0}>
+                                <Volume2 size={14} class="text-red-400" />
+                              </Show>
                             </div>
-                            <Show when={voipDomain.getScreenAudioVolume(participant.user.userId) === 0}>
-                              <div class="p-1 rounded-full bg-red-500 bg-opacity-80">
-                                <Volume2 size={12} class="text-white" />
-                              </div>
-                            </Show>
-                            <button
-                              onClick={() => toggleSubscription(participant.user.userId, "screen" as MediaType)}
-                              class="p-1 rounded-full bg-gray-600 bg-opacity-80 hover:bg-opacity-100 transition-all"
-                            >
-                              {voipDomain.isSubscribedToMedia(participant.user.userId, "screen" as MediaType) ?
-                                <Eye size={12} class="text-white" /> :
-                                <EyeOff size={12} class="text-white" />
-                              }
-                            </button>
-                          </div>
-                        </div>
 
-                        <div class="absolute top-2 right-2">
-                          <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
-                            {participant?.screenPlayback?.getFPS()() || 0} FPS
+                            <Button
+                              onClick={() => toggleSubscription(participant.user.userId, MediaType.Screen)}
+                              variant={voipDomain.isSubscribedToMedia(participant.user.userId, MediaType.Screen) ? 'primary' : 'secondary'}
+                              size="sm"
+                              class="flex items-center gap-1.5 rounded"
+                            >
+                              {voipDomain.isSubscribedToMedia(participant.user.userId, MediaType.Screen) ?
+                                <Eye size={14} /> :
+                                <EyeOff size={14} />
+                              }
+                              <span>
+                                {voipDomain.isSubscribedToMedia(participant.user.userId, MediaType.Screen) ? 'Watching' : 'Paused'}
+                              </span>
+                            </Button>
                           </div>
-                        </div>
+
+                          <div class="absolute top-2 right-2">
+                            <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
+                              {participant?.screenPlayback?.getFPS()() || 0} FPS
+                            </div>
+                          </div>
+                        </Show>
                       </ContextMenu>
                     </Show>
                   </>

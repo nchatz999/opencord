@@ -641,34 +641,6 @@ pub enum NotifierError {
     ServiceUnavailable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RecipientType {
-    User {
-        user_id: i64,
-    },
-
-    Role {
-        role_id: i64,
-    },
-
-    GroupRights {
-        group_id: i64,
-        minimum_rights: i64,
-    },
-
-    ChannelRights {
-        channel_id: i64,
-        minimum_rights: i64,
-    },
-
-    ChannelRecipients {
-        channel_id: i64,
-        sender_id: i64,
-    },
-
-    Broadcast,
-}
-
 pub trait NotifierManager: Send + Sync + Clone {
     async fn notify(&self, event: ServerMessage) -> Result<(), NotifierError>;
 }
@@ -694,5 +666,182 @@ impl NotifierManager for DefaultNotifierManager {
             .map_err(|_| NotifierError::SendFailed)?;
 
         Ok(())
+    }
+}
+
+use time::OffsetDateTime;
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LogEntry {
+    pub id: String,
+    pub log: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub date: OffsetDateTime,
+    pub category: String,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum LogError {
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
+}
+
+pub trait LogManager: Send + Sync + Clone {
+    fn log_entry(
+        &self,
+        log: String,
+        category: String,
+    ) -> impl std::future::Future<Output = Result<LogEntry, LogError>> + Send;
+
+    fn get_entries(
+        &self,
+        category: Option<String>,
+    ) -> impl std::future::Future<Output = Result<Vec<LogEntry>, LogError>> + Send;
+
+    fn delete_entries(
+        &self,
+        category: Option<String>,
+    ) -> impl std::future::Future<Output = Result<u64, LogError>> + Send;
+}
+
+#[derive(Clone)]
+pub struct TextLogManager {
+    file_path: PathBuf,
+}
+
+impl TextLogManager {
+    pub fn new<P: AsRef<Path>>(file_path: P) -> Self {
+        Self {
+            file_path: file_path.as_ref().to_path_buf(),
+        }
+    }
+
+    pub fn default() -> Self {
+        Self::new("./logs/app.log")
+    }
+
+    fn parse_line(line: &str) -> Option<LogEntry> {
+        let parts: Vec<&str> = line.splitn(4, '|').collect();
+        if parts.len() != 4 {
+            return None;
+        }
+
+        let date = OffsetDateTime::parse(parts[1], &time::format_description::well_known::Rfc3339)
+            .ok()?;
+
+        Some(LogEntry {
+            id: parts[0].to_string(),
+            date,
+            category: parts[2].to_string(),
+            log: parts[3].replace("\\n", "\n"),
+        })
+    }
+
+    fn format_entry(entry: &LogEntry) -> String {
+        let date_str = entry
+            .date
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default();
+        format!(
+            "{}|{}|{}|{}",
+            entry.id,
+            date_str,
+            entry.category,
+            entry.log.replace('\n', "\\n")
+        )
+    }
+}
+
+impl LogManager for TextLogManager {
+    async fn log_entry(&self, log: String, category: String) -> Result<LogEntry, LogError> {
+        use std::io::Write;
+
+        let entry = LogEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            log,
+            date: OffsetDateTime::now_utc(),
+            category,
+        };
+
+        if let Some(parent) = self.file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.file_path)?;
+
+        writeln!(file, "{}", Self::format_entry(&entry))?;
+
+        Ok(entry)
+    }
+
+    async fn get_entries(&self, category: Option<String>) -> Result<Vec<LogEntry>, LogError> {
+        use std::io::{BufRead, BufReader};
+
+        let file = match fs::File::open(&self.file_path) {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(e) => return Err(LogError::Io(e)),
+        };
+
+        let reader = BufReader::new(file);
+        let mut entries = Vec::new();
+
+        for line in reader.lines() {
+            let line = line?;
+            if let Some(entry) = Self::parse_line(&line) {
+                match &category {
+                    Some(cat) if entry.category == *cat => entries.push(entry),
+                    None => entries.push(entry),
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+
+    async fn delete_entries(&self, category: Option<String>) -> Result<u64, LogError> {
+        use std::io::{BufRead, BufReader, Write};
+
+        let file = match fs::File::open(&self.file_path) {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(LogError::Io(e)),
+        };
+
+        let reader = BufReader::new(file);
+        let mut remaining_lines = Vec::new();
+        let mut deleted_count = 0u64;
+
+        for line in reader.lines() {
+            let line = line?;
+            if let Some(entry) = Self::parse_line(&line) {
+                match &category {
+                    Some(cat) if entry.category == *cat => {
+                        deleted_count += 1;
+                    }
+                    None => {
+                        deleted_count += 1;
+                    }
+                    _ => {
+                        remaining_lines.push(line);
+                    }
+                }
+            }
+        }
+
+        let mut file = fs::File::create(&self.file_path)?;
+        for line in remaining_lines {
+            writeln!(file, "{}", line)?;
+        }
+
+        Ok(deleted_count)
     }
 }

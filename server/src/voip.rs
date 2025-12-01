@@ -21,6 +21,7 @@ pub struct VoipParticipant {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema)]
 #[sqlx(type_name = "media_type", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum MediaType {
     Screen,
     Camera,
@@ -28,6 +29,7 @@ pub enum MediaType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Subscription {
     pub user_id: i64,
     pub publisher_id: i64,
@@ -138,19 +140,22 @@ pub trait VoipRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::NotifierManager;
+use crate::auth::Session;
+use crate::managers::{LogManager, NotifierManager, TextLogManager};
 
 #[derive(Clone)]
-pub struct VoipService<R: VoipRepository, N: NotifierManager> {
+pub struct VoipService<R: VoipRepository, N: NotifierManager, G: LogManager> {
     repository: R,
     notifier: N,
+    logger: G,
 }
 
-impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
-    pub fn new(repository: R, notifier: N) -> Self {
+impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> {
+    pub fn new(repository: R, notifier: N, logger: G) -> Self {
         Self {
             repository,
             notifier,
+            logger,
         }
     }
 
@@ -181,6 +186,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
     pub async fn join_channel_voip(
         &self,
         user_id: i64,
+        session_id: i64,
         channel_id: i64,
         local_mute: bool,
         local_deafen: bool,
@@ -202,6 +208,14 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         let mut tx = self.repository.begin().await?;
 
         let _ = tx.remove_participant(user_id).await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!("Left VoIP: user_id={}, session_id={}", user_id, session_id),
+                "voip".to_string(),
+            )
+            .await;
 
         let participant = tx
             .create_channel_voip_participant(user_id, channel_id, local_mute, local_deafen)
@@ -231,12 +245,24 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Joined channel VoIP: user_id={}, session_id={}, channel_id={}",
+                    user_id, session_id, channel_id
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
     pub async fn join_private_voip(
         &self,
         user_id: i64,
+        session_id: i64,
         recipient_user_id: i64,
         local_mute: bool,
         local_deafen: bool,
@@ -253,6 +279,14 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
         let mut tx = self.repository.begin().await?;
 
         let _ = tx.remove_participant(user_id).await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!("Left VoIP: user_id={}, session_id={}", user_id, session_id),
+                "voip".to_string(),
+            )
+            .await;
 
         let participant = tx
             .create_private_voip_participant(user_id, recipient_user_id, local_mute, local_deafen)
@@ -279,10 +313,31 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event.clone(),
+                ControlRoutingPolicy::User {
+                    user_id: recipient_user_id,
+                },
+            ))
+            .await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Joined private VoIP: user_id={}, session_id={}, recipient_id={}",
+                    user_id, session_id, recipient_user_id
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
-    pub async fn leave_voip(&self, user_id: i64) -> Result<(), DomainError> {
+    pub async fn leave_voip(&self, user_id: i64, session_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let _ = tx
@@ -304,10 +359,23 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!("Left VoIP: user_id={}, session_id={}", user_id, session_id),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
-    pub async fn set_local_mute(&self, user_id: i64, mute: bool) -> Result<(), DomainError> {
+    pub async fn set_local_mute(
+        &self,
+        user_id: i64,
+        session_id: i64,
+        mute: bool,
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant = tx
@@ -329,10 +397,26 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "VoIP mute changed: user_id={}, session_id={}, mute={}",
+                    user_id, session_id, mute
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
-    pub async fn set_local_deafen(&self, user_id: i64, deafen: bool) -> Result<(), DomainError> {
+    pub async fn set_local_deafen(
+        &self,
+        user_id: i64,
+        session_id: i64,
+        deafen: bool,
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant =
@@ -354,10 +438,26 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "VoIP deafen changed: user_id={}, session_id={}, deafen={}",
+                    user_id, session_id, deafen
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
-    pub async fn set_publish_screen(&self, user_id: i64, publish: bool) -> Result<(), DomainError> {
+    pub async fn set_publish_screen(
+        &self,
+        user_id: i64,
+        session_id: i64,
+        publish: bool,
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant =
@@ -379,10 +479,26 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "VoIP screen publish changed: user_id={}, session_id={}, publish={}",
+                    user_id, session_id, publish
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
-    pub async fn set_publish_camera(&self, user_id: i64, publish: bool) -> Result<(), DomainError> {
+    pub async fn set_publish_camera(
+        &self,
+        user_id: i64,
+        session_id: i64,
+        publish: bool,
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let participant =
@@ -404,12 +520,24 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "VoIP camera publish changed: user_id={}, session_id={}, publish={}",
+                    user_id, session_id, publish
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
     pub async fn subscribe_to_media(
         &self,
         user_id: i64,
+        session_id: i64,
         publisher_id: i64,
         media_type: MediaType,
     ) -> Result<(), DomainError> {
@@ -452,12 +580,24 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
             ))
             .await;
 
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Media subscribed: user_id={}, session_id={}, publisher_id={}, media_type={:?}",
+                    user_id, session_id, publisher_id, media_type
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
         Ok(())
     }
 
     pub async fn unsubscribe_from_media(
         &self,
         user_id: i64,
+        session_id: i64,
         publisher_id: i64,
         media_type: MediaType,
     ) -> Result<(), DomainError> {
@@ -482,7 +622,7 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
 
         self.repository.commit(tx).await?;
 
-        let event = EventPayload::MediaSubscription { subscription };
+        let event = EventPayload::MediaUnsubscription { subscription };
         let _ = self
             .notifier
             .notify(ServerMessage::Control(
@@ -499,6 +639,11 @@ impl<R: VoipRepository, N: NotifierManager> VoipService<R, N> {
                 },
             ))
             .await;
+
+        let _ = self.logger.log_entry(
+            format!("Media unsubscribed: user_id={}, session_id={}, publisher_id={}, media_type={:?}", user_id, session_id, publisher_id, media_type),
+            "voip".to_string(),
+        ).await;
 
         Ok(())
     }
@@ -567,18 +712,19 @@ impl VoipTransaction for PgVoipTransaction {
             r#"INSERT INTO subscriptions (user_id, publisher_id, media_type)
             SELECT $1, $2, $3
             WHERE EXISTS (
-                SELECT 1 
+                SELECT 1
                 FROM voip_participants subscriber
                 JOIN voip_participants publisher ON (
-                    (subscriber.channel_id = publisher.channel_id 
+                    (subscriber.channel_id = publisher.channel_id
                      AND subscriber.channel_id IS NOT NULL)
                     OR
-                    (subscriber.recipient_id = publisher.user_id 
+                    (subscriber.recipient_id = publisher.user_id
                      AND publisher.recipient_id = subscriber.user_id)
                 )
-                WHERE subscriber.user_id = $1 
+                WHERE subscriber.user_id = $1
                     AND publisher.user_id = $2
             )
+            ON CONFLICT (user_id, publisher_id, media_type) DO UPDATE SET created_at = subscriptions.created_at
             RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
             user_id,
             publisher_id,
@@ -853,7 +999,7 @@ impl From<DomainError> for ApiError {
 }
 
 pub fn voip_routes(
-    voip_service: VoipService<Postgre, DefaultNotifierManager>,
+    voip_service: VoipService<Postgre, DefaultNotifierManager, TextLogManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -883,11 +1029,11 @@ pub fn voip_routes(
     security(("api_key" = []))
 )]
 async fn get_voip_participants_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<VoipParticipant>>, ApiError> {
     let participants = service
-        .get_voip_participants(user_id)
+        .get_voip_participants(session.user_id)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(participants))
@@ -908,12 +1054,18 @@ async fn get_voip_participants_handler(
     security(("api_key" = []))
 )]
 async fn join_channel_voip_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path((channel_id, local_mute, local_deafen)): Path<(i64, bool, bool)>,
 ) -> Result<(), ApiError> {
     service
-        .join_channel_voip(user_id, channel_id, local_mute, local_deafen)
+        .join_channel_voip(
+            session.user_id,
+            session.session_id,
+            channel_id,
+            local_mute,
+            local_deafen,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -933,12 +1085,18 @@ async fn join_channel_voip_handler(
     security(("api_key" = []))
 )]
 async fn join_private_voip_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path((recipient_user_id, local_mute, local_deafen)): Path<(i64, bool, bool)>,
 ) -> Result<(), ApiError> {
     service
-        .join_private_voip(user_id, recipient_user_id, local_mute, local_deafen)
+        .join_private_voip(
+            session.user_id,
+            session.session_id,
+            recipient_user_id,
+            local_mute,
+            local_deafen,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -956,10 +1114,13 @@ async fn join_private_voip_handler(
     security(("api_key" = []))
 )]
 async fn leave_voip_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
 ) -> Result<(), ApiError> {
-    service.leave_voip(user_id).await.map_err(ApiError::from)?;
+    service
+        .leave_voip(session.user_id, session.session_id)
+        .await
+        .map_err(ApiError::from)?;
     Ok(())
 }
 
@@ -976,12 +1137,12 @@ async fn leave_voip_handler(
     security(("api_key" = []))
 )]
 async fn set_local_mute_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<SetMuteRequest>,
 ) -> Result<(), ApiError> {
     service
-        .set_local_mute(user_id, payload.mute)
+        .set_local_mute(session.user_id, session.session_id, payload.mute)
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -1000,12 +1161,12 @@ async fn set_local_mute_handler(
     security(("api_key" = []))
 )]
 async fn set_local_deafen_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<SetDeafenRequest>,
 ) -> Result<(), ApiError> {
     service
-        .set_local_deafen(user_id, payload.deafen)
+        .set_local_deafen(session.user_id, session.session_id, payload.deafen)
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -1024,12 +1185,12 @@ async fn set_local_deafen_handler(
     security(("api_key" = []))
 )]
 async fn set_publish_screen_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<SetPublishScreenRequest>,
 ) -> Result<(), ApiError> {
     service
-        .set_publish_screen(user_id, payload.publish)
+        .set_publish_screen(session.user_id, session.session_id, payload.publish)
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -1048,12 +1209,12 @@ async fn set_publish_screen_handler(
     security(("api_key" = []))
 )]
 async fn set_publish_camera_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<SetPublishCameraRequest>,
 ) -> Result<(), ApiError> {
     service
-        .set_publish_camera(user_id, payload.publish)
+        .set_publish_camera(session.user_id, session.session_id, payload.publish)
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -1072,12 +1233,17 @@ async fn set_publish_camera_handler(
     security(("api_key" = []))
 )]
 async fn subscribe_to_media_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<SubscribeToMediaRequest>,
 ) -> Result<(), ApiError> {
     service
-        .subscribe_to_media(user_id, payload.publisher_id, payload.media_type)
+        .subscribe_to_media(
+            session.user_id,
+            session.session_id,
+            payload.publisher_id,
+            payload.media_type,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -1096,12 +1262,17 @@ async fn subscribe_to_media_handler(
     security(("api_key" = []))
 )]
 async fn unsubscribe_from_media_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<UnsubscribeFromMediaRequest>,
 ) -> Result<(), ApiError> {
     service
-        .unsubscribe_from_media(user_id, payload.publisher_id, payload.media_type)
+        .unsubscribe_from_media(
+            session.user_id,
+            session.session_id,
+            payload.publisher_id,
+            payload.media_type,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -1118,11 +1289,11 @@ async fn unsubscribe_from_media_handler(
     security(("api_key" = []))
 )]
 async fn get_voip_subscriptions_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<Subscription>>, ApiError> {
     let subscriptions = service
-        .get_voip_subscriptions(user_id)
+        .get_voip_subscriptions(session.user_id)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(subscriptions))

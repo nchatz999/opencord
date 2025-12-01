@@ -1,4 +1,3 @@
-// Type definitions for MediaStreamTrackGenerator polyfill
 interface MediaStreamTrackGeneratorInit {
   kind: 'video' | 'audio';
 }
@@ -19,7 +18,6 @@ declare global {
   } | undefined;
 }
 
-// Polyfill implementation
 if (!window.MediaStreamTrackGenerator) {
   window.MediaStreamTrackGenerator = class MediaStreamTrackGenerator {
     constructor({kind}: MediaStreamTrackGeneratorInit): MediaStreamTrackWithWritable {

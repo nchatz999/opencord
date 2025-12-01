@@ -65,21 +65,24 @@ pub trait GroupRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::auth::Session;
+use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
-pub struct GroupService<R: GroupRepository, N: NotifierManager> {
+pub struct GroupService<R: GroupRepository, N: NotifierManager, G: LogManager> {
     repository: R,
     notifier: N,
+    logger: G,
 }
 
-impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
-    pub fn new(repository: R, notifier: N) -> Self {
+impl<R: GroupRepository, N: NotifierManager, G: LogManager> GroupService<R, N, G> {
+    pub fn new(repository: R, notifier: N, logger: G) -> Self {
         Self {
             repository,
             notifier,
+            logger,
         }
     }
 
@@ -100,7 +103,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         Ok(rights >= minimum_rights_level)
     }
 
-    pub async fn create_group(&self, name: String, user_id: i64) -> Result<Group, DomainError> {
+    pub async fn create_group(&self, name: String, user_id: i64, session_id: i64) -> Result<Group, DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
@@ -148,6 +151,11 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Group created: user_id={}, session_id={}, group_id={}", user_id, session_id, group.group_id),
+            "group".to_string(),
+        ).await;
+
         Ok(group)
     }
 
@@ -180,6 +188,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         group_id: i64,
         new_name: String,
         user_id: i64,
+        session_id: i64,
     ) -> Result<(), DomainError> {
         let role_id = self
             .repository
@@ -235,6 +244,11 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Group name updated: user_id={}, session_id={}, group_id={}", user_id, session_id, group_id),
+            "group".to_string(),
+        ).await;
+
         Ok(())
     }
 
@@ -242,6 +256,7 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
         &self,
         group_id: i64,
         user_id: i64,
+        session_id: i64,
     ) -> Result<Option<Group>, DomainError> {
         let role_id = self
             .repository
@@ -275,6 +290,11 @@ impl<R: GroupRepository, N: NotifierManager> GroupService<R, N> {
                 ControlRoutingPolicy::Broadcast,
             ))
             .await;
+
+        let _ = self.logger.log_entry(
+            format!("Group deleted: user_id={}, session_id={}, group_id={}", user_id, session_id, group_id),
+            "group".to_string(),
+        ).await;
 
         Ok(Some(deleted))
     }
@@ -445,7 +465,7 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 pub fn group_routes(
-    group_service: GroupService<Postgre, DefaultNotifierManager>,
+    group_service: GroupService<Postgre, DefaultNotifierManager, TextLogManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -473,9 +493,10 @@ pub fn group_routes(
 )]
 #[axum::debug_handler]
 async fn list_groups_handler(
-    State(service): State<GroupService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<GroupService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<Group>>, ApiError> {
+    let user_id = session.user_id;
     let groups = service
         .list_user_groups(user_id)
         .await
@@ -502,10 +523,11 @@ async fn list_groups_handler(
 )]
 #[axum::debug_handler]
 async fn get_group_by_id_handler(
-    State(service): State<GroupService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<GroupService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
 ) -> Result<Json<Group>, ApiError> {
+    let user_id = session.user_id;
     let group_data = service
         .get_group(id, user_id)
         .await
@@ -528,12 +550,12 @@ async fn get_group_by_id_handler(
     security(("api_key" = []))
 )]
 async fn create_group_handler(
-    State(service): State<GroupService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<GroupService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<CreateGroupRequest>,
 ) -> Result<(StatusCode, Json<CreateGroupResponse>), ApiError> {
     let group = service
-        .create_group(payload.name, user_id)
+        .create_group(payload.name, session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -564,12 +586,12 @@ async fn create_group_handler(
     )
 )]
 async fn delete_group_handler(
-    State(service): State<GroupService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<GroupService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .delete_group(id, user_id)
+        .delete_group(id, session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -597,13 +619,13 @@ async fn delete_group_handler(
     )
 )]
 async fn update_group_name_handler(
-    State(service): State<GroupService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<GroupService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateGroupRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .update_group_name(id, payload.name.clone(), user_id)
+        .update_group_name(id, payload.name.clone(), session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 

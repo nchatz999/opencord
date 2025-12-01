@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js'
-import { createSignal, createMemo, For, Show } from 'solid-js'
-import { Search, Trash2, X, Plus, Copy, Users } from 'lucide-solid'
+import { createSignal, createMemo, For, Show, onMount } from 'solid-js'
+import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw } from 'lucide-solid'
 import { useToaster } from '../components/Toaster'
 import Button from '../components/Button'
 import { Tabs } from '../components/Tabs'
@@ -22,6 +22,13 @@ interface Invite {
   createdAt: string;
 }
 
+interface LogEntry {
+  id: string;
+  log: string;
+  date: string;
+  category: string;
+}
+
 const ServerSettingsModal: Component = () => {
   const [serverName, setServerName] = createSignal('Awesome Discord Server')
   const [maxFileSize, setMaxFileSize] = createSignal('50')
@@ -34,6 +41,11 @@ const ServerSettingsModal: Component = () => {
   const [newInviteRegistrations, setNewInviteRegistrations] = createSignal('1')
   const [newInviteRoleId, setNewInviteRoleId] = createSignal('2')
   const [loading, setLoading] = createSignal(false)
+
+  const [logs, setLogs] = createSignal<LogEntry[]>([])
+  const [logsLoading, setLogsLoading] = createSignal(false)
+  const [logCategoryFilter, setLogCategoryFilter] = createSignal<string>('')
+  const [logSearchTerm, setLogSearchTerm] = createSignal('')
 
   const { addToast } = useToaster()
 
@@ -152,6 +164,60 @@ const ServerSettingsModal: Component = () => {
     });
   };
 
+  const loadLogs = async () => {
+    if (!canManageInvites()) return;
+
+    setLogsLoading(true);
+    const result = await fetchApi<LogEntry[]>("/log", {
+      method: "GET",
+      query: logCategoryFilter() ? { category: logCategoryFilter() } : undefined,
+    });
+
+    if (result.ok) {
+      setLogs(result.value);
+    }
+    setLogsLoading(false);
+  };
+
+  const deleteLogs = async (category?: string) => {
+    if (!canManageInvites()) return;
+
+    setLogsLoading(true);
+    const result = await fetchApi<{ deletedCount: number }>("/log", {
+      method: "DELETE",
+      query: category ? { category } : undefined,
+    });
+
+    match(result, {
+      ok: (response) => {
+        addToast(`Deleted ${response.deletedCount} log entries`, "success");
+        loadLogs();
+      },
+      err: (error) => {
+        const message = (error as any)?.reason || "Failed to delete logs";
+        addToast(message, "error");
+      },
+    });
+    setLogsLoading(false);
+  };
+
+  const filteredLogs = createMemo(() => {
+    const search = logSearchTerm().toLowerCase();
+    return logs().filter((log) =>
+      log.log.toLowerCase().includes(search) ||
+      log.category.toLowerCase().includes(search)
+    );
+  });
+
+  const logCategories = createMemo(() => {
+    const categories = new Set(logs().map((log) => log.category));
+    return Array.from(categories).sort();
+  });
+
+  const formatLogDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString();
+  };
 
   const tabItems = createMemo(() => [
     {
@@ -180,7 +246,6 @@ const ServerSettingsModal: Component = () => {
             />
           </div>
 
-          {}
           <div class="mt-6 pt-4 border-t border-gray-700">
             <h3 class="text-lg font-semibold mb-2">Version Information</h3>
             <div class="grid grid-cols-2 gap-4">
@@ -365,7 +430,6 @@ const ServerSettingsModal: Component = () => {
               </div>
             </div>
 
-            {}
             <div class="bg-[#2f3136] rounded-lg p-4">
               <div class="flex items-center justify-between mb-4">
                 <h4 class="text-md font-medium text-[#dcddde]">Active Invitations</h4>
@@ -441,6 +505,116 @@ const ServerSettingsModal: Component = () => {
                     </For>
                   </TableBody>
                 </Table>
+              </Show>
+            </div>
+          </div>
+        </Show>
+      ),
+    },
+    {
+      id: 'logs',
+      label: 'Logs',
+      content: (
+        <Show
+          when={canManageInvites()}
+          fallback={
+            <div class="text-center py-8 text-[#72767d]">
+              You don't have permission to view logs.
+            </div>
+          }
+        >
+          <div class="space-y-6 mt-6">
+            <div class="flex items-center gap-2 mb-4">
+              <FileText class="w-5 h-5 text-[#dcddde]" />
+              <h3 class="text-lg font-semibold text-[#dcddde]">Server Logs</h3>
+            </div>
+
+            <div class="bg-[#2f3136] rounded-lg p-4">
+              <div class="flex flex-wrap items-center gap-4 mb-4">
+                <div class="flex-1 min-w-[200px]">
+                  <Input
+                    value={logSearchTerm()}
+                    onChange={setLogSearchTerm}
+                    placeholder="Search logs..."
+                    icon={<Search class="w-4 h-4 text-gray-400" />}
+                  />
+                </div>
+                <div class="min-w-[150px]">
+                  <Select
+                    value={logCategoryFilter()}
+                    onChange={(val) => {
+                      setLogCategoryFilter(val);
+                      loadLogs();
+                    }}
+                    options={[
+                      { value: '', label: 'All Categories' },
+                      ...logCategories().map((cat) => ({ value: cat, label: cat })),
+                    ]}
+                  />
+                </div>
+                <Button
+                  onClick={loadLogs}
+                  variant="secondary"
+                  size="sm"
+                  disabled={logsLoading()}
+                  class="flex items-center gap-2"
+                >
+                  <RefreshCw class={`w-4 h-4 ${logsLoading() ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={() => deleteLogs(logCategoryFilter() || undefined)}
+                  variant="destructive"
+                  size="sm"
+                  disabled={logsLoading() || logs().length === 0}
+                  class="flex items-center gap-2"
+                >
+                  <Trash2 class="w-4 h-4" />
+                  Clear {logCategoryFilter() ? 'Category' : 'All'}
+                </Button>
+              </div>
+
+              <Show
+                when={filteredLogs().length > 0}
+                fallback={
+                  <div class="text-center py-8 text-[#72767d]">
+                    No logs found. Click Refresh to load logs.
+                  </div>
+                }
+              >
+                <div class="">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>Date</TableHeader>
+                        <TableHeader>Category</TableHeader>
+                        <TableHeader>Message</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <For each={filteredLogs()}>
+                        {(log) => (
+                          <TableRow class="hover:bg-[#383a40]">
+                            <TableCell class="text-xs text-[#72767d] whitespace-nowrap">
+                              {formatLogDate(log.date)}
+                            </TableCell>
+                            <TableCell>
+                              <span class="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                                {log.category}
+                              </span>
+                            </TableCell>
+                            <TableCell class="text-sm font-mono text-[#dcddde] break-all">
+                              {log.log}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </For>
+                    </TableBody>
+                  </Table>
+                </div>
+                <div class="mt-4 text-sm text-[#72767d]">
+                  Showing {filteredLogs().length} of {logs().length} entries
+                </div>
               </Show>
             </div>
           </div>

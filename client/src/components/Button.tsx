@@ -16,7 +16,6 @@ const Button: Component<ButtonProps> = (props) => {
   );
 
   const handleClick = async (e: MouseEvent) => {
-    // If onClick returns a Promise, track its loading state
     const result = merged.onClick?.(e);
 
     if (result instanceof Promise) {

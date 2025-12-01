@@ -104,6 +104,10 @@ pub enum EventPayload {
     #[serde(rename_all = "camelCase")]
     MediaSubscription { subscription: Subscription },
 
+    #[serde(rename = "mediaUnsubscription")]
+    #[serde(rename_all = "camelCase")]
+    MediaUnsubscription { subscription: Subscription },
+
     #[serde(rename = "voipData")]
     #[serde(rename_all = "camelCase")]
     VoIPData {

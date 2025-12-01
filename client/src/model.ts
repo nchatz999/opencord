@@ -23,7 +23,7 @@ export enum VoipDataType {
 
 export enum MediaType {
   Screen = "screen",
-  Camera = "camera", 
+  Camera = "camera",
   Audio = "audio",
 }
 

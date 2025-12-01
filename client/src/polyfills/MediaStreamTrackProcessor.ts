@@ -1,4 +1,3 @@
-// Type definitions for MediaStreamTrackProcessor polyfill
 interface MediaStreamTrackProcessorInit {
   track: MediaStreamTrack;
 }
@@ -19,7 +18,6 @@ declare global {
   } | undefined;
 }
 
-// Polyfill implementation
 if (!self.MediaStreamTrackProcessor) {
   self.MediaStreamTrackProcessor = class MediaStreamTrackProcessor {
     readable: ReadableStream<VideoFrame | AudioData>;

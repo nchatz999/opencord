@@ -5,6 +5,7 @@ mod common;
 mod db;
 mod error;
 mod group;
+mod log;
 mod managers;
 mod message;
 mod middleware;
@@ -20,9 +21,10 @@ use channel::{ChannelService, channel_routes};
 use db::Postgre;
 use group::{GroupService, group_routes};
 use http::{HeaderValue, Method};
+use log::{LogService, log_routes};
 use managers::{
     DefaultLockoutManager, DefaultNotifierManager, DefaultPasswordValidator, DefaultTotpManager,
-    LocalFileManager,
+    LocalFileManager, TextLogManager,
 };
 use message::{MessageService, message_routes};
 use middleware::AuthorizeService;
@@ -48,6 +50,7 @@ pub const SYNC_TAG: &str = "sync";
 pub const ACL_TAG: &str = "acl";
 pub const VOIP_TAG: &str = "voip";
 pub const FILE_TAG: &str = "file";
+pub const LOG_TAG: &str = "log";
 
 #[derive(OpenApi)]
 #[openapi(tags(
@@ -58,7 +61,8 @@ pub const FILE_TAG: &str = "file";
     (name = SYNC_TAG, description = "Synchronization API endpoints"),
     (name = ACL_TAG, description = "Access Control List API endpoints"),
     (name = VOIP_TAG, description = "VoIP API endpoints"),
-    (name = FILE_TAG, description = "File API endpoints")
+    (name = FILE_TAG, description = "File API endpoints"),
+    (name = LOG_TAG, description = "Log API endpoints")
 ))]
 struct ApiDoc;
 #[tokio::main]
@@ -72,7 +76,8 @@ async fn main() -> Result<(), sqlx::Error> {
     sqlx::migrate!("./migrations").run(&db).await?;
 
     let postgre = Postgre { pool: db.clone() };
-    let mut server = RealtimeServer::new(postgre.clone());
+    let log_manager = TextLogManager::default();
+    let mut server = RealtimeServer::new(postgre.clone(), log_manager.clone());
 
     let file_manager = LocalFileManager::default();
     let avatar_manager = LocalFileManager::new("./avatars");
@@ -86,19 +91,22 @@ async fn main() -> Result<(), sqlx::Error> {
         lockout_manager,
         password_validator,
         notifier_manager.clone(),
+        log_manager.clone(),
     );
     let authorize_service = AuthorizeService::new(postgre.clone());
-    let channel_service = ChannelService::new(postgre.clone(), notifier_manager.clone());
+    let channel_service = ChannelService::new(postgre.clone(), notifier_manager.clone(), log_manager.clone());
     let message_service = MessageService::new(
         postgre.clone(),
         file_manager.clone(),
         notifier_manager.clone(),
+        log_manager.clone(),
     );
-    let acl_service = AclService::new(postgre.clone(), notifier_manager.clone());
-    let role_service = RoleService::new(postgre.clone(), notifier_manager.clone());
-    let group_service = GroupService::new(postgre.clone(), notifier_manager.clone());
-    let user_service = UserService::new(postgre.clone(), avatar_manager, notifier_manager.clone());
-    let voip_service = VoipService::new(postgre.clone(), notifier_manager.clone());
+    let acl_service = AclService::new(postgre.clone(), notifier_manager.clone(), log_manager.clone());
+    let role_service = RoleService::new(postgre.clone(), notifier_manager.clone(), log_manager.clone());
+    let group_service = GroupService::new(postgre.clone(), notifier_manager.clone(), log_manager.clone());
+    let user_service = UserService::new(postgre.clone(), avatar_manager, notifier_manager.clone(), log_manager.clone());
+    let voip_service = VoipService::new(postgre.clone(), notifier_manager.clone(), log_manager.clone());
+    let log_service = LogService::new(log_manager.clone(), postgre.clone());
 
     let allowed_origin = "http://localhost:5173".parse::<HeaderValue>().unwrap();
     let cors = CorsLayer::new()
@@ -148,6 +156,7 @@ async fn main() -> Result<(), sqlx::Error> {
             "/voip",
             voip_routes(voip_service, authorize_service.clone()),
         )
+        .nest("/log", log_routes(log_service, authorize_service.clone()))
         .layer(cors)
         .with_state(postgre)
         .split_for_parts();

@@ -33,7 +33,7 @@ pub struct Invite {
     pub created_at: OffsetDateTime,
 }
 
-use crate::managers::{LockoutManager, PasswordValidator};
+use crate::managers::{LockoutManager, LogManager, PasswordValidator};
 
 use crate::error::DatabaseError;
 
@@ -141,22 +141,25 @@ pub struct AuthService<
     L: LockoutManager,
     P: PasswordValidator,
     N: NotifierManager,
+    G: LogManager,
 > {
     repository: R,
     lockout_manager: L,
     password_validator: P,
     notifier: N,
+    logger: G,
 }
 
-impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierManager>
-    AuthService<R, L, P, N>
+impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierManager, G: LogManager>
+    AuthService<R, L, P, N, G>
 {
-    pub fn new(repository: R, lockout_manager: L, password_validator: P, notifier: N) -> Self {
+    pub fn new(repository: R, lockout_manager: L, password_validator: P, notifier: N, logger: G) -> Self {
         Self {
             repository,
             lockout_manager,
             password_validator,
             notifier,
+            logger,
         }
     }
 
@@ -214,6 +217,11 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("User registered: user_id={}", user.user_id),
+            "auth".to_string(),
+        ).await;
+
         Ok(user)
     }
 
@@ -260,12 +268,18 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
+        let _ = self.logger.log_entry(
+            format!("User logged in: user_id={}, session_id={}", session.user_id, session.session_id),
+            "auth".to_string(),
+        ).await;
+
         Ok(session)
     }
 
     pub async fn change_password(
         &mut self,
         user_id: i64,
+        session_id: i64,
         current_password: &str,
         new_password: &str,
     ) -> Result<(), DomainError> {
@@ -304,13 +318,18 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
+        let _ = self.logger.log_entry(
+            format!("Password changed: user_id={}, session_id={}", user_id, session_id),
+            "auth".to_string(),
+        ).await;
+
         Ok(())
     }
 
     pub async fn logout(&self, user_id: i64, session_token: &str) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        tx.remove_user_session(session_token, user_id)
+        let session = tx.remove_user_session(session_token, user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
                 "Session {} not found",
@@ -326,6 +345,11 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
+        let _ = self.logger.log_entry(
+            format!("User logged out: user_id={}, session_id={}", user_id, session.session_id),
+            "auth".to_string(),
+        ).await;
+
         Ok(())
     }
 
@@ -337,6 +361,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     pub async fn create_invite(
         &mut self,
         user_id: i64,
+        session_id: i64,
         code: &str,
         available_registrations: i32,
         role_id: i64,
@@ -380,10 +405,15 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
+        let _ = self.logger.log_entry(
+            format!("Invite created: user_id={}, session_id={}, invite_id={}, role_id={}", user_id, session_id, invite.invite_id, role_id),
+            "auth".to_string(),
+        ).await;
+
         Ok(invite)
     }
 
-    pub async fn delete_invite(&mut self, user_id: i64, invite_id: i64) -> Result<(), DomainError> {
+    pub async fn delete_invite(&mut self, user_id: i64, session_id: i64, invite_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let user = self
@@ -409,6 +439,11 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             )))?;
 
         self.repository.commit(tx).await?;
+
+        let _ = self.logger.log_entry(
+            format!("Invite deleted: user_id={}, session_id={}, invite_id={}", user_id, session_id, invite_id),
+            "auth".to_string(),
+        ).await;
 
         Ok(())
     }
@@ -870,7 +905,7 @@ impl From<DomainError> for ApiError {
     }
 }
 
-use crate::managers::{DefaultLockoutManager, DefaultPasswordValidator};
+use crate::managers::{DefaultLockoutManager, DefaultPasswordValidator, TextLogManager};
 use crate::middleware::{AuthorizeService, authorize};
 use axum::{
     Json,
@@ -885,6 +920,7 @@ pub fn auth_routes(
         DefaultLockoutManager,
         DefaultPasswordValidator,
         DefaultNotifierManager,
+        TextLogManager,
     >,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
@@ -924,6 +960,7 @@ async fn register_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
     Json(payload): Json<RegisterRequest>,
@@ -956,6 +993,7 @@ async fn login_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
     Json(payload): Json<LoginRequest>,
@@ -993,13 +1031,14 @@ async fn change_password_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<ChangePasswordRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .change_password(user_id, &payload.current_password, &payload.new_password)
+        .change_password(session.user_id, session.session_id, &payload.current_password, &payload.new_password)
         .await
         .map_err(ApiError::from)?;
 
@@ -1025,13 +1064,14 @@ async fn logout_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<LogoutRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .logout(user_id, &payload.session_token)
+        .logout(session.user_id, &payload.session_token)
         .await
         .map_err(ApiError::from)?;
     Ok(StatusCode::NO_CONTENT)
@@ -1054,12 +1094,13 @@ async fn get_sessions_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<Session>>, ApiError> {
     let sessions = service
-        .get_user_sessions(user_id)
+        .get_user_sessions(session.user_id)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(sessions))
@@ -1084,14 +1125,16 @@ async fn create_invite_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<CreateInviteRequest>,
 ) -> Result<Json<Invite>, ApiError> {
     let invite = service
         .create_invite(
-            user_id,
+            session.user_id,
+            session.session_id,
             &payload.code,
             payload.available_registrations,
             payload.role_id,
@@ -1121,13 +1164,14 @@ async fn delete_invite_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<DeleteInviteRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .delete_invite(user_id, payload.invite_id)
+        .delete_invite(session.user_id, session.session_id, payload.invite_id)
         .await
         .map_err(ApiError::from)?;
     Ok(StatusCode::NO_CONTENT)
@@ -1150,12 +1194,13 @@ async fn get_invites_handler(
             DefaultLockoutManager,
             DefaultPasswordValidator,
             DefaultNotifierManager,
+            TextLogManager,
         >,
     >,
-    Extension(user_id): Extension<i64>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<Invite>>, ApiError> {
     let invites = service
-        .get_all_invites(user_id)
+        .get_all_invites(session.user_id)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(invites))

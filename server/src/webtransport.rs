@@ -2,9 +2,10 @@ use crate::{
     auth::Session,
     db::Postgre,
     error::DatabaseError,
+    managers::LogManager,
     model::EventPayload,
     user::{User, UserStatusType},
-    voip::VoipParticipant,
+    voip::{MediaType, VoipParticipant},
 };
 use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
@@ -178,16 +179,24 @@ pub trait Repository: Send + Sync + Clone {
         &mut self,
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
+
+    async fn is_subscribed_to_media(
+        &self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<bool, DatabaseError>;
 }
 
 #[derive(Clone)]
-pub struct Service {
+pub struct Service<L: LogManager> {
     repository: Postgre,
+    logger: L,
 }
 
-impl Service {
-    pub fn new(repository: Postgre) -> Self {
-        Self { repository }
+impl<L: LogManager> Service<L> {
+    pub fn new(repository: Postgre, logger: L) -> Self {
+        Self { repository, logger }
     }
 
     pub async fn get_user_role(&self, user_id: i64) -> Result<Option<i64>, DomainError> {
@@ -242,9 +251,25 @@ impl Service {
         status: UserStatusType,
     ) -> Result<Option<User>, DomainError> {
         let mut repo = self.repository.clone();
-        repo.update_user_status(user_id, status)
+        let result = repo
+            .update_user_status(user_id, status.clone())
             .await
-            .map_err(DomainError::from)
+            .map_err(DomainError::from)?;
+
+        if result.is_some() {
+            let _ = self
+                .logger
+                .log_entry(
+                    format!(
+                        "User {} status changed to {:?} via WebTransport",
+                        user_id, status
+                    ),
+                    "webtransport".to_string(),
+                )
+                .await;
+        }
+
+        Ok(result)
     }
 
     pub async fn remove_voip_participant(
@@ -252,7 +277,32 @@ impl Service {
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DomainError> {
         let mut repo = self.repository.clone();
-        repo.remove_voip_participant(user_id)
+        let result = repo
+            .remove_voip_participant(user_id)
+            .await
+            .map_err(DomainError::from)?;
+
+        if result.is_some() {
+            let _ = self
+                .logger
+                .log_entry(
+                    format!("VoIP participant {} removed via WebTransport", user_id),
+                    "webtransport".to_string(),
+                )
+                .await;
+        }
+
+        Ok(result)
+    }
+
+    pub async fn is_subscribed_to_media(
+        &self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<bool, DomainError> {
+        self.repository
+            .is_subscribed_to_media(user_id, publisher_id, media_type)
             .await
             .map_err(DomainError::from)
     }
@@ -393,6 +443,26 @@ impl Repository for Postgre {
 
         Ok(result)
     }
+
+    async fn is_subscribed_to_media(
+        &self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: MediaType,
+    ) -> Result<bool, DatabaseError> {
+        let result = sqlx::query_scalar!(
+            r#"SELECT EXISTS(
+                SELECT 1 FROM subscriptions
+                WHERE user_id = $1 AND publisher_id = $2 AND media_type = $3
+            ) as "exists!""#,
+            user_id,
+            publisher_id,
+            media_type as MediaType
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(result)
+    }
 }
 
 pub struct SubscriberHandler {
@@ -412,20 +482,20 @@ impl SubscriberHandler {
     }
 }
 
-struct SubscriberSession {
+struct SubscriberSession<L: LogManager> {
     may_session: Option<Session>,
     observer_tx: mpsc::Sender<ServerMessage>,
     server_tx: mpsc::Sender<SubscriberMessage>,
     pub server_rx: mpsc::Receiver<SubscriberMessage>,
-    service: Service,
+    service: Service<L>,
     pub connection: Connection,
     identifier: String,
 }
 
-impl SubscriberSession {
+impl<L: LogManager> SubscriberSession<L> {
     fn new(
         observer_tx: mpsc::Sender<ServerMessage>,
-        service: Service,
+        service: Service<L>,
         conn: Connection,
         token: String,
     ) -> Self {
@@ -571,10 +641,10 @@ impl SubscriberSession {
                     }
                 }
             }
-            ControlPayload::Answer { answer } => Err(SessionError::BadRequest(
+            ControlPayload::Answer { .. } => Err(SessionError::BadRequest(
                 "Unexpected answer payload".to_string(),
             )),
-            ControlPayload::Close { reason } => {
+            ControlPayload::Close { .. } => {
                 return Err(SessionError::BadRequest("Session End".to_string()));
             }
         }
@@ -645,21 +715,21 @@ impl SubscriberSession {
     }
 }
 
-pub struct RealtimeServer {
+pub struct RealtimeServer<L: LogManager> {
     observers: Vec<SubscriberHandler>,
-    service: Service,
+    service: Service<L>,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
 }
 
-impl RealtimeServer {
-    pub fn new(repository: Postgre) -> Self {
+impl<L: LogManager + 'static> RealtimeServer<L> {
+    pub fn new(repository: Postgre, logger: L) -> Self {
         let (server_tx, server_rx): (mpsc::Sender<ServerMessage>, mpsc::Receiver<ServerMessage>) =
             mpsc::channel(1000);
 
         Self {
             observers: vec![],
-            service: Service::new(repository),
+            service: Service::new(repository, logger),
             receiver: server_rx,
             sender: server_tx,
         }
@@ -740,7 +810,78 @@ impl RealtimeServer {
         payload: VoipPayload,
         policy: VoipRoutingPolicy,
     ) -> Result<(), ServerError> {
-        self.route_voip(payload, policy).await?;
+        match &payload {
+            VoipPayload::Speech { .. } => self.handle_speech(payload, policy).await,
+            VoipPayload::Media {
+                user_id,
+                media_type: VoipDataType::Voice,
+                ..
+            } => {
+                self.handle_voice(payload.clone(), policy, *user_id as i64)
+                    .await
+            }
+            VoipPayload::Media {
+                user_id,
+                media_type,
+                ..
+            } => {
+                self.handle_media(payload.clone(), *user_id as i64, media_type.clone())
+                    .await
+            }
+        }
+    }
+
+    async fn handle_speech(
+        &self,
+        payload: VoipPayload,
+        policy: VoipRoutingPolicy,
+    ) -> Result<(), ServerError> {
+        let policy_no_except = match policy {
+            VoipRoutingPolicy::Channel(id, _) => VoipRoutingPolicy::Channel(id, None),
+            VoipRoutingPolicy::Recipient(id, _) => VoipRoutingPolicy::Recipient(id, None),
+        };
+        self.route_voip(payload, policy_no_except).await
+    }
+
+    async fn handle_voice(
+        &self,
+        payload: VoipPayload,
+        policy: VoipRoutingPolicy,
+        sender_id: i64,
+    ) -> Result<(), ServerError> {
+        let policy_with_except = match policy {
+            VoipRoutingPolicy::Channel(id, _) => VoipRoutingPolicy::Channel(id, Some(sender_id)),
+            VoipRoutingPolicy::Recipient(id, _) => {
+                VoipRoutingPolicy::Recipient(id, Some(sender_id))
+            }
+        };
+        self.route_voip(payload, policy_with_except).await
+    }
+
+    async fn handle_media(
+        &self,
+        payload: VoipPayload,
+        publisher_id: i64,
+        media_type: VoipDataType,
+    ) -> Result<(), ServerError> {
+        let db_media_type = match media_type {
+            VoipDataType::Camera => MediaType::Camera,
+            VoipDataType::Screen | VoipDataType::ScreenSound => MediaType::Screen,
+            VoipDataType::Voice => return Ok(()),
+        };
+
+        for subscriber in &self.observers {
+            let is_subscribed = self
+                .service
+                .is_subscribed_to_media(subscriber.user_id(), publisher_id, db_media_type.clone())
+                .await?;
+
+            if is_subscribed {
+                subscriber
+                    .send(SubscriberMessage::Voip(payload.clone()))
+                    .await;
+            }
+        }
         Ok(())
     }
 
@@ -850,15 +991,19 @@ impl RealtimeServer {
                         true
                     }
                     (
-                        VoipRoutingPolicy::Recipient(id, Some(except_id)),
+                        VoipRoutingPolicy::Recipient(target_user_id, Some(except_id)),
                         None,
-                        Some(recipient_id),
-                    ) if *id == recipient_id && subscriber.user_id() != *except_id => true,
-                    (VoipRoutingPolicy::Recipient(id, None), None, Some(recipient_id))
-                        if *id == recipient_id =>
+                        Some(_recipient_id),
+                    ) if subscriber.user_id() == *target_user_id
+                        && subscriber.user_id() != *except_id =>
                     {
                         true
                     }
+                    (
+                        VoipRoutingPolicy::Recipient(target_user_id, None),
+                        None,
+                        Some(_recipient_id),
+                    ) if subscriber.user_id() == *target_user_id => true,
 
                     (_, _, _) => false,
                 };
@@ -950,7 +1095,7 @@ impl RealtimeServer {
 
     async fn handle_subscriber_session(
         connection: Connection,
-        service: Service,
+        service: Service<L>,
         observer_tx: mpsc::Sender<ServerMessage>,
     ) {
         let session_token = Uuid::new_v4().to_string();

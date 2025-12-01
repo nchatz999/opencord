@@ -51,27 +51,30 @@ pub trait RoleRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
+use crate::auth::Session;
 use crate::middleware::{AuthorizeService, authorize};
 
-use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
-pub struct RoleService<R: RoleRepository, N: NotifierManager> {
+pub struct RoleService<R: RoleRepository, N: NotifierManager, G: LogManager> {
     repository: R,
     notifier: N,
+    logger: G,
 }
 
-impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
-    pub fn new(repository: R, notifier: N) -> Self {
+impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> {
+    pub fn new(repository: R, notifier: N, logger: G) -> Self {
         Self {
             repository,
             notifier,
+            logger,
         }
     }
 
-    pub async fn create_role(&self, name: String, user_id: i64) -> Result<Role, DomainError> {
+    pub async fn create_role(&self, name: String, user_id: i64, session_id: i64) -> Result<Role, DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
@@ -114,6 +117,11 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Role created: user_id={}, session_id={}, role_id={}", user_id, session_id, role.role_id),
+            "role".to_string(),
+        ).await;
+
         Ok(role)
     }
 
@@ -140,7 +148,9 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
         &self,
         role_id: i64,
         new_name: String,
+        user_id: i64,
         user_role_id: i64,
+        session_id: i64,
     ) -> Result<(), DomainError> {
         if user_role_id != 0 && user_role_id != 1 {
             return Err(DomainError::PermissionDenied(
@@ -191,13 +201,20 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
             ))
             .await;
 
+        let _ = self.logger.log_entry(
+            format!("Role name updated: user_id={}, session_id={}, role_id={}", user_id, session_id, role_id),
+            "role".to_string(),
+        ).await;
+
         Ok(())
     }
 
     pub async fn delete_role(
         &self,
         role_id: i64,
+        user_id: i64,
         user_role_id: i64,
+        session_id: i64,
     ) -> Result<Option<Role>, DomainError> {
         if user_role_id != 0 && user_role_id != 1 {
             return Err(DomainError::PermissionDenied(
@@ -233,6 +250,11 @@ impl<R: RoleRepository, N: NotifierManager> RoleService<R, N> {
                 ControlRoutingPolicy::Broadcast,
             ))
             .await;
+
+        let _ = self.logger.log_entry(
+            format!("Role deleted: user_id={}, session_id={}, role_id={}", user_id, session_id, role_id),
+            "role".to_string(),
+        ).await;
 
         Ok(Some(deleted))
     }
@@ -382,7 +404,7 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 pub fn role_routes(
-    role_service: RoleService<Postgre, DefaultNotifierManager>,
+    role_service: RoleService<Postgre, DefaultNotifierManager, TextLogManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -410,7 +432,7 @@ pub fn role_routes(
 )]
 #[axum::debug_handler]
 async fn list_roles_handler(
-    State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
+    State(service): State<RoleService<Postgre, DefaultNotifierManager, TextLogManager>>,
 ) -> Result<Json<Vec<Role>>, ApiError> {
     let roles = service.list_all_roles().await.map_err(ApiError::from)?;
     Ok(Json(roles))
@@ -435,7 +457,7 @@ async fn list_roles_handler(
 )]
 #[axum::debug_handler]
 async fn get_role_by_id_handler(
-    State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
+    State(service): State<RoleService<Postgre, DefaultNotifierManager, TextLogManager>>,
     Path(id): Path<i64>,
 ) -> Result<Json<Role>, ApiError> {
     let role_data = service.get_role(id).await.map_err(ApiError::from)?;
@@ -457,12 +479,12 @@ async fn get_role_by_id_handler(
     security(("api_key" = []))
 )]
 async fn create_role_handler(
-    State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<RoleService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<CreateRoleRequest>,
 ) -> Result<(StatusCode, Json<CreateRoleResponse>), ApiError> {
     let role = service
-        .create_role(payload.name.clone(), user_id)
+        .create_role(payload.name.clone(), session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -495,13 +517,14 @@ async fn create_role_handler(
     )
 )]
 async fn update_role_name_handler(
-    State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
+    State(service): State<RoleService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Extension(user): Extension<UsersSQL>,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateRoleRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .update_role_name(id, payload.name.clone(), user.role_id)
+        .update_role_name(id, payload.name.clone(), session.user_id, user.role_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -527,12 +550,13 @@ async fn update_role_name_handler(
     )
 )]
 async fn delete_role_handler(
-    State(service): State<RoleService<Postgre, DefaultNotifierManager>>,
-    Extension(user): Extension<i64>,
+    State(service): State<RoleService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
+    Extension(user): Extension<UsersSQL>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .delete_role(id, user)
+        .delete_role(id, session.user_id, user.role_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 

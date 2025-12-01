@@ -1,7 +1,6 @@
 import { createSignal } from 'solid-js';
 import { fetchApi } from '../utils';
 
-// Define types for Audio Encoding
 export interface AudioEncoderConfig {
   codec?: string;
   sampleRate?: number;
@@ -9,18 +8,15 @@ export interface AudioEncoderConfig {
   bitrate?: number;
 }
 
-// Existing constraints interface
 export interface ScreenShareConstraints {
   width?: number;
   height?: number;
   frameRate?: number;
   cursor?: 'always' | 'motion' | 'never';
   displaySurface?: 'application' | 'browser' | 'monitor' | 'window';
-  // Add property to request audio
   audio?: boolean;
 }
 
-// Existing video encoder config
 export interface VideoEncoderConfig {
   codec?: string;
   width?: number;

@@ -82,7 +82,7 @@ export class Microphone {
     this.getAvailableInputsSignal = getAvailableInputs;
     this.setAvailableInputsSignal = setAvailableInputs;
 
-    const [getQuality, setQuality] = createSignal<number>(1.0);
+    const [getQuality, setQuality] = createSignal<number>(128000);
     this.getQualitySignal = getQuality;
     this.setQualitySignal = setQuality;
 

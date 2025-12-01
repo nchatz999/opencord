@@ -75,21 +75,24 @@ pub trait AclRepository: Send + Sync + Clone {
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
-use crate::managers::{DefaultNotifierManager, NotifierManager};
+use crate::auth::Session;
+use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
-pub struct AclService<R: AclRepository, N: NotifierManager> {
+pub struct AclService<R: AclRepository, N: NotifierManager, G: LogManager> {
     repository: R,
     notifier: N,
+    logger: G,
 }
 
-impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
-    pub fn new(repository: R, notifier: N) -> Self {
+impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
+    pub fn new(repository: R, notifier: N, logger: G) -> Self {
         Self {
             repository,
             notifier,
+            logger,
         }
     }
 
@@ -140,6 +143,7 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         &self,
         acls: Vec<GroupRoleRights>,
         user_id: i64,
+        session_id: i64,
     ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
@@ -246,6 +250,11 @@ impl<R: AclRepository, N: NotifierManager> AclService<R, N> {
         }
 
         self.repository.commit(tx).await?;
+
+        let _ = self.logger.log_entry(
+            format!("Group role rights updated: user_id={}, session_id={}", user_id, session_id),
+            "acl".to_string(),
+        ).await;
 
         Ok(())
     }
@@ -486,7 +495,7 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 pub fn acl_routes(
-    acl_service: AclService<Postgre, DefaultNotifierManager>,
+    acl_service: AclService<Postgre, DefaultNotifierManager, TextLogManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -511,9 +520,10 @@ pub fn acl_routes(
 )]
 #[axum::debug_handler]
 async fn get_all_group_role_rights_handler(
-    State(service): State<AclService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<AclService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<GroupRoleRights>>, ApiError> {
+    let user_id = session.user_id;
     let rights = service
         .get_all_accessible_group_role_rights(user_id)
         .await
@@ -538,12 +548,12 @@ async fn get_all_group_role_rights_handler(
     )
 )]
 async fn set_group_role_rights_handler(
-    State(service): State<AclService<Postgre, DefaultNotifierManager>>,
-    Extension(user_id): Extension<i64>,
+    State(service): State<AclService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
     Json(payload): Json<Vec<GroupRoleRights>>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .set_group_role_rights(payload, user_id)
+        .set_group_role_rights(payload, session.user_id, session.session_id)
         .await
         .map_err(ApiError::from)?;
 
