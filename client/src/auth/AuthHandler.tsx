@@ -22,22 +22,37 @@ const AuthHandler: Component = () => {
         return;
       }
 
-
       userDomain.setAppState({ type: 'connecting' });
       userDomain.setCurrentUser(maybeToken.value.userId);
 
-      const connectResult = await connection.connect(maybeToken.value.sessionToken);
-      console.log("sindethika")
-      if (!connectResult.ok) {
+      let retries = 0;
+      const maxRetries = 3;
+
+      while (retries < maxRetries) {
+        const connectResult = await connection.connect(maybeToken.value.sessionToken);
+
+        if (connectResult.ok) {
+          await sleep(100);
+          await getInitialData();
+          userDomain.setAppState({ type: 'authenticated' });
+          return;
+        }
+
         addToast(connectResult.error, "error");
-        userDomain.setAppState({ type: 'connectionError' })
-        return
+
+        if (connectResult.error === 'Connection rejected by server') {
+          userDomain.setAppState({ type: 'unauthenticated' });
+          return;
+        }
+
+        retries++;
+        if (retries < maxRetries) {
+          userDomain.setAppState({ type: 'connectionError', reason: `${connectResult.error} (retry ${retries}/${maxRetries})` });
+          await sleep(5000);
+        } else {
+          userDomain.setAppState({ type: 'connectionError', reason: connectResult.error });
+        }
       }
-
-      await sleep(100)
-      await getInitialData()
-      userDomain.setAppState({ type: 'authenticated' });
-
     }
   });
 

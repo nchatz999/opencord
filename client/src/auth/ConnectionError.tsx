@@ -1,8 +1,11 @@
 import type { Component } from "solid-js";
-import { userDomain } from "../store";
+import { userDomain, type AppState } from "../store";
 import Button from "../components/Button";
 
-const ConnectionError: Component = () => (
+const ConnectionError: Component = () => {
+  const appState = () => userDomain.getAppState() as Extract<AppState, { type: 'connectionError' }>;
+
+  return (
   <div class="min-h-screen bg-[#313338] flex items-center justify-center">
     <div class="bg-[#2b2d31] rounded-lg p-8 max-w-md w-full mx-4">
       <div class="text-center">
@@ -12,8 +15,9 @@ const ConnectionError: Component = () => (
           </svg>
         </div>
         <h2 class="text-xl font-semibold text-white mb-4">Connection Lost</h2>
+        <p class="text-[#b5bac1] mb-2">{appState().reason}</p>
         <p class="text-[#b5bac1] mb-6 leading-relaxed">
-          Your session may have expired, the server might be down, or you may have logged in from another device.
+          Retrying in a few seconds...
         </p>
         <div class="space-y-3">
           <Button
@@ -34,6 +38,7 @@ const ConnectionError: Component = () => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 export default ConnectionError;

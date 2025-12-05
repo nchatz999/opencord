@@ -27,7 +27,7 @@ export type AppState =
   | { type: 'unauthenticated' }
   | { type: 'connecting' }
   | { type: 'authenticated' }
-  | { type: 'connectionError' }
+  | { type: 'connectionError'; reason: string }
 
 
 export type ModalType =
@@ -1153,7 +1153,6 @@ export function handleServerEvent(event: EventPayload): void {
 
 
 export const getInitialData = async () => {
-
   try {
     const [
       groupsResult,
@@ -1260,7 +1259,11 @@ connection.onServerEventReceived((event: EventPayload) => {
 });
 
 connection.onConnectionLost((reason) => {
-  userDomain.setAppState({ type: "connectionError" });
+  userDomain.setAppState({ type: "connectionError", reason });
+});
+
+connection.onAuthenticationRejected(() => {
+  userDomain.setAppState({ type: "unauthenticated" });
 });
 
 

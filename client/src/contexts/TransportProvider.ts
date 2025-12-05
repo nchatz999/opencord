@@ -23,6 +23,7 @@ export class TransportProvider {
   private onVoipData?: (data: VoipPayload) => void;
   private onServerEvent?: (event: EventPayload) => void;
   private onDisconnect?: (reason: string) => void;
+  private onAuthRejected?: () => void;
 
   constructor(config: TransportConfig) {
     this.protocol = new RTCPProtocol(
@@ -38,7 +39,7 @@ export class TransportProvider {
       },
       () => {
         if (this.onDisconnect) {
-          this.onDisconnect("Connection Lost");
+          this.onDisconnect("Connection to server is lost");
         }
       }
     );
@@ -67,6 +68,9 @@ export class TransportProvider {
           const success = payload.answer.type === 'accept';
           this.pendingConnection.resolve(success);
           this.pendingConnection = null;
+          if (!success && this.onAuthRejected) {
+            this.onAuthRejected();
+          }
         }
         break;
 
@@ -140,6 +144,10 @@ export class TransportProvider {
 
   public onConnectionLost(callback: (reason: string) => void): void {
     this.onDisconnect = callback;
+  }
+
+  public onAuthenticationRejected(callback: () => void): void {
+    this.onAuthRejected = callback;
   }
 
   public async disconnect() {

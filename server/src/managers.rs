@@ -2,10 +2,6 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use base32;
-use rand::Rng;
-use totp_rs::{Algorithm, TOTP};
-
 #[derive(Debug)]
 pub enum FileError {
     Io(io::Error),
@@ -174,58 +170,6 @@ impl FileManager for LocalFileManager {
 
         fs::remove_file(file_path)?;
         Ok(())
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum TotpError {
-    #[error("Failed to generate TOTP secret")]
-    SecretGenerationFailed,
-
-    #[error("Failed to verify TOTP code")]
-    VerificationFailed,
-
-    #[error("Invalid TOTP configuration")]
-    InvalidConfiguration,
-}
-
-pub trait TotpManager: Send + Sync + Clone {
-    fn generate_secret(&self) -> Result<String, TotpError>;
-
-    fn verify_code(&self, secret: &str, code: &str) -> Result<bool, TotpError>;
-}
-
-#[derive(Clone)]
-pub struct DefaultTotpManager;
-
-impl DefaultTotpManager {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for DefaultTotpManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TotpManager for DefaultTotpManager {
-    fn generate_secret(&self) -> Result<String, TotpError> {
-        let mut rng = rand::thread_rng();
-        let secret: [u8; 20] = rng.r#gen();
-        Ok(base32::encode(
-            base32::Alphabet::Rfc4648 { padding: false },
-            &secret,
-        ))
-    }
-
-    fn verify_code(&self, secret: &str, code: &str) -> Result<bool, TotpError> {
-        let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret.as_bytes().to_vec())
-            .map_err(|_| TotpError::InvalidConfiguration)?;
-
-        totp.check_current(code)
-            .map_err(|_| TotpError::VerificationFailed)
     }
 }
 
@@ -730,8 +674,8 @@ impl TextLogManager {
             return None;
         }
 
-        let date = OffsetDateTime::parse(parts[1], &time::format_description::well_known::Rfc3339)
-            .ok()?;
+        let date =
+            OffsetDateTime::parse(parts[1], &time::format_description::well_known::Rfc3339).ok()?;
 
         Some(LogEntry {
             id: parts[0].to_string(),

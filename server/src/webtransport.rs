@@ -792,7 +792,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             .iter()
             .filter(|o| o.session_token == session_token)
         {
-            o.send(SubscriberMessage::Close("disconnect".to_string()))
+            o.send(SubscriberMessage::Close("Disconnect".to_string()))
                 .await;
         }
         self.observers
@@ -1112,8 +1112,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                     match  may_msg {
                         Some(msg) => {
                             if let Err(e) = session.handle_connection_message(msg).await {
-                                println!("{:?}",e);
-                                session.close("sadf".to_string()).await;
+                                session.close(format!("{:?}",e)).await;
                                 break;
                             }
                         }
