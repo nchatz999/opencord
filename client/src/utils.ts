@@ -2,10 +2,10 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { Result } from 'opencord-utils'
 import { err, ok } from 'opencord-utils'
+import { getServerUrlOrDefault } from './contexts/ServerConfig'
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
-
 
 export const toBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -24,16 +24,15 @@ type ErrorResponse = {
 };
 
 const getBaseUrl = () => {
-  return (import.meta.env.VITE_DOMAIN || 'https://localhost') + "/api"
-
+  return getServerUrlOrDefault() + "/api";
 };
 
-export async function fetchApi<T = any>(
+export async function fetchApi<T = unknown>(
   url: string,
   options?: {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-    body?: any;
-    query?: Record<string, any>;
+    body?: Record<string, unknown>;
+    query?: Record<string, string | number | boolean | undefined | null>;
     headers?: Record<string, string>;
   }
 ): Promise<Result<T, ErrorResponse>> {

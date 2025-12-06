@@ -30,7 +30,7 @@ import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
 import { fetchApi } from "../utils";
 import { clearSession, loadSession } from "../contexts/Session";
-import { UserStatusType } from "../model";
+import { UserStatusType, type Session } from "../model";
 import { useToaster } from "../components/Toaster";
 import type { AudioOutputDevice } from "../contexts/OutputProvider";
 
@@ -50,7 +50,7 @@ const UserSettingsModal: Component = () => {
   const [confirmPassword, setConfirmPassword] = createSignal("");
   const [passwordError, setPasswordError] = createSignal("");
 
-  const [sessions, setSessions] = createSignal<any[]>([]);
+  const [sessions, setSessions] = createSignal<Session[]>([]);
   const [loadingSessions, setLoadingSessions] = createSignal(false);
 
   const { addToast } = useToaster();
@@ -83,7 +83,7 @@ const UserSettingsModal: Component = () => {
   });
 
   const loadSessions = async () => {
-    const result = await fetchApi<any[]>("/auth/sessions", {
+    const result = await fetchApi<Session[]>("/auth/sessions", {
       method: "GET",
     });
 

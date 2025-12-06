@@ -160,3 +160,14 @@ export interface MessageWithFiles {
   message: Message;
   files: File[];
 }
+
+export interface Session {
+  sessionId: number;
+  sessionToken: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface RegisterResponse {
+  user: User;
+}

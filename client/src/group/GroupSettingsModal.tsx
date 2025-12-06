@@ -25,8 +25,8 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
       roleDomain.list()
-        .filter((role: any) => role.roleId > 1)
-        .map((role: any) => [
+        .filter((role) => role.roleId > 1)
+        .map((role) => [
           role.roleId,
           aclDomain.getGroupRights(props.group.groupId, role.roleId) ?? 0,
         ])
@@ -42,7 +42,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
           <div class="flex-grow overflow-y-auto mb-4 pr-2 custom-scrollbar">
             <ul class="space-y-2">
               <For each={groupDomain.getChannels(props.group.groupId)}>
-                {(channel: any) => (
+                {(channel) => (
                   <li class="flex items-center justify-between bg-[#2f3136] p-2 rounded">
                     <div class="flex items-center">
                       {channel.channelType === 'Text' ? (

@@ -7,7 +7,7 @@ import { ok } from 'opencord-utils';
 
 export interface TransportConfig {
   url: string;
-  certificateHash: {
+  certificateHash?: {
     algorithm: string;
     value: Uint8Array;
   };
@@ -29,11 +29,11 @@ export class TransportProvider {
     this.protocol = new RTCPProtocol(
       config.url,
       config.certificateHash,
-      (data: any) => {
+      (data: ArrayBuffer) => {
         const event = decode(data) as ConnectionMessage;
         this.handleConnectionMessage(event)
       },
-      (data: any) => {
+      (data: ArrayBuffer) => {
         const event = decode(data) as ConnectionMessage;
         this.handleConnectionMessage(event)
       },

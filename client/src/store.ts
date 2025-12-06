@@ -21,6 +21,7 @@ import { Camera } from './contexts/CameraProvider'
 import { VideoPlayback } from './contexts/VideoPlayback'
 import { OutputManager } from './contexts/OutputProvider'
 import { TransportProvider } from './contexts/TransportProvider'
+import { getServerUrlOrDefault } from './contexts/ServerConfig'
 
 export type AppState =
   | { type: 'loading' }
@@ -45,7 +46,7 @@ export interface EventLogEntry {
   id: number;
   timestamp: string;
   type: string;
-  data: any;
+  data: unknown;
 }
 
 export interface State {
@@ -991,7 +992,7 @@ export const fileDomain = new FileDomain();
 
 let eventIdCounter = 0;
 
-function logEvent(type: string, data: any): void {
+function logEvent(type: string, data: unknown): void {
   const logEntry: EventLogEntry = {
     id: ++eventIdCounter,
     timestamp: new Date().toISOString(),
@@ -1188,22 +1189,101 @@ export const getInitialData = async () => {
   }
 }
 
-function hexToUint8Array(hexString: any) {
+function hexToUint8Array(hexString: string): Uint8Array {
   const cleanHex = hexString.replace(/[^0-9A-Fa-f]/g, '');
+  const matches = cleanHex.match(/.{1,2}/g);
+  if (!matches) return new Uint8Array();
   return new Uint8Array(
-    cleanHex.match(/.{1,2}/g).map((byte: any) => parseInt(byte, 16))
+    matches.map((byte) => parseInt(byte, 16))
   );
 }
 
-const certificateHash = {
-  algorithm: 'sha-256',
-  value: hexToUint8Array(import.meta.env.VITE_CERT_HASH)
-};
+function getWebTransportUrl(): string {
+  const serverUrl = getServerUrlOrDefault();
+  const url = new URL(serverUrl);
+  return `${url.protocol}//${url.hostname}:4443/session`;
+}
+
+function getCertificateHash(): { algorithm: string; value: Uint8Array } | undefined {
+  const certHash = import.meta.env.VITE_CERT_HASH;
+  if (!certHash) return undefined;
+  return {
+    algorithm: 'sha-256',
+    value: hexToUint8Array(certHash)
+  };
+}
 
 export let connection = new TransportProvider({
-  url: `https://${window.location.hostname}:4443/session`,
-  certificateHash
+  url: getWebTransportUrl(),
+  certificateHash: getCertificateHash()
 });
+
+export function reinitializeConnection(): void {
+  connection = new TransportProvider({
+    url: getWebTransportUrl(),
+    certificateHash: getCertificateHash()
+  });
+
+  connection.onVoipDataReceived((frame: VoipPayload) => {
+    if (frame.type === "media") {
+      switch (frame.mediaType) {
+        case "voice": {
+          let packet = new EncodedAudioChunk({
+            type: frame.key,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
+          break
+        }
+        case "camera": {
+          let videoPacket = new EncodedVideoChunk({
+            type: frame.key as EncodedVideoChunkType,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
+          break
+        }
+        case "screen": {
+          let videoPacket = new EncodedVideoChunk({
+            type: frame.key as EncodedVideoChunkType,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
+          break
+        }
+        case "screenSound": {
+          let videoPacket = new EncodedAudioChunk({
+            type: frame.key as EncodedAudioChunkType,
+            timestamp: frame.realTimestamp,
+            duration: undefined,
+            data: new Uint8Array(frame.data)
+          })
+          voipDomain.streamMedia(frame.userId, 'screenSound', videoPacket, frame.timestamp)
+        }
+      }
+    } else if (frame.type === "speech") {
+      voipDomain.updateSpeakingState(frame.userId, frame.isSpeaking)
+    }
+  });
+
+  connection.onServerEventReceived((event: EventPayload) => {
+    handleServerEvent(event);
+  });
+
+  connection.onConnectionLost((reason) => {
+    userDomain.setAppState({ type: "connectionError", reason });
+  });
+
+  connection.onAuthenticationRejected(() => {
+    userDomain.setAppState({ type: "unauthenticated" });
+  });
+}
 
 connection.onVoipDataReceived((frame: VoipPayload) => {
   if (frame.type === "media") {

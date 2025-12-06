@@ -71,7 +71,7 @@ export const Input: Component<InputProps> = (props) => {
           fallback={
             <input
               id={inputId()}
-              type="text"
+              type={merged.type || "text"}
               value={merged.value}
               placeholder={merged.placeholder}
               onChange={handleChange}

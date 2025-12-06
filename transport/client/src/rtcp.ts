@@ -128,7 +128,7 @@ export class RTCPProtocol {
   private closed: boolean = true;
   private pingIntervalId: number | null = null;
   private cleanerIntervalId: number | null = null;
-  private hash: WebTransportHash;
+  private hash?: WebTransportHash;
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
   onDisconnect: () => void;
@@ -137,7 +137,7 @@ export class RTCPProtocol {
 
   constructor(
     url: string,
-    hash: WebTransportHash,
+    hash: WebTransportHash | undefined,
     onFrameConplete: (data: Uint8Array) => void,
     onSafeDataComplete: (data: Uint8Array) => void,
     onDisconnect: (() => void),
@@ -167,7 +167,10 @@ export class RTCPProtocol {
     }
 
     try {
-      this.transport = new WebTransport(this.url + `/?${this.token}`, { serverCertificateHashes: [this.hash] })
+      const options: WebTransportOptions = this.hash
+        ? { serverCertificateHashes: [this.hash] }
+        : {};
+      this.transport = new WebTransport(this.url + `/?${this.token}`, options);
       await this.transport.ready;
       this.closed = false;
 
@@ -237,7 +240,6 @@ export class RTCPProtocol {
       await writer.close()
     } catch (e) {
       this.onDisconnect();
-      console.log("sendsafe error")
       await this.disconnect()
     }
   }
@@ -399,7 +401,6 @@ export class RTCPProtocol {
     this.pingIntervalId = window.setInterval(async () => {
       if (this.missedPongs >= 5) {
         this.onDisconnect();
-        console.log("send ping error")
         await this.disconnect()
         return;
       }
@@ -440,7 +441,6 @@ export class RTCPProtocol {
       }
     } catch (e) {
       this.onDisconnect();
-      console.log("run safe packthandler erorr")
       await this.disconnect()
     }
   }
@@ -468,7 +468,6 @@ export class RTCPProtocol {
       this.onSafeDataComplete(completeMessage);
     } catch (e) {
       this.onDisconnect();
-      console.log("handle safe datastream error")
       await this.disconnect()
     }
   }
@@ -484,7 +483,6 @@ export class RTCPProtocol {
         }
       } catch (e) {
         await this.disconnect()
-        console.log("runincoming handler error")
         break;
       }
     }
@@ -498,7 +496,6 @@ export class RTCPProtocol {
         await this.writer.write(value);
       } catch (e) {
         await this.disconnect()
-        console.log("run outgoing sender error")
         break;
       }
     }
@@ -556,18 +553,15 @@ export class RTCPProtocol {
 
       if (this.onDisconnect && closeCode && reason) {
         this.onDisconnect();
-        console.log("closed transport ")
         await this.disconnect()
       }
     } catch (e) {
       this.onDisconnect();
-      console.log("closed transport  try")
       await this.disconnect()
     }
   }
 
   public async disconnect(code: number = 0, reason: string = "Client initiated disconnect"): Promise<void> {
-    console.log("kalestika")
     this.closed = true;
 
     if (this.pingIntervalId !== null) {

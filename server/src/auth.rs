@@ -153,7 +153,13 @@ pub struct AuthService<
 impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierManager, G: LogManager>
     AuthService<R, L, P, N, G>
 {
-    pub fn new(repository: R, lockout_manager: L, password_validator: P, notifier: N, logger: G) -> Self {
+    pub fn new(
+        repository: R,
+        lockout_manager: L,
+        password_validator: P,
+        notifier: N,
+        logger: G,
+    ) -> Self {
         Self {
             repository,
             lockout_manager,
@@ -217,10 +223,13 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("User registered: user_id={}", user.user_id),
-            "auth".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!("User registered: user_id={}", user.user_id),
+                "auth".to_string(),
+            )
+            .await;
 
         Ok(user)
     }
@@ -268,10 +277,16 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
-        let _ = self.logger.log_entry(
-            format!("User logged in: user_id={}, session_id={}", session.user_id, session.session_id),
-            "auth".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "User logged in: user_id={}, session_id={}",
+                    session.user_id, session.session_id
+                ),
+                "auth".to_string(),
+            )
+            .await;
 
         Ok(session)
     }
@@ -318,10 +333,16 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
-        let _ = self.logger.log_entry(
-            format!("Password changed: user_id={}, session_id={}", user_id, session_id),
-            "auth".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Password changed: user_id={}, session_id={}",
+                    user_id, session_id
+                ),
+                "auth".to_string(),
+            )
+            .await;
 
         Ok(())
     }
@@ -329,7 +350,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
     pub async fn logout(&self, user_id: i64, session_token: &str) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let session = tx.remove_user_session(session_token, user_id)
+        let session = tx
+            .remove_user_session(session_token, user_id)
             .await?
             .ok_or(DomainError::BadRequest(format!(
                 "Session {} not found",
@@ -345,10 +367,16 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
-        let _ = self.logger.log_entry(
-            format!("User logged out: user_id={}, session_id={}", user_id, session.session_id),
-            "auth".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "User logged out: user_id={}, session_id={}",
+                    user_id, session.session_id
+                ),
+                "auth".to_string(),
+            )
+            .await;
 
         Ok(())
     }
@@ -405,15 +433,26 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
-        let _ = self.logger.log_entry(
-            format!("Invite created: user_id={}, session_id={}, invite_id={}, role_id={}", user_id, session_id, invite.invite_id, role_id),
-            "auth".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Invite created: user_id={}, session_id={}, invite_id={}, role_id={}",
+                    user_id, session_id, invite.invite_id, role_id
+                ),
+                "auth".to_string(),
+            )
+            .await;
 
         Ok(invite)
     }
 
-    pub async fn delete_invite(&mut self, user_id: i64, session_id: i64, invite_id: i64) -> Result<(), DomainError> {
+    pub async fn delete_invite(
+        &mut self,
+        user_id: i64,
+        session_id: i64,
+        invite_id: i64,
+    ) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
         let user = self
@@ -440,10 +479,16 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
 
         self.repository.commit(tx).await?;
 
-        let _ = self.logger.log_entry(
-            format!("Invite deleted: user_id={}, session_id={}, invite_id={}", user_id, session_id, invite_id),
-            "auth".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Invite deleted: user_id={}, session_id={}, invite_id={}",
+                    user_id, session_id, invite_id
+                ),
+                "auth".to_string(),
+            )
+            .await;
 
         Ok(())
     }
@@ -1038,7 +1083,12 @@ async fn change_password_handler(
     Json(payload): Json<ChangePasswordRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .change_password(session.user_id, session.session_id, &payload.current_password, &payload.new_password)
+        .change_password(
+            session.user_id,
+            session.session_id,
+            &payload.current_password,
+            &payload.new_password,
+        )
         .await
         .map_err(ApiError::from)?;
 

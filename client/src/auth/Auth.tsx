@@ -1,37 +1,41 @@
 import { type Component, createSignal, Switch, Match } from "solid-js";
-import { Lock, Mail, User, Ticket } from "lucide-solid";
+import { Lock, User, Ticket, Globe } from "lucide-solid";
 import { useToaster } from "../components/Toaster";
 import { Input } from "../components/Input";
 import Checkbox from "../components/CheckBox";
 import Button from "../components/Button";
 import { match } from "opencord-utils";
 import { fetchApi } from "../utils";
-import { userDomain } from "../store";
+import { userDomain, reinitializeConnection } from "../store";
 import { saveSession } from "../contexts/Session";
+import { getServerUrlOrDefault, setServerUrl } from "../contexts/ServerConfig";
+import type { RegisterResponse } from "../model";
 
-type FormType = "login" | "register" | "forgot-password";
+type FormType = "login" | "register";
 
 const AuthPage: Component = () => {
-  const [email, setEmail] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [repeatPassword, setRepeatPassword] = createSignal("");
   const [username, setUsername] = createSignal("");
   const [inviteCode, setInviteCode] = createSignal("");
   const [rememberMe, setRememberMe] = createSignal(false);
   const [activeForm, setActiveForm] = createSignal<FormType>("login");
+  const [serverUrl, setServerUrlSignal] = createSignal(getServerUrlOrDefault());
 
   const { addToast } = useToaster();
 
   const handleLogin = async (e: Event) => {
     e.preventDefault();
-    if (username() && password()) {
+    if (username() && password() && serverUrl()) {
+      setServerUrl(serverUrl());
+      reinitializeConnection();
+
       const ans = await fetchApi<{ session_token: string; expires_at?: string, user_id: number }>("/auth/login", {
         method: "POST",
         body: { username: username(), password: password() },
       });
       match(ans, {
         ok: (val) => {
-
           saveSession(val.session_token, val.user_id);
           userDomain.setAppState({ type: "loading" })
         },
@@ -48,11 +52,14 @@ const AuthPage: Component = () => {
 
   const handleRegister = async (e: Event) => {
     e.preventDefault();
-    if (password() && username() && repeatPassword() && inviteCode()) {
+    if (password() && username() && repeatPassword() && inviteCode() && serverUrl()) {
       if (password() !== repeatPassword()) {
         addToast("Passwords do not match", "error");
       } else {
-        const ans = await fetchApi<{ user: any }>("/auth/register", {
+        setServerUrl(serverUrl());
+        reinitializeConnection();
+
+        const ans = await fetchApi<RegisterResponse>("/auth/register", {
           method: "POST",
           body: {
             username: username(),
@@ -75,13 +82,15 @@ const AuthPage: Component = () => {
     }
   };
 
-  const handleForgotPassword = async (e: Event) => {
-    e.preventDefault();
-  };
-
   const loginForm = () => (
     <>
       <form onSubmit={handleLogin} class="space-y-4">
+        <Input
+          value={serverUrl()}
+          onChange={setServerUrlSignal}
+          placeholder="Server URL"
+          icon={<Globe class="w-5 h-5 text-[#72767d]" />}
+        />
         <Input
           value={username()}
           onChange={setUsername}
@@ -95,20 +104,11 @@ const AuthPage: Component = () => {
           placeholder="Password"
           icon={<Lock class="w-5 h-5 text-[#72767d]" />}
         />
-        <div class="flex items-center justify-between">
-          <Checkbox
-            label="Remember me"
-            checked={rememberMe()}
-            onChange={setRememberMe}
-          />
-          <button
-            type="button"
-            onClick={() => setActiveForm("forgot-password")}
-            class="text-sm text-[#5865f2] hover:underline"
-          >
-            Forgot password?
-          </button>
-        </div>
+        <Checkbox
+          label="Remember me"
+          checked={rememberMe()}
+          onChange={setRememberMe}
+        />
         <Button type="submit" class="w-full">
           Log In
         </Button>
@@ -128,6 +128,12 @@ const AuthPage: Component = () => {
   const registerForm = () => (
     <>
       <form onSubmit={handleRegister} class="space-y-4">
+        <Input
+          value={serverUrl()}
+          onChange={setServerUrlSignal}
+          placeholder="Server URL"
+          icon={<Globe class="w-5 h-5 text-[#72767d]" />}
+        />
         <Input
           value={username()}
           onChange={setUsername}
@@ -170,32 +176,6 @@ const AuthPage: Component = () => {
     </>
   );
 
-  const forgotPasswordForm = () => (
-    <>
-      <form onSubmit={handleForgotPassword} class="space-y-4">
-        <Input
-          value={email()}
-          onChange={setEmail}
-          placeholder="Email"
-          icon={<Mail class="w-5 h-5 text-[#72767d]" />}
-        />
-        <Button type="submit" class="w-full">
-          Reset Password
-        </Button>
-      </form>
-      <p class="mt-4 text-sm text-center text-[#72767d]">
-        Remember your password?{" "}
-        <button
-          onClick={() => setActiveForm("login")}
-          class="text-[#5865f2] hover:underline"
-        >
-          Log in
-        </button>
-      </p>
-    </>
-  );
-
-
   return (
     <div class="min-h-screen bg-[#36393f] flex items-center justify-center p-4">
       <div class="w-full max-w-md bg-[#2f3136] p-8 rounded-lg shadow-lg">
@@ -203,18 +183,12 @@ const AuthPage: Component = () => {
           <Switch>
             <Match when={activeForm() === "login"}>Welcome Back!</Match>
             <Match when={activeForm() === "register"}>Create an Account</Match>
-            <Match when={activeForm() === "forgot-password"}>
-              Reset Password
-            </Match>
           </Switch>
         </h1>
 
         <Switch>
           <Match when={activeForm() === "login"}>{loginForm()}</Match>
           <Match when={activeForm() === "register"}>{registerForm()}</Match>
-          <Match when={activeForm() === "forgot-password"}>
-            {forgotPasswordForm()}
-          </Match>
         </Switch>
       </div>
     </div>

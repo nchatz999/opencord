@@ -28,7 +28,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
 
   const [groupRights, setGroupRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
-      groupDomain.list().map((group: any) => [
+      groupDomain.list().map((group) => [
         group.groupId,
         aclDomain.getGroupRights(group.groupId, props.role.roleId) ?? 0,
       ])
@@ -60,7 +60,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
               <h3 class="text-lg font-semibold mb-2">Role Users</h3>
               <ul class="space-y-2 max-h-96 overflow-y-auto">
                 <For each={filteredUsers()}>
-                  {(user: any) => (
+                  {(user) => (
                     <li class="flex items-center justify-between bg-gray-700 p-2 rounded">
                       <div class="flex items-center space-x-2">
                         <img
@@ -101,7 +101,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             </TableHead>
             <TableBody>
               <For each={groupDomain.list()}>
-                {(group: any) => (
+                {(group) => (
                   <TableRow>
                     <TableCell>{group.groupName}</TableCell>
 

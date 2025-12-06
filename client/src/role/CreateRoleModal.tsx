@@ -48,7 +48,7 @@ const CreateRoleModal: Component = () => {
             </TableHead>
             <TableBody>
               <For each={groupDomain.list()}>
-                {(group: any) => (
+                {(group) => (
                   <TableRow>
                     <TableCell>{group.groupName}</TableCell>
 

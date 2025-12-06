@@ -18,6 +18,19 @@ import MessageComponent from "./Message";
 
 const MESSAGES_LIMIT = 50;
 const SCROLL_THRESHOLD = 5;
+const BOTTOM_THRESHOLD = 100;
+
+const waitForImages = (container: HTMLElement): Promise<void> => {
+  const images = container.querySelectorAll('img');
+  const promises = Array.from(images).map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      img.addEventListener('load', () => resolve(), { once: true });
+      img.addEventListener('error', () => resolve(), { once: true });
+    });
+  });
+  return Promise.all(promises).then(() => {});
+};
 
 const ChatContent: Component = () => {
 
@@ -43,10 +56,22 @@ const ChatContent: Component = () => {
     return msgs.length > 0 ? msgs[msgs.length - 1].id : null;
   });
 
+  const isNearBottom = (): boolean => {
+    if (!messagesContainerRef) return true;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef;
+    return scrollHeight - scrollTop - clientHeight < BOTTOM_THRESHOLD;
+  };
 
   const scrollToBottom = () => {
     if (messagesEndRef)
       messagesEndRef.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToBottomIfNeeded = async (forceScroll = false) => {
+    if (!messagesContainerRef) return;
+    if (!forceScroll && !isNearBottom()) return;
+    await waitForImages(messagesContainerRef);
+    scrollToBottom();
   };
 
   const loadMoreMessages = async () => {
@@ -120,7 +145,7 @@ const ChatContent: Component = () => {
   createEffect(on(ctx, () => {
     if (messages().length == 0) {
       loadMoreMessages()
-      setTimeout(scrollToBottom, 500);
+      scrollToBottomIfNeeded(true);
     }
   }));
 
@@ -128,7 +153,7 @@ const ChatContent: Component = () => {
     latestMessageId,
     (newId, prevId) => {
       if (newId !== prevId) {
-        setTimeout(scrollToBottom, 500);
+        scrollToBottomIfNeeded();
       }
     }
   ));
