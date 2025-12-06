@@ -6,7 +6,7 @@ import Checkbox from "../components/CheckBox";
 import Button from "../components/Button";
 import { match } from "opencord-utils";
 import { fetchApi } from "../utils";
-import { userDomain, reinitializeConnection } from "../store";
+import { userDomain } from "../store";
 import { saveSession } from "../contexts/Session";
 import { getServerUrlOrDefault, setServerUrl } from "../contexts/ServerConfig";
 import type { RegisterResponse } from "../model";
@@ -28,7 +28,6 @@ const AuthPage: Component = () => {
     e.preventDefault();
     if (username() && password() && serverUrl()) {
       setServerUrl(serverUrl());
-      reinitializeConnection();
 
       const ans = await fetchApi<{ session_token: string; expires_at?: string, user_id: number }>("/auth/login", {
         method: "POST",
@@ -57,7 +56,6 @@ const AuthPage: Component = () => {
         addToast("Passwords do not match", "error");
       } else {
         setServerUrl(serverUrl());
-        reinitializeConnection();
 
         const ans = await fetchApi<RegisterResponse>("/auth/register", {
           method: "POST",

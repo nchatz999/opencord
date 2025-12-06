@@ -63,8 +63,11 @@ const ChatContent: Component = () => {
   };
 
   const scrollToBottom = () => {
-    if (messagesEndRef)
-      messagesEndRef.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => {
+      if (messagesContainerRef) {
+        messagesContainerRef.scrollTop = messagesContainerRef.scrollHeight;
+      }
+    });
   };
 
   const scrollToBottomIfNeeded = async (forceScroll = false) => {

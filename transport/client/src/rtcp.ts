@@ -128,21 +128,15 @@ export class RTCPProtocol {
   private closed: boolean = true;
   private pingIntervalId: number | null = null;
   private cleanerIntervalId: number | null = null;
-  private hash?: WebTransportHash;
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
   onDisconnect: () => void;
 
-  private url: string;
-
   constructor(
-    url: string,
-    hash: WebTransportHash | undefined,
     onFrameConplete: (data: Uint8Array) => void,
     onSafeDataComplete: (data: Uint8Array) => void,
     onDisconnect: (() => void),
   ) {
-    this.url = url;
     this.outSeq = 0n;
     this.inSeq = 0n;
     this.retransmission = new Map();
@@ -154,23 +148,22 @@ export class RTCPProtocol {
     this.onFrameComplete = onFrameConplete;
     this.onSafeDataComplete = onSafeDataComplete;
     this.onDisconnect = onDisconnect;
-    this.hash = hash;
   }
 
   public setToken(token: string) {
     this.token = token
   }
 
-  public async connect(): Promise<Result<void, RtcpError>> {
+  public async connect(url: string, hash?: WebTransportHash): Promise<Result<void, RtcpError>> {
     if (!this.closed) {
       throw new Error("Already connected. Disconnect first.");
     }
 
     try {
-      const options: WebTransportOptions = this.hash
-        ? { serverCertificateHashes: [this.hash] }
+      const options: WebTransportOptions = hash
+        ? { serverCertificateHashes: [hash] }
         : {};
-      this.transport = new WebTransport(this.url + `/?${this.token}`, options);
+      this.transport = new WebTransport(url + `/?${this.token}`, options);
       await this.transport.ready;
       this.closed = false;
 

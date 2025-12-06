@@ -6,7 +6,6 @@ import { err } from 'opencord-utils';
 import { ok } from 'opencord-utils';
 
 export interface TransportConfig {
-  url: string;
   certificateHash?: {
     algorithm: string;
     value: Uint8Array;
@@ -15,6 +14,7 @@ export interface TransportConfig {
 
 export class TransportProvider {
   private protocol: RTCPProtocol;
+  private certificateHash?: WebTransportHash;
   private pendingConnection: {
     resolve: (success: boolean) => void;
     reject: (error: Error) => void;
@@ -25,10 +25,9 @@ export class TransportProvider {
   private onDisconnect?: (reason: string) => void;
   private onAuthRejected?: () => void;
 
-  constructor(config: TransportConfig) {
+  constructor(config?: TransportConfig) {
+    this.certificateHash = config?.certificateHash;
     this.protocol = new RTCPProtocol(
-      config.url,
-      config.certificateHash,
       (data: ArrayBuffer) => {
         const event = decode(data) as ConnectionMessage;
         this.handleConnectionMessage(event)
@@ -88,8 +87,8 @@ export class TransportProvider {
     }
   }
 
-  public async connect(token: string): Promise<Result<void, string>> {
-    await this.protocol.connect()
+  public async connect(url: string, token: string): Promise<Result<void, string>> {
+    await this.protocol.connect(url, this.certificateHash)
 
     return new Promise((resolve) => {
       if (this.pendingConnection) {

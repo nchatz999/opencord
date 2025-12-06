@@ -1,7 +1,8 @@
 import type { Component } from "solid-js";
 import { createEffect, Match, Switch } from "solid-js";
-import { userDomain, connection, getInitialData } from "../store";
+import { userDomain, connection, getInitialData, getWebTransportUrl } from "../store";
 import { loadSession } from "../contexts/Session";
+import { getServerUrl } from "../contexts/ServerConfig";
 import Loading from "./Loading";
 import Auth from "./Auth";
 import App from "../App";
@@ -16,6 +17,12 @@ const AuthHandler: Component = () => {
     const appState = userDomain.getAppState();
 
     if (appState.type === 'loading') {
+      const serverUrl = getServerUrl();
+      if (!serverUrl) {
+        userDomain.setAppState({ type: 'unauthenticated' });
+        return;
+      }
+
       const maybeToken = loadSession();
       if (maybeToken.isErr()) {
         userDomain.setAppState({ type: 'unauthenticated' });
@@ -25,9 +32,12 @@ const AuthHandler: Component = () => {
       userDomain.setAppState({ type: 'connecting' });
       userDomain.setCurrentUser(maybeToken.value.userId);
 
+      const url = getWebTransportUrl();
+      const MAX_RETRIES = 5;
+      let retries = 0;
 
-      while (true) {
-        const connectResult = await connection.connect(maybeToken.value.sessionToken);
+      while (retries < MAX_RETRIES) {
+        const connectResult = await connection.connect(url, maybeToken.value.sessionToken);
 
         if (connectResult.isErr()) {
           addToast(connectResult.error, "error");
@@ -36,7 +46,15 @@ const AuthHandler: Component = () => {
             userDomain.setAppState({ type: 'unauthenticated' });
             return;
           }
-          continue;
+
+          retries++;
+          if (retries < MAX_RETRIES) {
+            await sleep(1000 * retries);
+            continue;
+          }
+
+          userDomain.setAppState({ type: 'connectionError', reason: 'Max retries exceeded' });
+          return;
         }
 
         await sleep(100);

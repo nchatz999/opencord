@@ -1198,12 +1198,6 @@ function hexToUint8Array(hexString: string): Uint8Array {
   );
 }
 
-function getWebTransportUrl(): string {
-  const serverUrl = getServerUrlOrDefault();
-  const url = new URL(serverUrl);
-  return `${url.protocol}//${url.hostname}:4443/session`;
-}
-
 function getCertificateHash(): { algorithm: string; value: Uint8Array } | undefined {
   const certHash = import.meta.env.VITE_CERT_HASH;
   if (!certHash) return undefined;
@@ -1213,77 +1207,15 @@ function getCertificateHash(): { algorithm: string; value: Uint8Array } | undefi
   };
 }
 
-export let connection = new TransportProvider({
-  url: getWebTransportUrl(),
+export function getWebTransportUrl(): string {
+  const serverUrl = getServerUrlOrDefault();
+  const url = new URL(serverUrl);
+  return `${url.protocol}//${url.hostname}:4443/session`;
+}
+
+export const connection = new TransportProvider({
   certificateHash: getCertificateHash()
 });
-
-export function reinitializeConnection(): void {
-  connection = new TransportProvider({
-    url: getWebTransportUrl(),
-    certificateHash: getCertificateHash()
-  });
-
-  connection.onVoipDataReceived((frame: VoipPayload) => {
-    if (frame.type === "media") {
-      switch (frame.mediaType) {
-        case "voice": {
-          let packet = new EncodedAudioChunk({
-            type: frame.key,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'voice', packet, frame.timestamp)
-          break
-        }
-        case "camera": {
-          let videoPacket = new EncodedVideoChunk({
-            type: frame.key as EncodedVideoChunkType,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'camera', videoPacket, frame.timestamp)
-          break
-        }
-        case "screen": {
-          let videoPacket = new EncodedVideoChunk({
-            type: frame.key as EncodedVideoChunkType,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'screen', videoPacket, frame.timestamp)
-          break
-        }
-        case "screenSound": {
-          let videoPacket = new EncodedAudioChunk({
-            type: frame.key as EncodedAudioChunkType,
-            timestamp: frame.realTimestamp,
-            duration: undefined,
-            data: new Uint8Array(frame.data)
-          })
-          voipDomain.streamMedia(frame.userId, 'screenSound', videoPacket, frame.timestamp)
-        }
-      }
-    } else if (frame.type === "speech") {
-      voipDomain.updateSpeakingState(frame.userId, frame.isSpeaking)
-    }
-  });
-
-  connection.onServerEventReceived((event: EventPayload) => {
-    handleServerEvent(event);
-  });
-
-  connection.onConnectionLost((reason) => {
-    userDomain.setAppState({ type: "connectionError", reason });
-  });
-
-  connection.onAuthenticationRejected(() => {
-    userDomain.setAppState({ type: "unauthenticated" });
-  });
-}
 
 connection.onVoipDataReceived((frame: VoipPayload) => {
   if (frame.type === "media") {
@@ -1326,6 +1258,7 @@ connection.onVoipDataReceived((frame: VoipPayload) => {
           data: new Uint8Array(frame.data)
         })
         voipDomain.streamMedia(frame.userId, 'screenSound', videoPacket, frame.timestamp)
+        break
       }
     }
   } else if (frame.type === "speech") {
