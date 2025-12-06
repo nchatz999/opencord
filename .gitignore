@@ -39,6 +39,7 @@ client/.env.*
 server/.env
 server/.env.*
 !server/.env.example
+CLAUDE.md
 
 # Rust / Cargo
 target/
