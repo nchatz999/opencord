@@ -110,9 +110,7 @@ async function ensureWorkletInitialized(context: AudioContext): Promise<void> {
     try {
       await context.audioWorklet.addModule(workletUrl);
       workletInitialized = true;
-      console.log("Audio worklet initialized successfully");
     } catch (error) {
-      console.error("Failed to initialize audio worklet:", error);
       workletInitPromise = null;
       throw error;
     } finally {
@@ -175,7 +173,7 @@ export class AudioPlayback {
       output: (audioData) => {
         this.handleAudioData(audioData);
       },
-      error: (e) => console.log(e),
+      error: () => { },
     });
     this.decoder.configure(decoderConfig);
 

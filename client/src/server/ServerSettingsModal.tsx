@@ -75,12 +75,12 @@ const ServerSettingsModal: Component = () => {
         method: "GET",
       });
 
-      if (result.ok) {
-        setInvites(result.value)
+      if (result.isErr()) {
+        addToast(result.error.reason, "error");
+        return;
       }
-    } catch (error) {
-      console.error("Error loading invites:", error);
-      addToast("Error loading invites", "error");
+
+      setInvites(result.value);
     } finally {
       setLoading(false);
     }
@@ -173,9 +173,13 @@ const ServerSettingsModal: Component = () => {
       query: logCategoryFilter() ? { category: logCategoryFilter() } : undefined,
     });
 
-    if (result.ok) {
-      setLogs(result.value);
+    if (result.isErr()) {
+      addToast(result.error.reason, "error");
+      setLogsLoading(false);
+      return;
     }
+
+    setLogs(result.value);
     setLogsLoading(false);
   };
 

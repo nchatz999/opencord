@@ -3,6 +3,7 @@ import { MessageCircle, Phone } from "lucide-solid";
 import { UserStatusType, type User } from "../model";
 import { userDomain, voipDomain, microphone, messageDomain } from "../store";
 import { fetchApi } from "../utils";
+import { useToaster } from "../components/Toaster";
 
 const handleUserClick = async (user: User) => {
   messageDomain.setContext({ type: "dm", id: user.userId })
@@ -12,6 +13,7 @@ const handleUserClick = async (user: User) => {
 export const UserEntry: Component<{ user: User; }> = (
   props
 ) => {
+  const { addToast } = useToaster();
 
 
   const statusColors: Record<UserStatusType | number, string> = {
@@ -52,14 +54,13 @@ export const UserEntry: Component<{ user: User; }> = (
       { method: "POST" }
     );
 
-    if (result.ok) {
-
-      await microphone.start()
-      await voipDomain.resume()
-      console.log('Joined private call with', props.user.username);
-    } else {
-      console.error('Failed to join private call:', result.error);
+    if (result.isErr()) {
+      addToast(`Failed to join private call: ${result.error.reason}`, 'error');
+      return;
     }
+
+    await microphone.start();
+    await voipDomain.resume();
   };
   return (
     <button

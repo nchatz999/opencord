@@ -16,11 +16,11 @@ const FileItem: Component<FileProps> = (props) => {
         method: "GET",
       });
 
-      if (result.ok) {
-        const blob = new Blob([result.value], { type: props.file.fileType });
-        const url = URL.createObjectURL(blob);
-        setImageUrl(url);
-      }
+      if (result.isErr()) return;
+
+      const blob = new Blob([result.value], { type: props.file.fileType });
+      const url = URL.createObjectURL(blob);
+      setImageUrl(url);
     }
   });
 
@@ -29,17 +29,17 @@ const FileItem: Component<FileProps> = (props) => {
       method: "GET",
     });
 
-    if (result.ok) {
-      const blob = new Blob([result.value], { type: props.file.fileType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = props.file.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+    if (result.isErr()) return;
+
+    const blob = new Blob([result.value], { type: props.file.fileType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = props.file.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (

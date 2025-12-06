@@ -63,10 +63,8 @@ export async function fetchApi<T = any>(
     fetchOptions.body = JSON.stringify(body);
   }
   try {
-    console.log(finalUrl)
     const response = await fetch(finalUrl, fetchOptions);
     if (!response.ok) {
-      console.log(response)
       const errorData = await response.json();
       return err(errorData);
     }

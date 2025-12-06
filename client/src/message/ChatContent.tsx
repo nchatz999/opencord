@@ -58,52 +58,52 @@ const ChatContent: Component = () => {
     const previousScrollHeight = container.scrollHeight;
     const firstMessage = msgs[0];
 
-    try {
-      let createdAt;
-      if (firstMessage)
-        createdAt = firstMessage.createdAt
-      else
-        createdAt = new Date().toISOString()
-      const messagesEndpoint = context.type === "dm"
-        ? `/message/dm/${context.id}/messages`
-        : `/message/channel/${context.id}/messages`;
+    let createdAt;
+    if (firstMessage)
+      createdAt = firstMessage.createdAt
+    else
+      createdAt = new Date().toISOString()
 
-      const result = await fetchApi<Message[]>(messagesEndpoint, {
-        method: "GET",
-        query: {
-          limit: MESSAGES_LIMIT,
-          timestamp: createdAt
-        }
-      });
-      if (!result.ok) {
-        addToast(`Error: ${result.error.reason}`, "error");
-        return;
+    const messagesEndpoint = context.type === "dm"
+      ? `/message/dm/${context.id}/messages`
+      : `/message/channel/${context.id}/messages`;
+
+    const result = await fetchApi<Message[]>(messagesEndpoint, {
+      method: "GET",
+      query: {
+        limit: MESSAGES_LIMIT,
+        timestamp: createdAt
       }
-      messageDomain.insertMany(result.value);
-      const filesEndpoint = context.type === "dm"
-        ? `/message/dm/${context.id}/files`
-        : `/message/channel/${context.id}/files`;
+    });
 
-      const filesResult = await fetchApi<File[]>(filesEndpoint, {
-        method: "GET",
-        query: {
-          limit: MESSAGES_LIMIT,
-          timestamp: createdAt
-        }
-      });
-      if (filesResult.ok) {
-        fileDomain.addMany(filesResult.value);
-      }
-
-      requestAnimationFrame(() => {
-        const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
-        container.scrollTop += scrollHeightDiff;
-      });
-    } catch (error) {
-      console.error("Error loading messages:", error);
-    } finally {
+    if (result.isErr()) {
+      addToast(`Error: ${result.error.reason}`, "error");
       setIsLoadingMore(false);
+      return;
     }
+
+    messageDomain.insertMany(result.value);
+    const filesEndpoint = context.type === "dm"
+      ? `/message/dm/${context.id}/files`
+      : `/message/channel/${context.id}/files`;
+
+    const filesResult = await fetchApi<File[]>(filesEndpoint, {
+      method: "GET",
+      query: {
+        limit: MESSAGES_LIMIT,
+        timestamp: createdAt
+      }
+    });
+    if (!filesResult.isErr()) {
+      fileDomain.addMany(filesResult.value);
+    }
+
+    requestAnimationFrame(() => {
+      const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
+      container.scrollTop += scrollHeightDiff;
+    });
+
+    setIsLoadingMore(false);
   };
 
 
@@ -117,16 +117,12 @@ const ChatContent: Component = () => {
     }
   };
 
-
-
-
   createEffect(on(ctx, () => {
     if (messages().length == 0) {
       loadMoreMessages()
       setTimeout(scrollToBottom, 500);
     }
   }));
-
 
   createEffect(on(
     latestMessageId,

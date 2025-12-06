@@ -873,7 +873,6 @@ export class VoipDomain {
     setState(
       'voipState',
       produce(voipState => {
-        console.log(voipState)
         const index = voipState.findIndex(p => p.userId === userId);
         if (index !== -1) {
           voipState.splice(index, 1);
@@ -1172,7 +1171,7 @@ export const getInitialData = async () => {
       fetchApi<Subscription[]>('/voip/subscriptions', { method: 'GET' }),
     ])
 
-    if (!groupsResult.ok || !channelsResult.ok || !rolesResult.ok || !usersResult.ok || !groupRightsResult.ok || !voipStatusResult.ok || !subscriptionsResult.ok) {
+    if (groupsResult.isErr() || channelsResult.isErr() || rolesResult.isErr() || usersResult.isErr() || groupRightsResult.isErr() || voipStatusResult.isErr() || subscriptionsResult.isErr()) {
       userDomain.setAppState({ type: 'unauthenticated' });
       return;
     }

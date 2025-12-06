@@ -7,30 +7,11 @@ import { useToaster } from "../components/Toaster";
 import { channelDomain, userDomain } from "../store";
 import { fetchApi, toBase64 } from "../utils";
 import Button from "../components/Button";
-
-const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+import { formatLinks } from "../utils/messageFormatting";
 
 const formatContent = (text: string) => {
   if (!text) return <></>;
-  return (
-    <>
-      {text.split(URL_REGEX).map((part, i) =>
-        i % 2 === 1 ? (
-          <a
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-[#00A8FC] hover:underline"
-            onClick={(e) => e.preventDefault()}
-          >
-            {part}
-          </a>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
+  return formatLinks(text, "text-[#00A8FC] hover:underline", true);
 };
 
 const MessageInput: Component<{
@@ -88,15 +69,16 @@ const MessageInput: Component<{
       }
     );
 
-    if (result.ok) {
-      setContent("");
-      setFiles([]);
-      if (textareaRef) {
-        textareaRef.innerText = "";
-        textareaRef.style.height = "";
-      }
-    } else {
+    if (result.isErr()) {
       addToast(`Failed to send message: ${result.error.reason}`, "error");
+      return;
+    }
+
+    setContent("");
+    setFiles([]);
+    if (textareaRef) {
+      textareaRef.innerText = "";
+      textareaRef.style.height = "";
     }
   };
 

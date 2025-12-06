@@ -68,15 +68,12 @@ const UserSettingsModal: Component = () => {
   };
 
   const handleStatusChange = async (newStatus: UserStatusType) => {
-    try {
-      const result = await fetchApi(`/user/${user.userId}/manual-status`, {
-        method: 'PUT',
-        body: { manualStatus: newStatus }
-      });
-      if (!result.ok)
-        addToast(result.error.reason, "error")
-    } catch (error) {
-      console.error('Error updating status:', error);
+    const result = await fetchApi(`/user/${user.userId}/manual-status`, {
+      method: 'PUT',
+      body: { manualStatus: newStatus }
+    });
+    if (result.isErr()) {
+      addToast(result.error.reason, "error");
     }
   };
 
@@ -90,7 +87,7 @@ const UserSettingsModal: Component = () => {
       method: "GET",
     });
 
-    if (!result.ok) {
+    if (result.isErr()) {
       addToast(result.error.reason, "error");
     }
   };
@@ -101,8 +98,9 @@ const UserSettingsModal: Component = () => {
       body: { session_token: sessionToken },
     });
 
-    if (!result.ok) {
+    if (result.isErr()) {
       addToast(result.error.reason, "error");
+      return;
     }
 
     setSessions(sessions().filter(session => session.sessionToken !== sessionToken));

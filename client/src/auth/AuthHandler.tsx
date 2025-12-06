@@ -17,7 +17,7 @@ const AuthHandler: Component = () => {
 
     if (appState.type === 'loading') {
       const maybeToken = loadSession();
-      if (!maybeToken.ok) {
+      if (maybeToken.isErr()) {
         userDomain.setAppState({ type: 'unauthenticated' });
         return;
       }
@@ -25,33 +25,24 @@ const AuthHandler: Component = () => {
       userDomain.setAppState({ type: 'connecting' });
       userDomain.setCurrentUser(maybeToken.value.userId);
 
-      let retries = 0;
-      const maxRetries = 3;
 
-      while (retries < maxRetries) {
+      while (true) {
         const connectResult = await connection.connect(maybeToken.value.sessionToken);
 
-        if (connectResult.ok) {
-          await sleep(100);
-          await getInitialData();
-          userDomain.setAppState({ type: 'authenticated' });
-          return;
+        if (connectResult.isErr()) {
+          addToast(connectResult.error, "error");
+
+          if (connectResult.error === 'Connection rejected by server') {
+            userDomain.setAppState({ type: 'unauthenticated' });
+            return;
+          }
+          continue;
         }
 
-        addToast(connectResult.error, "error");
-
-        if (connectResult.error === 'Connection rejected by server') {
-          userDomain.setAppState({ type: 'unauthenticated' });
-          return;
-        }
-
-        retries++;
-        if (retries < maxRetries) {
-          userDomain.setAppState({ type: 'connectionError', reason: `${connectResult.error} (retry ${retries}/${maxRetries})` });
-          await sleep(5000);
-        } else {
-          userDomain.setAppState({ type: 'connectionError', reason: connectResult.error });
-        }
+        await sleep(100);
+        await getInitialData();
+        userDomain.setAppState({ type: 'authenticated' });
+        return;
       }
     }
   });

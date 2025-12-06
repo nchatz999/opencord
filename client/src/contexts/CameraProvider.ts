@@ -121,7 +121,6 @@ export class Camera {
           method: 'PUT',
           body: { publish: false }
         })
-        console.log('Camera track ended');
         this.stop();
       };
 

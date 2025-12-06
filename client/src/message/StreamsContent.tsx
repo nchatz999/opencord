@@ -1,5 +1,5 @@
 import type { Component } from "solid-js";
-import { For, Show, createSignal, onCleanup } from "solid-js";
+import { For, Show, createSignal, createMemo, onCleanup } from "solid-js";
 
 import { Camera, Monitor, Users, Video, Volume2, Eye, EyeOff } from "lucide-solid";
 import { voipDomain, messageDomain } from "../store";
@@ -23,7 +23,7 @@ const StreamsContent: Component = () => {
     document.removeEventListener('fullscreenchange', handleFullscreenChange);
   });
 
-  const getCurrentParticipants = () => {
+  const getCurrentParticipants = createMemo(() => {
     const voipSession = voipDomain.getCurrent();
 
     if (!voipSession) {
@@ -37,7 +37,11 @@ const StreamsContent: Component = () => {
     }
 
     return [] as VoipParticipantWithUser[];
-  }
+  });
+
+  const streamCount = createMemo(() =>
+    getCurrentParticipants().reduce((count, p) => count + (p.publishCamera ? 1 : 0) + (p.publishScreen ? 1 : 0), 0)
+  );
 
   const getGridCols = (participants: VoipParticipantWithUser[]) => {
 
@@ -63,8 +67,8 @@ const StreamsContent: Component = () => {
       }
     });
 
-    if (!result.ok) {
-      console.error('Failed to toggle subscription:', result.error);
+    if (result.isErr()) {
+      // Subscription toggle failed silently - user can retry
     }
   };
 
@@ -139,8 +143,7 @@ const StreamsContent: Component = () => {
             <div class="flex items-center gap-2 text-sm text-[#949ba4]">
               <Users size={16} />
               <span>
-                {getCurrentParticipants().reduce((count, p) => count + (p.publishCamera ? 1 : 0) + (p.publishScreen ? 1 : 0), 0)} stream
-                {getCurrentParticipants().reduce((count, p) => count + (p.publishCamera ? 1 : 0) + (p.publishScreen ? 1 : 0), 0) !== 1 ? "s" : ""}
+                {streamCount()} stream{streamCount() !== 1 ? "s" : ""}
               </span>
             </div>
           </div>

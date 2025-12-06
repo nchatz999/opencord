@@ -1,4 +1,4 @@
-import type { Component, JSX } from "solid-js";
+import type { Component } from "solid-js";
 import { createSignal, createMemo, Show, For } from "solid-js";
 import FileItem from "./File";
 import { Edit2Icon, ReplyIcon, Trash2Icon } from "lucide-solid";
@@ -8,67 +8,11 @@ import { useToaster } from "../components/Toaster";
 import { messageDomain, userDomain } from "../store";
 import Button from "../components/Button";
 import { fetchApi } from "../utils";
+import { formatLinks, formatMessageText, extractYoutubeIds } from "../utils/messageFormatting";
 
 interface MessageProps {
   message: Message;
   type: "direct" | "channel";
-}
-
-const URL_REGEX = /(https?:\/\/[^\s]+)/g;
-const CODE_BLOCK_REGEX = /```([^`]*)```/g;
-const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
-
-function formatLinks(text: string, linkClass: string): JSX.Element {
-  return (
-    <>
-      {text.split(URL_REGEX).map((part, i) =>
-        i % 2 === 1 ? (
-          <a href={part} target="_blank" rel="noopener noreferrer" class={linkClass}>
-            {part}
-          </a>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
-}
-
-function formatMessageText(text: string, isOwner: boolean, type: "direct" | "channel"): JSX.Element {
-
-  const linkClass = type === "direct" && isOwner
-    ? "text-[#d0d5ff] hover:text-[#ffffff] hover:underline"
-    : "text-blue-400 hover:text-blue-300 hover:underline";
-
-  const segments: Array<{ type: "text" | "code"; content: string }> = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = CODE_BLOCK_REGEX.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", content: text.substring(lastIndex, match.index) });
-    }
-    segments.push({ type: "code", content: match[1] });
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ type: "text", content: text.substring(lastIndex) });
-  }
-
-  return (
-    <>
-      {segments.map((segment) =>
-        segment.type === "code" ? (
-          <pre class="bg-[#2f3136] p-3 my-2 rounded overflow-auto whitespace-pre-wrap break-words">
-            <code>{segment.content}</code>
-          </pre>
-        ) : (
-          formatLinks(segment.content, linkClass)
-        )
-      )}
-    </>
-  );
 }
 
 const MessageComponent: Component<MessageProps> = (props) => {
@@ -77,9 +21,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
   const { addToast } = useToaster();
 
   const isOwner = createMemo(() => userDomain.getCurrent().userId === props.message.senderId);
-  const youtubeIds = createMemo(() =>
-    Array.from(props.message.messageText.matchAll(YOUTUBE_REGEX), match => match[1])
-  );
+  const youtubeIds = createMemo(() => extractYoutubeIds(props.message.messageText));
 
   const handleSaveEdit = async () => {
     const trimmed = editedContent().trim();

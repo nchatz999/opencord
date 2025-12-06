@@ -61,7 +61,6 @@ export class OutputManager {
           label: device.label || `Audio Output ${device.deviceId.slice(0, 8)}`,
           groupId: device.groupId,
         }));
-      console.log(devices)
 
       this.setDevicesSignal(audioOutputs);
 
