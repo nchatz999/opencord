@@ -189,95 +189,6 @@ export function match<T, E, R>(
   return result.match(patterns);
 }
 
-export async function fromPromise<T, E = Error>(
-  promise: Promise<T>,
-  mapError?: (error: unknown) => E
-): Promise<Result<T, E>> {
-  try {
-    const value = await promise;
-    return ok(value);
-  } catch (error) {
-    if (mapError) {
-      return err(mapError(error));
-    }
-    return err(error as E);
-  }
-}
-
-export function tryCatch<T, E = Error>(
-  fn: () => T,
-  mapError?: (error: unknown) => E
-): Result<T, E> {
-  try {
-    return ok(fn());
-  } catch (error) {
-    if (mapError) {
-      return err(mapError(error));
-    }
-    return err(error as E);
-  }
-}
-
-export async function tryCatchAsync<T, E = Error>(
-  fn: () => Promise<T>,
-  mapError?: (error: unknown) => E
-): Promise<Result<T, E>> {
-  return fromPromise(fn(), mapError);
-}
-
-export function collect<T, E>(results: Result<T, E>[]): Result<T[], E> {
-  const values: T[] = [];
-
-  for (const result of results) {
-    if (result.isErr()) {
-      return err(result.error);
-    }
-    values.push(result.value);
-  }
-
-  return ok(values);
-}
-
-export function collectAll<T, E>(
-  results: Result<T, E>[]
-): { values: T[]; errors: E[] } {
-  const values: T[] = [];
-  const errors: E[] = [];
-
-  for (const result of results) {
-    if (result.isOk()) {
-      values.push(result.value);
-    } else {
-      errors.push(result.error);
-    }
-  }
-
-  return { values, errors };
-}
-
-export function combine<T1, T2, U, E>(
-  result1: Result<T1, E>,
-  result2: Result<T2, E>,
-  fn: (value1: T1, value2: T2) => U
-): Result<U, E> {
-  return result1.flatMap((value1) =>
-    result2.map((value2) => fn(value1, value2))
-  );
-}
-
-export function isResult<T, E>(value: unknown): value is Result<T, E> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "ok" in value &&
-    typeof (value as any).ok === "boolean"
-  );
-}
-
-export type OkType<R> = R extends Result<infer T, any> ? T : never;
-
-export type ErrType<R> = R extends Result<any, infer E> ? E : never;
-
 export class RingBuffer<T> {
   private buffer: T[];
   private head: number = 0;
@@ -410,7 +321,7 @@ const workerCode = `
       case 'clear':
         const timerId = timers.get(id);
         if (timerId !== undefined) {
-          clearTimeout(timerId); // works for both timeout and interval
+          clearTimeout(timerId); 
           clearInterval(timerId);
           timers.delete(id);
         }
@@ -419,19 +330,19 @@ const workerCode = `
   };
 `;
 
-// Main thread implementation
+
 export class WorkerTimerManager {
   private worker: Worker;
   private callbacks: Map<number, Function>;
   private nextId: number = 1;
 
   constructor() {
-    // Create worker from inline code
+
     const blob = new Blob([workerCode], { type: 'application/javascript' });
     this.worker = new Worker(URL.createObjectURL(blob));
     this.callbacks = new Map();
 
-    // Listen for timer events from worker
+
     this.worker.onmessage = (e) => {
       const { type, id } = e.data;
       const callback = this.callbacks.get(id);
@@ -439,7 +350,7 @@ export class WorkerTimerManager {
       if (callback) {
         callback();
 
-        // Clean up one-time timeouts
+
         if (type === 'timeout') {
           this.callbacks.delete(id);
         }
@@ -477,13 +388,13 @@ export class WorkerTimerManager {
   }
 }
 
-// Create singleton instance
+
 export const timerManager = new WorkerTimerManager();
 
 
 export class MinHeap<T> {
   private heap: T[] = [];
-  private comparator: (a: T, b: T) => number; // Returns negative if a < b, 0 if equal, positive if a > b
+  private comparator: (a: T, b: T) => number;
 
   constructor(comparator: (a: T, b: T) => number) {
     this.comparator = comparator;

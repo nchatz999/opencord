@@ -5,13 +5,14 @@ interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost" | "destructive";
   children: JSX.Element;
   size?: "sm" | "md" | "lg";
+  fullWidth?: boolean;
 }
 
 const Button: Component<ButtonProps> = (props) => {
   const [isLoading, setIsLoading] = createSignal(false);
 
   const merged = mergeProps(
-    { variant: "primary" as const, size: "md" as const },
+    { variant: "primary" as const, size: "md" as const, fullWidth: false },
     props
   );
 
@@ -56,6 +57,7 @@ const Button: Component<ButtonProps> = (props) => {
         variantStyles[merged.variant],
         sizeStyles[merged.size],
         isLoading() && loadingStyles,
+        merged.fullWidth && "w-full",
         merged.class
       )}
     >

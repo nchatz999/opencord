@@ -1,17 +1,17 @@
 import type { Component } from 'solid-js'
 import { createSignal, createMemo, For, Show, onMount } from 'solid-js'
-import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw } from 'lucide-solid'
+import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw, Upload } from 'lucide-solid'
 import { useToaster } from '../components/Toaster'
 import Button from '../components/Button'
 import { Tabs } from '../components/Tabs'
-import { modalDomain, roleDomain, userDomain } from '../store'
+import { modalDomain, roleDomain, userDomain, serverDomain } from '../store'
 import { Input } from '../components/Input'
 import Select from '../components/Select'
 import Checkbox from '../components/CheckBox'
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../components/Table'
 import { fetchApi } from '../utils'
 import { match } from 'opencord-utils'
-import type { User } from '../model'
+import type { User, ServerConfig } from '../model'
 
 
 interface Invite {
@@ -30,17 +30,16 @@ interface LogEntry {
 }
 
 const ServerSettingsModal: Component = () => {
-  const [serverName, setServerName] = createSignal('Awesome Discord Server')
   const [maxFileSize, setMaxFileSize] = createSignal('50')
   const [isRegistrationOpen, setIsRegistrationOpen] = createSignal(true)
   const [searchTerm, setSearchTerm] = createSignal('')
-
+  const [saving, setSaving] = createSignal(false)
+  let avatarInputRef: HTMLInputElement | undefined;
 
   const [invites, setInvites] = createSignal<Invite[]>([])
   const [newInviteCode, setNewInviteCode] = createSignal('')
   const [newInviteRegistrations, setNewInviteRegistrations] = createSignal('1')
   const [newInviteRoleId, setNewInviteRoleId] = createSignal('2')
-  const [loading, setLoading] = createSignal(false)
 
   const [logs, setLogs] = createSignal<LogEntry[]>([])
   const [logsLoading, setLogsLoading] = createSignal(false)
@@ -61,29 +60,71 @@ const ServerSettingsModal: Component = () => {
   )
 
 
-  const canManageInvites = () => {
+  const isAdmin = () => {
     const user = userDomain.getCurrent();
-    return user && (user.roleId === 0 || user.roleId === 1);
+    return user && user.roleId <= 1;
   };
 
-  const loadInvites = async () => {
-    if (!canManageInvites()) return;
+  const serverConfig = () => serverDomain.get();
 
-    setLoading(true);
-    try {
-      const result = await fetchApi<Invite[]>("/auth/invites", {
-        method: "GET",
+  const saveServerName = async (name: string) => {
+    if (!isAdmin()) return;
+    const currentConfig = serverConfig();
+    if (!currentConfig || name === currentConfig.serverName) return;
+
+    setSaving(true);
+    const result = await fetchApi<ServerConfig>('/server/name', {
+      method: 'PUT',
+      body: { serverName: name },
+    });
+
+    if (result.isErr()) {
+      addToast(result.error.reason, 'error');
+    }
+    setSaving(false);
+  };
+
+  const handleAvatarChange = async (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (!target.files || !target.files[0]) return;
+
+    const file = target.files[0];
+    setSaving(true);
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64data = (reader.result as string).split(',')[1];
+
+      const result = await fetchApi<ServerConfig>('/server/avatar', {
+        method: 'PUT',
+        body: {
+          fileName: file.name,
+          contentType: file.type,
+          data: base64data,
+        },
       });
 
       if (result.isErr()) {
-        addToast(result.error.reason, "error");
-        return;
+        addToast(result.error.reason, 'error');
       }
+      setSaving(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
-      setInvites(result.value);
-    } finally {
-      setLoading(false);
+  const loadInvites = async () => {
+    if (!isAdmin()) return;
+
+    const result = await fetchApi<Invite[]>("/auth/invites", {
+      method: "GET",
+    });
+
+    if (result.isErr()) {
+      addToast(result.error.reason, "error");
+      return;
     }
+
+    setInvites(result.value);
   };
 
   const createInvite = async () => {
@@ -98,62 +139,46 @@ const ServerSettingsModal: Component = () => {
       return;
     }
 
-    setLoading(true);
-    try {
-      const result = await fetchApi<Invite>("/auth/invites", {
-        method: "POST",
-        body: {
-          code: newInviteCode(),
-          available_registrations: registrations,
-          role_id: parseInt(newInviteRoleId()),
-        },
-      });
+    const result = await fetchApi<Invite>("/auth/invites", {
+      method: "POST",
+      body: {
+        code: newInviteCode(),
+        available_registrations: registrations,
+        role_id: parseInt(newInviteRoleId()),
+      },
+    });
 
-      match(result, {
-        ok: (invite) => {
-          setInvites([invite, ...invites()]);
-          setNewInviteCode("");
-          setNewInviteRegistrations("1");
-          setNewInviteRoleId("2");
-          addToast("Invite created successfully", "success");
-        },
-        err: (error) => {
-          const message = (error as any)?.reason || "Failed to create invite";
-          addToast(message, "error");
-        },
-      });
-    } catch (error) {
-      console.error("Error creating invite:", error);
-      addToast("Error creating invite", "error");
-    } finally {
-      setLoading(false);
-    }
+    match(result, {
+      ok: (invite) => {
+        setInvites([invite, ...invites()]);
+        setNewInviteCode("");
+        setNewInviteRegistrations("1");
+        setNewInviteRoleId("2");
+        addToast("Invite created successfully", "success");
+      },
+      err: (error) => {
+        const message = (error as any)?.reason || "Failed to create invite";
+        addToast(message, "error");
+      },
+    });
   };
 
   const deleteInvite = async (inviteId: number) => {
-    setLoading(true);
-    try {
-      const result = await fetchApi("/auth/invites", {
-        method: "DELETE",
-        body: { invite_id: inviteId },
-      });
+    const result = await fetchApi("/auth/invites", {
+      method: "DELETE",
+      body: { invite_id: inviteId },
+    });
 
-      match(result, {
-        ok: () => {
-          setInvites(invites().filter(invite => invite.inviteId !== inviteId));
-          addToast("Invite deleted successfully", "success");
-        },
-        err: (error) => {
-          const message = (error as any)?.reason || "Failed to delete invite";
-          addToast(message, "error");
-        },
-      });
-    } catch (error) {
-      console.error("Error deleting invite:", error);
-      addToast("Error deleting invite", "error");
-    } finally {
-      setLoading(false);
-    }
+    match(result, {
+      ok: () => {
+        setInvites(invites().filter(invite => invite.inviteId !== inviteId));
+        addToast("Invite deleted successfully", "success");
+      },
+      err: (error) => {
+        const message = (error as any)?.reason || "Failed to delete invite";
+        addToast(message, "error");
+      },
+    });
   };
 
   const copyInviteCode = (code: string) => {
@@ -165,7 +190,7 @@ const ServerSettingsModal: Component = () => {
   };
 
   const loadLogs = async () => {
-    if (!canManageInvites()) return;
+    if (!isAdmin()) return;
 
     setLogsLoading(true);
     const result = await fetchApi<LogEntry[]>("/log", {
@@ -184,7 +209,7 @@ const ServerSettingsModal: Component = () => {
   };
 
   const deleteLogs = async (category?: string) => {
-    if (!canManageInvites()) return;
+    if (!isAdmin()) return;
 
     setLogsLoading(true);
     const result = await fetchApi<{ deletedCount: number }>("/log", {
@@ -229,26 +254,61 @@ const ServerSettingsModal: Component = () => {
       label: 'General',
       content: (
         <div class="space-y-4 mt-6">
-          <Input
-            label="Server Name"
-            value={serverName()}
-            onChange={setServerName}
-            placeholder="Enter server name"
-          />
-          <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">
-              Maximum File Size (MB)
-            </label>
-            <Select
-              value={maxFileSize()}
-              onChange={setMaxFileSize}
-              options={[
-                { value: '8', label: '8 MB' },
-                { value: '50', label: '50 MB' },
-                { value: '100', label: '100 MB' },
-              ]}
-            />
-          </div>
+          <Show when={serverConfig()}>
+            {(config) => (
+              <div class="flex items-center gap-4 p-4 bg-[#2f3136] rounded-lg">
+                <div class="relative">
+                  <Show
+                    when={config().avatarFileId}
+                    fallback={
+                      <div class="w-20 h-20 rounded-full bg-[#5865f2] flex items-center justify-center text-2xl font-bold">
+                        {config().serverName.charAt(0)}
+                      </div>
+                    }
+                  >
+                    {(avatarId) => (
+                      <img
+                        src={`/api/server/avatar/${avatarId()}`}
+                        alt="Server avatar"
+                        class="w-20 h-20 rounded-full object-cover"
+                      />
+                    )}
+                  </Show>
+                  <Show when={isAdmin()}>
+                    <button
+                      onClick={() => avatarInputRef?.click()}
+                      disabled={saving()}
+                      class="absolute bottom-0 right-0 bg-[#5865f2] hover:bg-[#4752c4] rounded-full p-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <Upload class="w-4 h-4 text-white" />
+                    </button>
+                  </Show>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    class="hidden"
+                  />
+                </div>
+                <div class="flex-1">
+                  <Show
+                    when={isAdmin()}
+                    fallback={
+                      <h3 class="text-lg font-semibold text-[#dcddde]">{config().serverName}</h3>
+                    }
+                  >
+                    <Input
+                      label="Server Name"
+                      value={config().serverName}
+                      onBlur={(e) => saveServerName(e.currentTarget.value)}
+                      disabled={saving()}
+                    />
+                  </Show>
+                </div>
+              </div>
+            )}
+          </Show>
 
           <div class="mt-6 pt-4 border-t border-gray-700">
             <h3 class="text-lg font-semibold mb-2">Version Information</h3>
@@ -287,14 +347,14 @@ const ServerSettingsModal: Component = () => {
                 <TableRow>
                   <TableHeader>User</TableHeader>
                   <TableHeader>Role</TableHeader>
-                  <TableHeader class="text-right">Actions</TableHeader>
+                  <TableHeader class="text-center">Actions</TableHeader>
                 </TableRow>
               </TableHead>
               <TableBody>
                 <For each={filteredUsers()}>
                   {(user) => (
                     <TableRow class="hover:bg-[#383a40]">
-                      <TableCell>
+                      <TableCell class="text-center">
                         <div class="flex items-center space-x-3">
                           <img
                             src={`/api/user/${user.avatarFileId}/avatar`}
@@ -304,7 +364,7 @@ const ServerSettingsModal: Component = () => {
                           <span class="font-medium">{user.username}</span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell class="text-center">
                         <Select
                           value={user.roleId}
                           onChange={async (roleId) => {
@@ -325,10 +385,9 @@ const ServerSettingsModal: Component = () => {
                           class="min-w-[120px]"
                         />
                       </TableCell>
-                      <TableCell class="text-right">
+                      <TableCell class="text-center">
                         <Button
                           variant="destructive"
-                          size="sm"
                           disabled={user.roleId === 0}
                           title={user.roleId === 0 ? "Cannot delete owner" : "Delete user"}
                         >
@@ -371,7 +430,7 @@ const ServerSettingsModal: Component = () => {
       label: 'Invitations',
       content: (
         <Show
-          when={canManageInvites()}
+          when={isAdmin()}
           fallback={
             <div class="text-center py-8 text-[#72767d]">
               You don't have permission to manage invitations.
@@ -394,7 +453,6 @@ const ServerSettingsModal: Component = () => {
                     value={newInviteCode()}
                     onChange={setNewInviteCode}
                     placeholder="Enter unique invite code"
-                    disabled={loading()}
                   />
                 </div>
                 <div>
@@ -405,7 +463,6 @@ const ServerSettingsModal: Component = () => {
                     onChange={setNewInviteRegistrations}
                     placeholder="1"
                     min="1"
-                    disabled={loading()}
                   />
                 </div>
                 <div>
@@ -425,7 +482,6 @@ const ServerSettingsModal: Component = () => {
               <div class="mt-4">
                 <Button
                   onClick={createInvite}
-                  disabled={loading()}
                   class="flex items-center gap-2"
                 >
                   <Plus class="w-4 h-4" />
@@ -441,7 +497,6 @@ const ServerSettingsModal: Component = () => {
                   onClick={loadInvites}
                   variant="secondary"
                   size="sm"
-                  disabled={loading()}
                 >
                   Refresh
                 </Button>
@@ -498,7 +553,6 @@ const ServerSettingsModal: Component = () => {
                             <Button
                               onClick={() => deleteInvite(invite.inviteId)}
                               variant='destructive'
-                              disabled={loading()}
                               title="Delete invite"
                             >
                               <Trash2 class="w-4 h-4" />
@@ -520,7 +574,7 @@ const ServerSettingsModal: Component = () => {
       label: 'Logs',
       content: (
         <Show
-          when={canManageInvites()}
+          when={isAdmin()}
           fallback={
             <div class="text-center py-8 text-[#72767d]">
               You don't have permission to view logs.
@@ -630,7 +684,7 @@ const ServerSettingsModal: Component = () => {
 
 
   const handleModalOpen = () => {
-    if (canManageInvites()) {
+    if (isAdmin()) {
       loadInvites();
     }
   };
@@ -648,11 +702,6 @@ const ServerSettingsModal: Component = () => {
           </Button>
         </div>
         <Tabs items={tabItems()} />
-        <div class="mt-6 flex justify-end space-x-2">
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
-            Cancel
-          </Button>
-        </div>
       </div>
     </div>
   )

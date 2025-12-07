@@ -338,22 +338,24 @@ impl ConnectionRunner {
                 }
 
                 _ = retransmission_check_interval.tick() => {
-                    for nack in &mut self.nacks {
+                    self.nacks.retain_mut(|nack| {
+                        if nack.retransmissions >= MAX_RETRANSMISSIONS {
+                            return false;
+                        }
                         let duration = if nack.retransmissions == 0 {
                             Duration::from_millis(20)
                         } else {
                             Duration::from_millis(self.rto)
                         };
                         if nack.sent_at.elapsed() > duration {
-                            if nack.retransmissions < MAX_RETRANSMISSIONS {
-                                if let Err(e) = self.session.send_datagram(PacketSerializer::serialize(&packet::Packet::Nack(nack.packet.clone()))) {
-                                    error!("Failed to send NACK retransmission: {}", e);
-                                }
-                                nack.sent_at = Instant::now();
-                                nack.retransmissions += 1;
+                            if let Err(e) = self.session.send_datagram(PacketSerializer::serialize(&packet::Packet::Nack(nack.packet.clone()))) {
+                                error!("Failed to send NACK retransmission: {}", e);
                             }
+                            nack.sent_at = Instant::now();
+                            nack.retransmissions += 1;
                         }
-                    }
+                        true
+                    });
                 }
 
                 _ = cleanup_interval.tick() => {

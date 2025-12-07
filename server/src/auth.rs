@@ -584,10 +584,7 @@ impl AuthTransaction for PgAuthTransaction {
                    created_at,
                    avatar_file_id,
                    role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    server_deafen,
                    server_mute"#,
             username,
@@ -778,10 +775,7 @@ impl AuthRepository for Postgre {
                    created_at,
                    avatar_file_id,
                    role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    server_deafen,
                    server_mute
                FROM users
@@ -821,10 +815,7 @@ impl AuthRepository for Postgre {
                    created_at,
                    avatar_file_id,
                    role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    server_deafen,
                    server_mute
                FROM users

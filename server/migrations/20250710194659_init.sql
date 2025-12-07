@@ -247,6 +247,13 @@ CREATE TABLE settings (
     setting_value TEXT
 );
 
+-- Server config table - stores server-wide settings
+CREATE TABLE server_config (
+    id BIGSERIAL PRIMARY KEY,
+    server_name VARCHAR(100) NOT NULL DEFAULT 'OpenCord',
+    avatar_file_id BIGINT REFERENCES avatar_files(file_id) ON DELETE SET NULL
+);
+
 -- ============================================
 -- Account Management Tables
 -- ============================================
@@ -345,6 +352,9 @@ VALUES ('1', '1.jpg', 'image/jpeg', 0, 'default_hash');
 
 
 INSERT INTO invites (code, available_registrations, role_id) VALUES ('ADMIN_INVITE_2024', 1, 0);
+
+-- Insert default server config
+INSERT INTO server_config (server_name) VALUES ('OpenCord');
 
 -- ============================================
 -- Permission System Constants (as comments)

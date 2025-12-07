@@ -11,6 +11,7 @@ mod message;
 mod middleware;
 mod model;
 mod role;
+mod server;
 mod user;
 mod voip;
 mod webtransport;
@@ -18,6 +19,7 @@ mod webtransport;
 use acl::{AclService, acl_routes};
 use auth::{AuthService, auth_routes};
 use channel::{ChannelService, channel_routes};
+use server::{ServerService, server_routes};
 use db::Postgre;
 use group::{GroupService, group_routes};
 use http::Method;
@@ -50,6 +52,7 @@ pub const ACL_TAG: &str = "acl";
 pub const VOIP_TAG: &str = "voip";
 pub const FILE_TAG: &str = "file";
 pub const LOG_TAG: &str = "log";
+pub const SERVER_TAG: &str = "server";
 
 #[derive(OpenApi)]
 #[openapi(tags(
@@ -61,7 +64,8 @@ pub const LOG_TAG: &str = "log";
     (name = ACL_TAG, description = "Access Control List API endpoints"),
     (name = VOIP_TAG, description = "VoIP API endpoints"),
     (name = FILE_TAG, description = "File API endpoints"),
-    (name = LOG_TAG, description = "Log API endpoints")
+    (name = LOG_TAG, description = "Log API endpoints"),
+    (name = SERVER_TAG, description = "Server configuration API endpoints")
 ))]
 struct ApiDoc;
 #[tokio::main]
@@ -120,7 +124,7 @@ async fn main() -> Result<(), sqlx::Error> {
     );
     let user_service = UserService::new(
         postgre.clone(),
-        avatar_manager,
+        avatar_manager.clone(),
         notifier_manager.clone(),
         log_manager.clone(),
     );
@@ -130,6 +134,12 @@ async fn main() -> Result<(), sqlx::Error> {
         log_manager.clone(),
     );
     let log_service = LogService::new(log_manager.clone(), postgre.clone());
+    let server_service = ServerService::new(
+        postgre.clone(),
+        avatar_manager.clone(),
+        notifier_manager.clone(),
+        log_manager.clone(),
+    );
 
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::any())
@@ -179,6 +189,10 @@ async fn main() -> Result<(), sqlx::Error> {
             voip_routes(voip_service, authorize_service.clone()),
         )
         .nest("/log", log_routes(log_service, authorize_service.clone()))
+        .nest(
+            "/server",
+            server_routes(server_service, authorize_service.clone()),
+        )
         .layer(cors)
         .with_state(postgre)
         .split_for_parts();

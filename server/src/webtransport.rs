@@ -401,10 +401,7 @@ impl Repository for Postgre {
                RETURNING
                    user_id,
                    username, 
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    avatar_file_id,
                    created_at,
                    server_mute,
@@ -768,10 +765,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         session_token: String,
         identifier: String,
     ) -> Result<(), ServerError> {
-        let _ = self
-            .handle_user_status_update(user_id, UserStatusType::Online)
-            .await;
-        self.handle_voip_participant_removal(user_id).await?;
         let subscriber = SubscriberHandler {
             user_id,
             sender,
@@ -779,6 +772,10 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             session_token,
         };
         self.observers.push(subscriber);
+        let _ = self
+            .handle_user_status_update(user_id, UserStatusType::Online)
+            .await;
+        self.handle_voip_participant_removal(user_id).await?;
         Ok(())
     }
 

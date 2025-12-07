@@ -30,6 +30,14 @@ pub enum VoipType {
     Direct { recipient_id: i64 },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerConfig {
+    pub id: i64,
+    pub server_name: String,
+    pub avatar_file_id: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum EventPayload {
@@ -57,6 +65,9 @@ pub enum EventPayload {
     #[serde(rename = "userDeleted")]
     #[serde(rename_all = "camelCase")]
     UserDeleted { user_id: i64 },
+    #[serde(rename = "serverUpdated")]
+    #[serde(rename_all = "camelCase")]
+    ServerUpdated { server: ServerConfig },
     #[serde(rename = "groupRoleRightUpdated")]
     #[serde(rename_all = "camelCase")]
     GroupRoleRightUpdated { right: GroupRoleRights },

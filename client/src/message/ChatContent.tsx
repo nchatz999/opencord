@@ -145,11 +145,11 @@ const ChatContent: Component = () => {
     }
   };
 
-  createEffect(on(ctx, () => {
+  createEffect(on(ctx, async () => {
     if (messages().length == 0) {
-      loadMoreMessages()
-      scrollToBottomIfNeeded(true);
+      await loadMoreMessages();
     }
+    scrollToBottomIfNeeded(true);
   }));
 
   createEffect(on(

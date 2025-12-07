@@ -171,3 +171,9 @@ export interface Session {
 export interface RegisterResponse {
   user: User;
 }
+
+export interface ServerConfig {
+  id: number;
+  serverName: string;
+  avatarFileId: number | null;
+}

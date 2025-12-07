@@ -36,7 +36,7 @@ export class TransportProvider {
         const event = decode(data) as ConnectionMessage;
         this.handleConnectionMessage(event)
       },
-      () => {
+      (e) => {
         if (this.onDisconnect) {
           this.onDisconnect("Connection to server is lost");
         }

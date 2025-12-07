@@ -1,6 +1,7 @@
 import {
   Show,
   mergeProps,
+  splitProps,
   createMemo,
   type Component,
   type JSX,
@@ -11,7 +12,7 @@ interface InputProps
   extends Omit<JSX.InputHTMLAttributes<HTMLInputElement>, "onChange"> {
   value: string;
   placeholder?: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   label?: string;
   error?: string;
   icon?: JSX.Element;
@@ -21,12 +22,26 @@ interface InputProps
 }
 
 export const Input: Component<InputProps> = (props) => {
+  const [local, rest] = splitProps(props, [
+    "value",
+    "placeholder",
+    "onChange",
+    "label",
+    "error",
+    "icon",
+    "multiline",
+    "rows",
+    "class",
+    "type",
+    "id",
+  ]);
+
   const merged = mergeProps(
     {
       multiline: false,
       rows: 3,
     },
-    props
+    local
   );
 
   const inputId = createMemo(
@@ -48,7 +63,7 @@ export const Input: Component<InputProps> = (props) => {
     HTMLInputElement | HTMLTextAreaElement,
     Event
   > = (e) => {
-    merged.onChange(e.currentTarget.value);
+    merged.onChange?.(e.currentTarget.value);
   };
 
   return (
@@ -70,6 +85,7 @@ export const Input: Component<InputProps> = (props) => {
           when={merged.multiline}
           fallback={
             <input
+              {...rest}
               id={inputId()}
               type={merged.type || "text"}
               value={merged.value}
@@ -80,6 +96,7 @@ export const Input: Component<InputProps> = (props) => {
           }
         >
           <textarea
+            {...rest}
             id={inputId()}
             value={merged.value}
             placeholder={merged.placeholder}

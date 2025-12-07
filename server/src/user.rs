@@ -361,10 +361,7 @@ impl UserTransaction for PgUserTransaction {
                    created_at,
                    avatar_file_id,
                    role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    server_mute,
                    server_deafen"#,
             role_id,
@@ -429,10 +426,7 @@ impl UserTransaction for PgUserTransaction {
                    created_at,
                    avatar_file_id,
                    role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    server_mute,
                    server_deafen"#,
             avatar_file_id,
@@ -462,10 +456,7 @@ impl UserTransaction for PgUserTransaction {
                    role_id,
                    server_deafen,
                    server_mute,
-                   COALESCE(
-                       NULLIF($2, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType""#,
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE($2, status) END as "status!: UserStatusType""#,
             user_id,
             manual_status as UserStatusType
         )
@@ -502,10 +493,7 @@ impl UserRepository for Postgre {
                    created_at,
                    avatar_file_id,
                    role_id,
-                   COALESCE(
-                       NULLIF(manual_status, 'Offline'::user_status_type),
-                       status
-                   ) as "status!: UserStatusType",
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
                    server_mute,
                    server_deafen
                FROM users

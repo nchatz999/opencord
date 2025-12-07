@@ -12,6 +12,7 @@ import {
   type VoipParticipantWithUser,
   type Subscription,
   type MediaType,
+  type ServerConfig,
 } from './model'
 import { fetchApi } from './utils'
 import { Microphone } from './contexts/MicrophoneProvider'
@@ -67,6 +68,7 @@ export interface State {
   subscribedStreams: number[]
   subscriptions: Subscription[]
   groupRoleRights: GroupRoleRights[]
+  serverConfig: ServerConfig | null
 
   eventLog: EventLogEntry[]
   notification: Record<number, boolean>
@@ -88,6 +90,7 @@ const initialState: State = {
   messages: [],
   currentUser: null,
   groupRoleRights: [],
+  serverConfig: null,
   voipState: [],
   speakingStates: {},
   audio: createSharedAudioContext(),
@@ -178,6 +181,10 @@ export type EventPayload =
   | {
     type: "userDeleted";
     userId: number;
+  }
+  | {
+    type: "serverUpdated";
+    server: ServerConfig;
   }
   | {
     type: "groupRoleRightUpdated";
@@ -341,6 +348,22 @@ export class UserDomain {
         }
       })
     );
+  }
+}
+
+export class ServerDomain {
+  constructor() {}
+
+  get(): ServerConfig | null {
+    return state.serverConfig;
+  }
+
+  set(config: ServerConfig): void {
+    setState('serverConfig', config);
+  }
+
+  update(updates: Partial<ServerConfig>): void {
+    setState('serverConfig', prev => prev ? { ...prev, ...updates } : null);
   }
 }
 
@@ -982,6 +1005,7 @@ export class ModalDomain {
 
 export const modalDomain = new ModalDomain();
 export const userDomain = new UserDomain();
+export const serverDomain = new ServerDomain();
 export const groupDomain = new GroupDomain();
 export const channelDomain = new ChannelDomain();
 export const messageDomain = new MessageDomain();
@@ -1053,6 +1077,10 @@ export function handleServerEvent(event: EventPayload): void {
 
     case 'userDeleted':
       userDomain.remove(event.userId);
+      break;
+
+    case 'serverUpdated':
+      serverDomain.set(event.server);
       break;
 
     case 'groupRoleRightUpdated':
@@ -1162,6 +1190,7 @@ export const getInitialData = async () => {
       usersResult,
       voipStatusResult,
       subscriptionsResult,
+      serverConfigResult,
     ] = await Promise.all([
       fetchApi<Group[]>('/group', { method: 'GET' }),
       fetchApi<Channel[]>('/channel', { method: 'GET' }),
@@ -1170,9 +1199,10 @@ export const getInitialData = async () => {
       fetchApi<User[]>('/user', { method: 'GET' }),
       fetchApi<VoipParticipant[]>('/voip/participants', { method: 'GET' }),
       fetchApi<Subscription[]>('/voip/subscriptions', { method: 'GET' }),
+      fetchApi<ServerConfig>('/server/config', { method: 'GET' }),
     ])
 
-    if (groupsResult.isErr() || channelsResult.isErr() || rolesResult.isErr() || usersResult.isErr() || groupRightsResult.isErr() || voipStatusResult.isErr() || subscriptionsResult.isErr()) {
+    if (groupsResult.isErr() || channelsResult.isErr() || rolesResult.isErr() || usersResult.isErr() || groupRightsResult.isErr() || voipStatusResult.isErr() || subscriptionsResult.isErr() || serverConfigResult.isErr()) {
       userDomain.setAppState({ type: 'unauthenticated' });
       return;
     }
@@ -1184,6 +1214,7 @@ export const getInitialData = async () => {
     aclDomain.replaceAll(groupRightsResult.value)
     voipDomain.replaceAll(voipStatusResult.value)
     voipDomain.replaceAllSubscriptions(subscriptionsResult.value)
+    serverDomain.set(serverConfigResult.value)
   } catch (error) {
     userDomain.setAppState({ type: 'unauthenticated' });
   }

@@ -160,7 +160,12 @@ use crate::model::EventPayload;
 use tracing::{error, warn};
 
 #[derive(Clone)]
-pub struct MessageService<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager> {
+pub struct MessageService<
+    R: MessageRepository,
+    F: FileManager + Clone + Send,
+    N: NotifierManager,
+    G: LogManager,
+> {
     repository: R,
     file_manager: F,
     notifier: N,
@@ -334,10 +339,16 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 .await;
         }
 
-        let _ = self.logger.log_entry(
-            format!("DM message created: user_id={}, session_id={}, message_id={}, recipient_id={}", sender_id, session_id, message.id, recipient_id),
-            "message".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "DM message created: user_id={}, session_id={}, message_id={}, recipient_id={}",
+                    sender_id, session_id, message.id, recipient_id
+                ),
+                "message".to_string(),
+            )
+            .await;
 
         Ok((message, file_attachments))
     }
@@ -503,6 +514,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 ))
                 .await;
         }
+
         if let Some(recipient_id) = message.recipient_id {
             let _ = self
                 .notifier
@@ -522,10 +534,16 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 .await;
         }
 
-        let _ = self.logger.log_entry(
-            format!("Message edited: user_id={}, session_id={}, message_id={}", user_id, session_id, message_id),
-            "message".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Message edited: user_id={}, session_id={}, message_id={}",
+                    user_id, session_id, message_id
+                ),
+                "message".to_string(),
+            )
+            .await;
 
         Ok(message)
     }
@@ -556,21 +574,32 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                     .await?
                     .unwrap_or(0);
 
-                if rights >= 8 {
-                    let user_role = repo
-                        .find_user_role(user_id)
-                        .await?
-                        .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
-                    let sender_role = repo.find_user_role(message.sender_id).await?.ok_or(
-                        DomainError::PermissionDenied("Sender not found".to_string()),
-                    )?;
-
-                    if sender_role < 2 && user_role != 1 {
-                        return Err(DomainError::PermissionDenied(
-                            "Cannot delete messages from higher role users".to_string(),
-                        ));
-                    }
+                if rights < 8 {
+                    self.repository.rollback(tx).await?;
+                    return Err(DomainError::PermissionDenied(
+                        "Insufficient permissions to delete this message".to_string(),
+                    ));
                 }
+
+                let user_role = repo
+                    .find_user_role(user_id)
+                    .await?
+                    .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
+                let sender_role = repo.find_user_role(message.sender_id).await?.ok_or(
+                    DomainError::PermissionDenied("Sender not found".to_string()),
+                )?;
+
+                if sender_role < user_role {
+                    self.repository.rollback(tx).await?;
+                    return Err(DomainError::PermissionDenied(
+                        "Cannot delete messages from higher role users".to_string(),
+                    ));
+                }
+            } else {
+                self.repository.rollback(tx).await?;
+                return Err(DomainError::PermissionDenied(
+                    "Cannot delete other users' direct messages".to_string(),
+                ));
             }
         }
 
@@ -615,10 +644,16 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 .await;
         }
 
-        let _ = self.logger.log_entry(
-            format!("Message deleted: user_id={}, session_id={}, message_id={}", user_id, session_id, message_id),
-            "message".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Message deleted: user_id={}, session_id={}, message_id={}",
+                    user_id, session_id, message_id
+                ),
+                "message".to_string(),
+            )
+            .await;
 
         Ok(message)
     }
@@ -1094,7 +1129,8 @@ use crate::error::ApiError;
 use axum::Json;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 
-type AppMessageService = MessageService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>;
+type AppMessageService =
+    MessageService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>;
 
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
@@ -1334,7 +1370,12 @@ async fn edit_message_handler(
     Json(payload): Json<EditMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .edit_message(session.user_id, session.session_id, message_id, payload.message_text)
+        .edit_message(
+            session.user_id,
+            session.session_id,
+            message_id,
+            payload.message_text,
+        )
         .await
         .map_err(ApiError::from)?;
 
