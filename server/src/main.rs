@@ -38,6 +38,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
@@ -83,8 +84,6 @@ async fn main() -> Result<(), sqlx::Error> {
     let key_path = PathBuf::from(std::env::var("KEY_PATH").expect("KEY_PATH not set"));
 
     let db = sqlx::PgPool::connect(&db_url).await.unwrap();
-
-    sqlx::migrate!("./migrations").run(&db).await?;
 
     let postgre = Postgre { pool: db.clone() };
     let log_manager = TextLogManager::default();
@@ -211,6 +210,20 @@ async fn main() -> Result<(), sqlx::Error> {
         .split_for_parts();
 
     let router = router.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api));
+
+    let serve_client = std::env::var("SERVE_CLIENT")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    let router = if serve_client {
+        let client_path = std::env::var("CLIENT_PATH").unwrap_or_else(|_| "../client/dist".to_string());
+        let index_path = PathBuf::from(&client_path).join("index.html");
+        let serve_dir = ServeDir::new(&client_path).fallback(ServeFile::new(&index_path));
+        println!("Serving client from: {}", client_path);
+        router.fallback_service(serve_dir)
+    } else {
+        router
+    };
 
     let tls_config = RustlsConfig::from_pem_file(&cert_path, &key_path)
         .await

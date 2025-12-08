@@ -70,7 +70,7 @@ export const UserEntry: Component<{ user: User; }> = (
     >
       <div class="relative shrink-0">
         <img
-          src={`/api/user/${props.user.avatarFileId}/avatar`}
+          src={`/user/${props.user.avatarFileId}/avatar`}
           alt={props.user.username}
           class="w-8 h-8 rounded-full"
         />

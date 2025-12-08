@@ -47,7 +47,7 @@ const FileItem: Component<FileProps> = (props) => {
       {props.file.fileType.startsWith("image/") ? (
         <img
           class="rounded-lg max-w-sm max-h-96 object-contain"
-          src={`/api/message/files/${props.file.fileId}`}
+          src={`/message/files/${props.file.fileId}`}
           alt="File preview"
         />
       ) : (

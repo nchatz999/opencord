@@ -22,7 +22,7 @@ const RoleUser: Component<RoleUserProps> = (props) => {
       <div class="relative shrink-0">
         <img
           class="w-6 h-6 rounded-full"
-          src={`/api/user/${props.user.avatarFileId}/avatar`}
+          src={`/user/${props.user.avatarFileId}/avatar`}
           alt={`${props.user.username} avatar`}
           width={24}
           height={24}

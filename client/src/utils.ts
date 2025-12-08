@@ -24,7 +24,7 @@ type ErrorResponse = {
 };
 
 const getBaseUrl = () => {
-  return getServerUrlOrDefault() + "/api";
+  return getServerUrlOrDefault();
 };
 
 export async function fetchApi<T = unknown>(

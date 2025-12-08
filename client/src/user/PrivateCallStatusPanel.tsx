@@ -34,14 +34,14 @@ const PrivateCallStatusPanel: Component = () => {
           <div class="flex -space-x-2">
             <div class="relative z-10">
               <img
-                src={`/api/user/${info().currentUser.avatarFileId}/avatar`}
+                src={`/user/${info().currentUser.avatarFileId}/avatar`}
                 alt={info().currentUser.username}
                 class="w-6 h-6 rounded-full border-2 border-[#2b2d31]"
               />
             </div>
             <div class="relative">
               <img
-                src={`/api/user/${info().otherUser.avatarFileId}/avatar`}
+                src={`/user/${info().otherUser.avatarFileId}/avatar`}
                 alt={info().otherUser.username}
                 class="w-6 h-6 rounded-full border-2 border-[#2b2d31]"
               />

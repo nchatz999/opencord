@@ -262,7 +262,7 @@ const ServerSettingsModal: Component = () => {
                   >
                     {(avatarId) => (
                       <img
-                        src={`/api/server/avatar/${avatarId()}`}
+                        src={`/server/avatar/${avatarId()}`}
                         alt="Server avatar"
                         class="w-20 h-20 rounded-full object-cover"
                       />
@@ -349,7 +349,7 @@ const ServerSettingsModal: Component = () => {
                       <TableCell class="text-center">
                         <div class="flex items-center space-x-3">
                           <img
-                            src={`/api/user/${user.avatarFileId}/avatar`}
+                            src={`/user/${user.avatarFileId}/avatar`}
                             alt={user.username}
                             class="w-8 h-8 rounded-full"
                           />

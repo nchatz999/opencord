@@ -56,7 +56,7 @@ const LeftPanel: Component = () => {
                 >
                   {(avatarId) => (
                     <img
-                      src={`/api/server/avatar/${avatarId()}`}
+                      src={`/server/avatar/${avatarId()}`}
                       alt="Server avatar"
                       class="w-7 h-7 rounded-full object-cover"
                     />

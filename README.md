@@ -15,38 +15,59 @@ A modern real-time communication platform built with Rust and SolidJS.
 - File sharing
 - Modern web interface
 
-## Quick Start
+## Local Development
 
 ### Prerequisites
 
 - Node.js (18+)
 - Rust (latest stable)
 - PostgreSQL
-- Caddy web server
 - sqlx-cli (`cargo install sqlx-cli`)
 
-### Installation
+### Setup
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd opencord
-   ```
+```bash
+# Clone and setup
+git clone <repository-url>
+cd opencord
+cp .env.example .env
 
-2. **Set up environment**
+# Generate dev certificates
+./generate-dev-certs
+
+# Build and run
+make build
+make run
+```
+
+Access at `https://localhost:3000`
+
+## Production Deployment
+
+### Without Docker
+
+1. **Install prerequisites**
+   - Node.js 18+
+   - Rust (latest stable)
+   - PostgreSQL
+   - sqlx-cli (`cargo install sqlx-cli`)
+
+2. **Setup**
    ```bash
    cp .env.example .env
-   # Edit .env with your configuration
+   # Edit .env with production DATABASE_URL and cert paths
    ```
 
-3. **Check requirements**
+3. **Generate certificates**
    ```bash
-   make check-requirements
+   ./generate-prod-certs yourdomain.com
    ```
 
-4. **Generate certificates**
-   ```bash
-   make generate-certs
+4. **Update .env**
+   ```
+   CERT_PATH=certs/yourdomain.com.crt
+   KEY_PATH=certs/yourdomain.com.key
+   SERVE_CLIENT=true
    ```
 
 5. **Build and run**
@@ -55,25 +76,38 @@ A modern real-time communication platform built with Rust and SolidJS.
    make run
    ```
 
+### With Docker
+
+1. **Generate certificates**
+   ```bash
+   ./generate-prod-certs yourdomain.com
+   ```
+
+2. **Deploy**
+   ```bash
+   DOMAIN=yourdomain.com docker-compose up -d
+   ```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | required |
+| `CERT_PATH` | Path to TLS certificate | required |
+| `KEY_PATH` | Path to TLS private key | required |
+| `SERVE_CLIENT` | Serve frontend from server | false |
+
 ## Project Structure
 
 ```
 opencord/
-├── client/          # SolidJS frontend application
-├── server/          # Rust backend server
-├── prot/           # WebTransport protocol implementation
-│   ├── client/     # Transport client library
-│   └── server/     # Transport server library
-├── utils/          # Shared utilities
-└── Makefile        # Build automation
+├── client/          # SolidJS frontend
+├── server/          # Rust backend
+├── transport/       # WebTransport implementation
+├── utils/           # Shared utilities
+├── certs/           # TLS certificates
+└── Makefile         # Build automation
 ```
-
-## Development
-
-- **Frontend**: SolidJS with TypeScript, Vite, Tailwind CSS
-- **Backend**: Rust with Axum, SQLx, PostgreSQL
-- **Transport**: Custom WebTransport implementation
-- **Build**: Make-based build system
 
 ## License
 

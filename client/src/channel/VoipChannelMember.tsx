@@ -109,7 +109,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
         <div class="relative shrink-0">
           <div class={`rounded-full p-0.5 transition-all duration-200 ${isSpeaking() ? 'bg-green-500 shadow-lg shadow-green-500/50' : ''}`}>
             <img
-              src={`/api/user/${props.participant.user.avatarFileId}/avatar`}
+              src={`/user/${props.participant.user.avatarFileId}/avatar`}
               alt={props.participant.user.username}
               class="w-6 h-6 rounded-full"
             />

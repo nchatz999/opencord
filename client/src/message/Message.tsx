@@ -68,7 +68,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
             <div class={`flex gap-3 ${isOwner() ? "flex-row-reverse" : "flex-row"}`}>
               <img
                 class="w-10 h-10 rounded-full flex-shrink-0"
-                src={`/api/user/${user().avatarFileId}/avatar`}
+                src={`/user/${user().avatarFileId}/avatar`}
                 alt={`${user().username}'s avatar`}
                 width={40}
                 height={40}

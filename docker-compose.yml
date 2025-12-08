@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-opencord}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-opencord}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db/${POSTGRES_DB:-opencord}
+      CERT_PATH: /app/certs/${DOMAIN}.crt
+      KEY_PATH: /app/certs/${DOMAIN}.key
+      SERVE_CLIENT: "true"
+      CLIENT_PATH: /app/client/dist
+    volumes:
+      - ./certs:/app/certs:ro
+      - server_uploads:/app/uploads
+      - server_avatars:/app/avatars
+      - server_logs:/app/logs
+    ports:
+      - "443:3000"
+      - "4443:4443/udp"
+
+volumes:
+  postgres_data:
+  server_uploads:
+  server_avatars:
+  server_logs:

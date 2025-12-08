@@ -23,7 +23,7 @@ const ChatHeader: Component<{
                 {}
                 <div class="relative">
                   <img
-                    src={`/api/user/${user().avatarFileId}/avatar`}
+                    src={`/user/${user().avatarFileId}/avatar`}
                     alt={user().username}
                     class="w-10 h-10 rounded-full object-cover border-2 border-[#313338]"
                   />
@@ -36,7 +36,7 @@ const ChatHeader: Component<{
                 <Show when={user().avatarFileId}>
                   <div class="relative -ml-3 z-10">
                     <img
-                      src={`/api/user/${user().avatarFileId}/avatar`}
+                      src={`/user/${user().avatarFileId}/avatar`}
                       alt="You"
                       class="w-8 h-8 rounded-full object-cover border-2 border-[#313338]"
                     />

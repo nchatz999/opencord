@@ -52,7 +52,7 @@ const UserSection: Component = () => {
       <div class="flex items-center gap-2 flex-1 min-w-0">
         <div class="relative">
           <img
-            src={`/api/user/${userDomain.getCurrent().avatarFileId}/avatar`}
+            src={`/user/${userDomain.getCurrent().avatarFileId}/avatar`}
             alt={userDomain.getCurrent().username}
             class="w-8 h-8 rounded-full object-cover"
           />

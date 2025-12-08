@@ -227,7 +227,7 @@ const UserSettingsModal: Component = () => {
             <div class="flex flex-col items-center space-y-3">
               <div class="relative w-24 h-24">
                 <img
-                  src={`/api/user/${userDomain.getCurrent().avatarFileId}/avatar`}
+                  src={`/user/${userDomain.getCurrent().avatarFileId}/avatar`}
                   alt="Avatar"
                   class="w-24 h-24 rounded-full object-cover"
                 />
