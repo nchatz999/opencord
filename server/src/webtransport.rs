@@ -9,6 +9,7 @@ use crate::{
 };
 use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -717,10 +718,12 @@ pub struct RealtimeServer<L: LogManager> {
     service: Service<L>,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
+    cert_path: PathBuf,
+    key_path: PathBuf,
 }
 
 impl<L: LogManager + 'static> RealtimeServer<L> {
-    pub fn new(repository: Postgre, logger: L) -> Self {
+    pub fn new(repository: Postgre, logger: L, cert_path: PathBuf, key_path: PathBuf) -> Self {
         let (server_tx, server_rx): (mpsc::Sender<ServerMessage>, mpsc::Receiver<ServerMessage>) =
             mpsc::channel(1000);
 
@@ -729,6 +732,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             service: Service::new(repository, logger),
             receiver: server_rx,
             sender: server_tx,
+            cert_path,
+            key_path,
         }
     }
 
@@ -1015,12 +1020,13 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
     }
 
     pub async fn run(mut self) -> Result<(), ServerError> {
-        let cert_path = std::env::var("CERT_PATH").expect("Cert not found");
-        let key_path = std::env::var("KEY_PATH").expect("Key not found");
-
-        let mut server = Server::bind("[::]:4443", &cert_path, &key_path)
-            .await
-            .expect("Failed to start server");
+        let mut server = Server::bind(
+            "[::]:4443",
+            self.cert_path.to_str().expect("Invalid cert path"),
+            self.key_path.to_str().expect("Invalid key path"),
+        )
+        .await
+        .expect("Failed to start server");
 
         let sender = self.subscribe_channel().await;
         loop {
@@ -1120,7 +1126,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                                    .send(ServerMessage::Command(CommandPayload::Timeout(user_session.user_id, session.identifier.clone())))
                                    .await;
                             }
-
+                            break;
                         },
                     }
                 }

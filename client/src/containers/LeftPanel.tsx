@@ -1,8 +1,7 @@
 import type { Component } from "solid-js";
 import { createMemo, Show } from "solid-js";
 import { Hash, Settings, UsersIcon } from "lucide-solid";
-import { type User } from "../model";
-import { groupDomain, messageDomain, modalDomain, userDomain, serverDomain } from "../store";
+import { groupDomain, modalDomain, userDomain, serverDomain } from "../store";
 import { ChannelBrowser } from "../channel/ChannelBrowser";
 import { UserBrowser } from "../user/UserBrowser";
 import { Tabs } from "../components/Tabs";

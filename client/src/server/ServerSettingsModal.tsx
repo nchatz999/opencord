@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js'
-import { createSignal, createMemo, For, Show, onMount } from 'solid-js'
+import { createSignal, createMemo, For, Show } from 'solid-js'
 import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw, Upload } from 'lucide-solid'
 import { useToaster } from '../components/Toaster'
 import Button from '../components/Button'
@@ -30,10 +30,8 @@ interface LogEntry {
 }
 
 const ServerSettingsModal: Component = () => {
-  const [maxFileSize, setMaxFileSize] = createSignal('50')
   const [isRegistrationOpen, setIsRegistrationOpen] = createSignal(true)
   const [searchTerm, setSearchTerm] = createSignal('')
-  const [saving, setSaving] = createSignal(false)
   let avatarInputRef: HTMLInputElement | undefined;
 
   const [invites, setInvites] = createSignal<Invite[]>([])
@@ -72,7 +70,6 @@ const ServerSettingsModal: Component = () => {
     const currentConfig = serverConfig();
     if (!currentConfig || name === currentConfig.serverName) return;
 
-    setSaving(true);
     const result = await fetchApi<ServerConfig>('/server/name', {
       method: 'PUT',
       body: { serverName: name },
@@ -81,7 +78,6 @@ const ServerSettingsModal: Component = () => {
     if (result.isErr()) {
       addToast(result.error.reason, 'error');
     }
-    setSaving(false);
   };
 
   const handleAvatarChange = async (e: Event) => {
@@ -89,7 +85,6 @@ const ServerSettingsModal: Component = () => {
     if (!target.files || !target.files[0]) return;
 
     const file = target.files[0];
-    setSaving(true);
 
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -107,7 +102,6 @@ const ServerSettingsModal: Component = () => {
       if (result.isErr()) {
         addToast(result.error.reason, 'error');
       }
-      setSaving(false);
     };
     reader.readAsDataURL(file);
   };
@@ -277,7 +271,6 @@ const ServerSettingsModal: Component = () => {
                   <Show when={isAdmin()}>
                     <button
                       onClick={() => avatarInputRef?.click()}
-                      disabled={saving()}
                       class="absolute bottom-0 right-0 bg-[#5865f2] hover:bg-[#4752c4] rounded-full p-1.5 transition-colors disabled:opacity-50"
                     >
                       <Upload class="w-4 h-4 text-white" />
@@ -302,7 +295,6 @@ const ServerSettingsModal: Component = () => {
                       label="Server Name"
                       value={config().serverName}
                       onBlur={(e) => saveServerName(e.currentTarget.value)}
-                      disabled={saving()}
                     />
                   </Show>
                 </div>
@@ -601,7 +593,7 @@ const ServerSettingsModal: Component = () => {
                   <Select
                     value={logCategoryFilter()}
                     onChange={(val) => {
-                      setLogCategoryFilter(val);
+                      setLogCategoryFilter(val as string);
                       loadLogs();
                     }}
                     options={[

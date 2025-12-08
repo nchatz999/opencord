@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { createEffect, Match, Switch } from "solid-js";
 import { userDomain, connection, getInitialData, getWebTransportUrl } from "../store";
-import { loadSession } from "../contexts/Session";
+import { clearSession, loadSession } from "../contexts/Session";
 import { getServerUrl } from "../contexts/ServerConfig";
 import Loading from "./Loading";
 import Auth from "./Auth";
@@ -43,6 +43,7 @@ const AuthHandler: Component = () => {
           addToast(connectResult.error, "error");
 
           if (connectResult.error === 'Connection rejected by server') {
+            clearSession()
             userDomain.setAppState({ type: 'unauthenticated' });
             return;
           }

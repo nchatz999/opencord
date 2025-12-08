@@ -19,7 +19,6 @@ mod webtransport;
 use acl::{AclService, acl_routes};
 use auth::{AuthService, auth_routes};
 use channel::{ChannelService, channel_routes};
-use server::{ServerService, server_routes};
 use db::Postgre;
 use group::{GroupService, group_routes};
 use http::Method;
@@ -31,10 +30,13 @@ use managers::{
 use message::{MessageService, message_routes};
 use middleware::AuthorizeService;
 use role::{RoleService, role_routes};
+use server::{ServerService, server_routes};
 use user::{UserService, user_routes};
 use voip::{VoipService, voip_routes};
 
+use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -70,9 +72,15 @@ pub const SERVER_TAG: &str = "server";
 struct ApiDoc;
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     dotenv::from_path("../.env").ok();
 
-    let db_url = std::env::var("DATABASE_URL").expect("Env not found");
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL not set");
+    let cert_path = PathBuf::from(std::env::var("CERT_PATH").expect("CERT_PATH not set"));
+    let key_path = PathBuf::from(std::env::var("KEY_PATH").expect("KEY_PATH not set"));
 
     let db = sqlx::PgPool::connect(&db_url).await.unwrap();
 
@@ -80,7 +88,12 @@ async fn main() -> Result<(), sqlx::Error> {
 
     let postgre = Postgre { pool: db.clone() };
     let log_manager = TextLogManager::default();
-    let mut server = RealtimeServer::new(postgre.clone(), log_manager.clone());
+    let mut server = RealtimeServer::new(
+        postgre.clone(),
+        log_manager.clone(),
+        cert_path.clone(),
+        key_path.clone(),
+    );
 
     let file_manager = LocalFileManager::default();
     let avatar_manager = LocalFileManager::new("./avatars");
@@ -198,18 +211,21 @@ async fn main() -> Result<(), sqlx::Error> {
         .split_for_parts();
 
     let router = router.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api));
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
-    println!("HTTP server listening on http://0.0.0.0:3000");
-    println!("WebTransport server listening on https://localhost:4433");
-    println!("Swagger UI available at http://0.0.0.0:3000/swagger-ui");
+    let tls_config = RustlsConfig::from_pem_file(&cert_path, &key_path)
+        .await
+        .expect("Failed to load TLS certificates");
 
-    axum::serve(
-        listener,
-        router.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+
+    println!("HTTPS server listening on https://0.0.0.0:3000");
+    println!("WebTransport server listening on https://localhost:4443");
+    println!("Swagger UI available at https://0.0.0.0:3000/swagger-ui");
+
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(router.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .unwrap();
 
     Ok(())
 }
