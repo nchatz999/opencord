@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createEffect, Match, Switch } from "solid-js";
-import { userDomain, connection, getInitialData, getWebTransportUrl } from "../store";
+import { userDomain, getInitialData, getWebTransportUrl, connection } from "../store";
 import { clearSession, loadSession } from "../contexts/Session";
 import { getServerUrl } from "../contexts/ServerConfig";
 import Loading from "./Loading";

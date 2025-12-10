@@ -132,6 +132,9 @@ export type ControlPayload =
   }
   | {
     type: "close";
+  }
+  | {
+    type: "error";
     reason: string;
   };
 
@@ -352,7 +355,7 @@ export class UserDomain {
 }
 
 export class ServerDomain {
-  constructor() {}
+  constructor() { }
 
   get(): ServerConfig | null {
     return state.serverConfig;
@@ -1301,13 +1304,14 @@ connection.onServerEventReceived((event: EventPayload) => {
   handleServerEvent(event);
 });
 
-connection.onConnectionLost((reason) => {
+connection.onConnectionError((reason) => {
   userDomain.setAppState({ type: "connectionError", reason });
 });
 
-connection.onAuthenticationRejected(() => {
+connection.onConnectionClosed(() => {
   userDomain.setAppState({ type: "unauthenticated" });
 });
+
 
 
 

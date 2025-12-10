@@ -21,7 +21,7 @@ import {
   Calendar,
   Settings,
 } from "lucide-solid";
-import { connection, microphone, modalDomain, outputManager, userDomain, camera, screenShare, voipDomain } from "../store";
+import { microphone, modalDomain, outputManager, userDomain, camera, screenShare, voipDomain, connection } from "../store";
 import { Input } from "../components/Input";
 import Button from "../components/Button";
 import Select from "../components/Select";
@@ -51,7 +51,6 @@ const UserSettingsModal: Component = () => {
   const [passwordError, setPasswordError] = createSignal("");
 
   const [sessions, setSessions] = createSignal<Session[]>([]);
-  const [loadingSessions, setLoadingSessions] = createSignal(false);
 
   const { addToast } = useToaster();
 
@@ -89,7 +88,9 @@ const UserSettingsModal: Component = () => {
 
     if (result.isErr()) {
       addToast(result.error.reason, "error");
+      return
     }
+    setSessions(result.value);
   };
 
   const terminateSession = async (sessionToken: string) => {
@@ -111,7 +112,9 @@ const UserSettingsModal: Component = () => {
   };
 
   const isCurrentSession = (sessionToken: string) => {
-    return sessions().length > 0 && sessions()[0].sessionToken === sessionToken;
+    const currentSession = loadSession();
+    if (currentSession.isErr()) return false;
+    return currentSession.value.sessionToken === sessionToken;
   };
 
 
@@ -492,7 +495,6 @@ const UserSettingsModal: Component = () => {
               onClick={loadSessions}
               variant="secondary"
               size="sm"
-              disabled={loadingSessions()}
             >
               Refresh
             </Button>
@@ -503,7 +505,7 @@ const UserSettingsModal: Component = () => {
               when={sessions().length > 0}
               fallback={
                 <div class="text-center py-8 text-[#72767d]">
-                  {loadingSessions() ? "Loading sessions..." : "No active sessions found."}
+                  {"No active sessions found."}
                 </div>
               }
             >
@@ -549,7 +551,7 @@ const UserSettingsModal: Component = () => {
                         <TableCell >
                           <button
                             onClick={() => terminateSession(session.sessionToken)}
-                            disabled={loadingSessions() || isCurrentSession(session.sessionToken)}
+                            disabled={isCurrentSession(session.sessionToken)}
                             class="p-2 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title={isCurrentSession(session.sessionToken) ? "Cannot terminate current session" : "Terminate session"}
                           >

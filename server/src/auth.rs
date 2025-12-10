@@ -946,7 +946,9 @@ use crate::middleware::{AuthorizeService, authorize};
 use axum::{
     Json,
     extract::{Extension, State},
+    http::{HeaderMap, HeaderValue, header},
     middleware::from_fn_with_state,
+    response::IntoResponse,
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 

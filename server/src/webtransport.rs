@@ -104,7 +104,8 @@ pub enum AnswerPayload {
 pub enum ControlPayload {
     Connect { token: String },
     Answer { answer: AnswerPayload },
-    Close { reason: String },
+    Close,
+    Error { reason: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -512,9 +513,9 @@ impl<L: LogManager> SubscriberSession<L> {
         }
     }
 
-    async fn close(&mut self, reason: String) {
+    async fn send_error(&mut self, reason: String) {
         if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control {
-            payload: ControlPayload::Close { reason },
+            payload: ControlPayload::Error { reason },
         }) {
             self.connection.send_ordered(serialized_event.into()).await;
         }
@@ -538,13 +539,11 @@ impl<L: LogManager> SubscriberSession<L> {
                         .await;
                 }
             }
-            SubscriberMessage::Close(reason) => {
+            SubscriberMessage::Close(_) => {
                 if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control {
-                    payload: ControlPayload::Close { reason },
+                    payload: ControlPayload::Close,
                 }) {
-                    self.connection
-                        .send_unordered(serialized_event.into())
-                        .await;
+                    self.connection.send_ordered(serialized_event.into()).await;
                     return Err(SessionError::BadRequest("Close".to_string()));
                 }
             }
@@ -642,8 +641,13 @@ impl<L: LogManager> SubscriberSession<L> {
             ControlPayload::Answer { .. } => Err(SessionError::BadRequest(
                 "Unexpected answer payload".to_string(),
             )),
-            ControlPayload::Close { .. } => {
+            ControlPayload::Close => {
                 return Err(SessionError::BadRequest("Session End".to_string()));
+            }
+            ControlPayload::Error { .. } => {
+                return Err(SessionError::BadRequest(
+                    "Received error from client".to_string(),
+                ));
             }
         }
     }
@@ -1115,7 +1119,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                     match  may_msg {
                         Some(msg) => {
                             if let Err(e) = session.handle_connection_message(msg).await {
-                                session.close(format!("{:?}",e)).await;
+                                session.send_error(format!("{:?}",e)).await;
                                 break;
                             }
                         }

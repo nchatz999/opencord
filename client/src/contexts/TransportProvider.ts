@@ -22,7 +22,8 @@ export class TransportProvider {
 
   private onVoipData?: (data: VoipPayload) => void;
   private onServerEvent?: (event: EventPayload) => void;
-  private onDisconnect?: (reason: string) => void;
+  private onClose?: () => void;
+  private onError?: (reason: string) => void;
   private onAuthRejected?: () => void;
 
   constructor(config?: TransportConfig) {
@@ -36,9 +37,9 @@ export class TransportProvider {
         const event = decode(data) as ConnectionMessage;
         this.handleConnectionMessage(event)
       },
-      (e) => {
-        if (this.onDisconnect) {
-          this.onDisconnect("Connection to server is lost");
+      () => {
+        if (this.onError) {
+          this.onError("Connection to server lost");
         }
       }
     );
@@ -74,10 +75,16 @@ export class TransportProvider {
         break;
 
       case 'close':
-        if (this.onDisconnect) {
-          if (this.onDisconnect) {
-            this.onDisconnect(payload.reason);
-          }
+        if (this.onClose) {
+          this.onClose();
+          this.disconnect()
+        }
+        break;
+
+      case 'error':
+        if (this.onError) {
+          this.onError(payload.reason);
+          this.disconnect()
         }
         break;
 
@@ -141,20 +148,20 @@ export class TransportProvider {
     this.onServerEvent = callback;
   }
 
-  public onConnectionLost(callback: (reason: string) => void): void {
-    this.onDisconnect = callback;
+  public onConnectionClosed(callback: () => void): void {
+    this.onClose = callback;
   }
 
-  public onAuthenticationRejected(callback: () => void): void {
-    this.onAuthRejected = callback;
+  public onConnectionError(callback: (reason: string) => void): void {
+    this.onError = callback;
   }
+
 
   public async disconnect() {
     const closeMessage: ConnectionMessage = {
       type: 'control',
       payload: {
-        type: 'close',
-        reason: 'User disconnected'
+        type: 'close'
       }
     };
     this.protocol.send(encode(closeMessage));

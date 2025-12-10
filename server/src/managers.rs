@@ -7,6 +7,7 @@ pub enum FileError {
     Io(io::Error),
     NotFound(i64),
     TransactionFailed(String),
+    AccessDenied,
 }
 
 impl From<io::Error> for FileError {
@@ -21,6 +22,7 @@ impl std::fmt::Display for FileError {
             FileError::Io(err) => write!(f, "IO error: {}", err),
             FileError::NotFound(id) => write!(f, "File not found: {}", id),
             FileError::TransactionFailed(msg) => write!(f, "Transaction failed: {}", msg),
+            FileError::AccessDenied => write!(f, "Access denied"),
         }
     }
 }
@@ -63,12 +65,25 @@ impl LocalFileManager {
         Self::new("./files")
     }
 
-    fn get_file_path(&self, id: i64) -> PathBuf {
-        self.base_directory.join(id.to_string())
+    fn get_file_path(&self, id: i64) -> Result<PathBuf, FileError> {
+        let path = self.base_directory.join(id.to_string());
+        self.validate_path(&path)?;
+        Ok(path)
     }
 
-    fn get_temp_file_path(&self, id: i64) -> PathBuf {
-        self.base_directory.join(format!("{}.tmp", id))
+    fn get_temp_file_path(&self, id: i64) -> Result<PathBuf, FileError> {
+        let path = self.base_directory.join(format!("{}.tmp", id));
+        self.validate_path(&path)?;
+        Ok(path)
+    }
+
+    fn validate_path(&self, path: &Path) -> Result<(), FileError> {
+        let canonical_base = self.base_directory.canonicalize().unwrap_or_else(|_| self.base_directory.clone());
+        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        if !canonical_path.starts_with(&canonical_base) {
+            return Err(FileError::AccessDenied);
+        }
+        Ok(())
     }
 }
 
@@ -145,13 +160,13 @@ impl FileManager for LocalFileManager {
     fn upload_file(&self, id: i64, data: &[u8]) -> Result<(), FileError> {
         fs::create_dir_all(&self.base_directory)?;
 
-        let file_path = self.get_file_path(id);
+        let file_path = self.get_file_path(id)?;
         fs::write(file_path, data)?;
         Ok(())
     }
 
     fn get_file(&self, id: i64) -> Result<Vec<u8>, FileError> {
-        let file_path = self.get_file_path(id);
+        let file_path = self.get_file_path(id)?;
 
         if !file_path.exists() {
             return Err(FileError::NotFound(id));
@@ -162,7 +177,7 @@ impl FileManager for LocalFileManager {
     }
 
     fn delete_file(&self, id: i64) -> Result<(), FileError> {
-        let file_path = self.get_file_path(id);
+        let file_path = self.get_file_path(id)?;
 
         if !file_path.exists() {
             return Err(FileError::NotFound(id));

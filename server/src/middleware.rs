@@ -6,6 +6,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use time::OffsetDateTime;
 
 #[derive(Clone)]
 pub struct AuthorizeService<T: AuthRepository> {
@@ -25,7 +26,14 @@ impl<T: AuthRepository> AuthorizeService<T> {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match result {
-            Some(session) => Ok(session),
+            Some(session) => {
+                if let Some(expires_at) = session.expires_at {
+                    if expires_at < OffsetDateTime::now_utc() {
+                        return Err(StatusCode::UNAUTHORIZED);
+                    }
+                }
+                Ok(session)
+            }
             None => Err(StatusCode::UNAUTHORIZED),
         }
     }
