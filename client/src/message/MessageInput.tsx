@@ -11,7 +11,7 @@ import { formatLinks } from "../utils/messageFormatting";
 
 const formatContent = (text: string) => {
   if (!text) return <></>;
-  return formatLinks(text, "text-[#00A8FC] hover:underline", true);
+  return formatLinks(text, "text-link hover:underline", true);
 };
 
 const MessageInput: Component<{
@@ -126,9 +126,9 @@ const MessageInput: Component<{
 
   return (
     <Show when={props.context}>
-      <div class="p-4 bg-[#313338]">
+      <div class="p-4 bg-background">
         <Show when={files().length > 0}>
-          <div class="mb-3 flex flex-wrap gap-2 p-3 bg-[#1e1f22] rounded-lg border border-[#383a40]">
+          <div class="mb-3 flex flex-wrap gap-2 p-3 bg-background-dark rounded-lg border border-muted">
             <For each={files()}>
               {(file) => (
                 <FilePreview
@@ -141,7 +141,7 @@ const MessageInput: Component<{
         </Show>
 
         <div
-          class={`relative flex items-center gap-3 py-3 px-1 bg-[#383a40] rounded-lg transition-colors ${isDragging() ? "bg-[#404249] border-2 border-dashed border-[#00A8FC]" : ""}`}
+          class={`relative flex items-center gap-3 py-3 px-1 bg-muted rounded-lg transition-colors ${isDragging() ? "bg-accent border-2 border-dashed border-link" : ""}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -163,7 +163,7 @@ const MessageInput: Component<{
               onTextContent={setContent}
               onKeyDown={handleKeyDown}
               data-placeholder={placeholder()}
-              class="w-full bg-transparent text-[#DBDEE1] placeholder-[#6c7177] resize-none outline-none max-h-[120px] min-h-[24px] empty:before:content-[attr(data-placeholder)] empty:before:text-[#6c7177] overflow-y-auto whitespace-pre-wrap break-words p-2 flex items-center"
+              class="w-full bg-transparent text-foreground placeholder-muted-foreground-dark resize-none outline-none max-h-[120px] min-h-[24px] empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground-dark overflow-y-auto whitespace-pre-wrap break-words p-2 flex items-center"
               render={(content) => formatContent(content())}
             />
           </div>
@@ -192,12 +192,12 @@ const MessageInput: Component<{
 
         <Show when={isDragging()}>
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-            <div class="bg-[#1e1f22] bg-opacity-90 border-2 border-dashed border-[#00A8FC] rounded-lg p-8 flex flex-col items-center justify-center">
-              <div class="w-16 h-16 flex items-center justify-center rounded-full border-4 border-[#00A8FC] border-dashed mb-4">
-                <Paperclip size={32} class="text-[#00A8FC]" />
+            <div class="bg-background-dark bg-opacity-90 border-2 border-dashed border-link rounded-lg p-8 flex flex-col items-center justify-center">
+              <div class="w-16 h-16 flex items-center justify-center rounded-full border-4 border-link border-dashed mb-4">
+                <Paperclip size={32} class="text-link" />
               </div>
-              <h2 class="text-xl font-semibold text-[#f2f3f5] mb-2">Drop to Upload</h2>
-              <p class="text-[#b5bac1]">Files will be uploaded to this channel</p>
+              <h2 class="text-xl font-semibold text-foreground-bright mb-2">Drop to Upload</h2>
+              <p class="text-secondary-text">Files will be uploaded to this channel</p>
             </div>
           </div>
         </Show>

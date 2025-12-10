@@ -35,15 +35,15 @@ const DebugItem: Component<DebugItemProps> = (props) => {
 
   const getTypeColor = (type: string): string => {
     switch (type) {
-      case "string": return "text-green-400";
-      case "number": return "text-blue-400";
-      case "boolean": return "text-purple-400";
-      case "null": return "text-gray-400";
-      case "undefined": return "text-gray-400";
-      case "date": return "text-yellow-400";
-      case "array": return "text-orange-400";
-      case "object": return "text-cyan-400";
-      default: return "text-white";
+      case "string": return "text-syntax-string";
+      case "number": return "text-syntax-number";
+      case "boolean": return "text-syntax-boolean";
+      case "null": return "text-syntax-null";
+      case "undefined": return "text-syntax-null";
+      case "date": return "text-syntax-date";
+      case "array": return "text-link";
+      case "object": return "text-link";
+      default: return "text-primary-foreground";
     }
   };
 
@@ -71,7 +71,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
         <Show when={!isPrimitive(props.value)}>
           <button
             onClick={() => setIsExpanded(!isExpanded())}
-            class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            class="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-primary-foreground transition-colors"
           >
             {isExpanded() ? "▼" : "▶"}
           </button>
@@ -80,7 +80,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
           <div class="w-4" />
         </Show>
 
-        <span class="text-gray-300">{props.label}:</span>
+        <span class="text-muted-foreground">{props.label}:</span>
 
         <Show when={isPrimitive(props.value)}>
           <span class={getTypeColor(getValueType(props.value))}>
@@ -91,7 +91,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
         <Show when={!isPrimitive(props.value)}>
           <span class={getTypeColor(getValueType(props.value))}>
             {getValueType(props.value)}
-            <span class="text-gray-400 ml-1">
+            <span class="text-muted-foreground ml-1">
               ({getCollectionLength(props.value)} items)
             </span>
           </span>
@@ -99,7 +99,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
       </div>
 
       <Show when={!isPrimitive(props.value) && isExpanded()}>
-        <div class="border-l border-gray-600 ml-2">
+        <div class="border-l border-secondary ml-2">
           <For each={getObjectEntries(props.value)}>
             {([key, value]) => (
               <DebugItem
@@ -120,12 +120,12 @@ const EventDebugOverlay: Component = () => {
   const [selectedEvent, setSelectedEvent] = createSignal<EventLogEntry | null>(null);
 
   const getEventTypeColor = (type: string): string => {
-    if (type.includes("Updated")) return "text-blue-400";
-    if (type.includes("Created")) return "text-green-400";
-    if (type.includes("Deleted")) return "text-red-400";
-    if (type.includes("Reveal")) return "text-yellow-400";
-    if (type.includes("Hide")) return "text-orange-400";
-    return "text-gray-400";
+    if (type.includes("Updated")) return "text-syntax-number";
+    if (type.includes("Created")) return "text-syntax-string";
+    if (type.includes("Deleted")) return "text-destructive";
+    if (type.includes("Reveal")) return "text-syntax-date";
+    if (type.includes("Hide")) return "text-link";
+    return "text-muted-foreground";
   };
 
   const clearEvents = () => {
@@ -138,7 +138,7 @@ const EventDebugOverlay: Component = () => {
       <div class="fixed top-16 right-4 z-[9999]">
         <button
           onClick={() => setIsVisible(!isVisible())}
-          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          class="bg-primary hover:bg-primary-hover text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           Events {isVisible() ? "Hide" : "Show"}
         </button>
@@ -146,21 +146,21 @@ const EventDebugOverlay: Component = () => {
 
       <Show when={isVisible()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 z-[9998]" onClick={() => setIsVisible(false)} />
-        <div class="fixed top-4 left-4 right-4 bottom-4 bg-[#1e1f22] border border-gray-600 rounded-lg z-[9999] flex">
+        <div class="fixed top-4 left-4 right-4 bottom-4 bg-background-dark border border-secondary rounded-lg z-[9999] flex">
 
-          <div class="w-1/3 border-r border-gray-600 flex flex-col">
-            <div class="flex items-center justify-between p-4 border-b border-gray-600">
-              <h3 class="text-lg font-semibold text-white">Events ({state.eventLog.length})</h3>
+          <div class="w-1/3 border-r border-secondary flex flex-col">
+            <div class="flex items-center justify-between p-4 border-b border-secondary">
+              <h3 class="text-lg font-semibold text-primary-foreground">Events ({state.eventLog.length})</h3>
               <div class="flex gap-2">
                 <button
                   onClick={clearEvents}
-                  class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition-colors"
+                  class="bg-action-negative hover:bg-action-negative-hover text-primary-foreground px-2 py-1 rounded text-xs transition-colors"
                 >
                   Clear
                 </button>
                 <button
                   onClick={() => setIsVisible(false)}
-                  class="text-gray-400 hover:text-white transition-colors"
+                  class="text-muted-foreground hover:text-primary-foreground transition-colors"
                 >
                   ✕
                 </button>
@@ -171,7 +171,7 @@ const EventDebugOverlay: Component = () => {
               <For each={[...state.eventLog].reverse()}>
                 {(event) => (
                   <div
-                    class={`p-3 border-b border-gray-700 cursor-pointer hover:bg-[#2b2d31] transition-colors ${selectedEvent()?.id === event.id ? "bg-[#404249]" : ""
+                    class={`p-3 border-b border-secondary cursor-pointer hover:bg-sidebar transition-colors ${selectedEvent()?.id === event.id ? "bg-accent" : ""
                       }`}
                     onClick={() => setSelectedEvent(event)}
                   >
@@ -179,18 +179,18 @@ const EventDebugOverlay: Component = () => {
                       <span class={`text-sm font-medium ${getEventTypeColor(event.type)}`}>
                         {event.type}
                       </span>
-                      <span class="text-xs text-gray-400">
+                      <span class="text-xs text-muted-foreground">
                         #{event.id}
                       </span>
                     </div>
-                    <div class="text-xs text-gray-400">
+                    <div class="text-xs text-muted-foreground">
                       {event.timestamp}
                     </div>
                   </div>
                 )}
               </For>
               <Show when={state.eventLog.length === 0}>
-                <div class="p-4 text-center text-gray-400">
+                <div class="p-4 text-center text-muted-foreground">
                   No events logged yet
                 </div>
               </Show>
@@ -198,33 +198,33 @@ const EventDebugOverlay: Component = () => {
           </div>
 
           <div class="flex-1 flex flex-col">
-            <div class="p-4 border-b border-gray-600">
-              <h3 class="text-lg font-semibold text-white">Event Details</h3>
+            <div class="p-4 border-b border-secondary">
+              <h3 class="text-lg font-semibold text-primary-foreground">Event Details</h3>
             </div>
 
-            <div class="flex-1 overflow-auto p-4 bg-[#313338]">
+            <div class="flex-1 overflow-auto p-4 bg-background">
               <Show when={selectedEvent()} fallback={
-                <div class="text-center text-gray-400 mt-8">
+                <div class="text-center text-muted-foreground mt-8">
                   Select an event to view details
                 </div>
               }>
                 {(event) => (
                   <div>
-                    <div class="mb-4 p-3 bg-[#2b2d31] rounded">
+                    <div class="mb-4 p-3 bg-sidebar rounded">
                       <div class="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span class="text-gray-400">ID:</span>
-                          <span class="text-white ml-2">#{event().id}</span>
+                          <span class="text-muted-foreground">ID:</span>
+                          <span class="text-primary-foreground ml-2">#{event().id}</span>
                         </div>
                         <div>
-                          <span class="text-gray-400">Type:</span>
+                          <span class="text-muted-foreground">Type:</span>
                           <span class={`ml-2 ${getEventTypeColor(event().type)}`}>
                             {event().type}
                           </span>
                         </div>
                         <div class="col-span-2">
-                          <span class="text-gray-400">Timestamp:</span>
-                          <span class="text-white ml-2">{event().timestamp}</span>
+                          <span class="text-muted-foreground">Timestamp:</span>
+                          <span class="text-primary-foreground ml-2">{event().timestamp}</span>
                         </div>
                       </div>
                     </div>

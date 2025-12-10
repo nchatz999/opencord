@@ -50,7 +50,7 @@ export const ChannelEntry: Component<{
       <button
         onClick={async () => await handleChannelClick(props.channel)}
         onContextMenu={handleContextMenu}
-        class="flex items-center gap-2 w-full px-2 py-1 rounded text-[#949ba4] hover:text-[#DBDEE1] hover:bg-[#383a40] transition-all group"
+        class="flex items-center gap-2 w-full px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all group"
       >
         <Show
           when={props.channel.channelType === "VoIP"}

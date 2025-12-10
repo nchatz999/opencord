@@ -30,31 +30,31 @@ const PrivateCallStatusPanel: Component = () => {
   return (
     <Show when={privateCallInfo()}>
       {(info) => (
-        <div class="bg-[#2b2d31] rounded-lg p-2 flex items-center gap-2">
+        <div class="bg-sidebar rounded-lg p-2 flex items-center gap-2">
           <div class="flex -space-x-2">
             <div class="relative z-10">
               <img
                 src={`/user/${info().currentUser.avatarFileId}/avatar`}
                 alt={info().currentUser.username}
-                class="w-6 h-6 rounded-full border-2 border-[#2b2d31]"
+                class="w-6 h-6 rounded-full border-2 border-sidebar"
               />
             </div>
             <div class="relative">
               <img
                 src={`/user/${info().otherUser.avatarFileId}/avatar`}
                 alt={info().otherUser.username}
-                class="w-6 h-6 rounded-full border-2 border-[#2b2d31]"
+                class="w-6 h-6 rounded-full border-2 border-sidebar"
               />
-              <div class={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#2b2d31] ${info().otherUserConnected ? 'bg-green-500' : 'bg-yellow-500'}`} />
+              <div class={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-sidebar ${info().otherUserConnected ? 'bg-status-online' : 'bg-status-away'}`} />
             </div>
           </div>
 
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1">
-              <span class="text-xs text-[#DBDEE1] truncate">
+              <span class="text-xs text-foreground truncate">
                 {info().otherUser.username}
               </span>
-              <span class={`text-[10px] ${info().otherUserConnected ? 'text-green-400' : 'text-yellow-400'}`}>
+              <span class={`text-[10px] ${info().otherUserConnected ? 'text-status-online' : 'text-status-away'}`}>
                 {info().otherUserConnected ? 'Connected' : 'Waiting'}
               </span>
             </div>

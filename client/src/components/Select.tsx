@@ -117,8 +117,8 @@ export default function Select(props: SelectProps) {
       <div class={cn("relative", props.class)} ref={selectRef}>
         <div
           class={cn(
-            "flex items-center justify-between px-2 gap-2 py-2 bg-[#202225] text-[#dcddde] cursor-pointer",
-            isOpen() ? "ring-2 ring-[#5865f2] focus:border-transparent" : ""
+            "flex items-center justify-between px-2 gap-2 py-2 bg-input text-foreground cursor-pointer",
+            isOpen() ? "ring-2 ring-ring focus:border-transparent" : ""
           )}
           onClick={() => {
             if (!isOpen() && props.options.length !== 0) {
@@ -145,7 +145,7 @@ export default function Select(props: SelectProps) {
       <Show when={isOpen()}>
         <div
           ref={dropdownRef}
-          class={cn("bg-[#202225] shadow-lg", props.dropdownClass)}
+          class={cn("bg-input shadow-lg", props.dropdownClass)}
           style={{
             position: props.position || "absolute",
             "z-index": props.zIndex || 9999,
@@ -161,7 +161,7 @@ export default function Select(props: SelectProps) {
           <For each={props.options}>
             {(option) => (
               <div
-                class="px-3 py-2 cursor-pointer hover:bg-[#4752c4] hover:text-white transition-colors"
+                class="px-3 py-2 cursor-pointer hover:bg-primary-hover hover:text-primary-foreground transition-colors"
                 onClick={() => handleSelect(option.value)}
                 role="option"
                 aria-selected={props.value === option.value}

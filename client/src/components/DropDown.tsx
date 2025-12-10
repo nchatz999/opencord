@@ -84,9 +84,9 @@ export const DropDown: Component<DropDownProps> = (props) => {
         type="button"
         class={cn(
           "flex items-center justify-between w-full px-3 py-2 text-sm font-medium",
-          "bg-[#2f3136] text-[#dcddde] rounded-md transition-colors",
-          "hover:bg-[#36393f]",
-          isOpen() && "ring-2 ring-[#5865f2]",
+          "bg-card text-foreground rounded-md transition-colors",
+          "hover:bg-popover",
+          isOpen() && "ring-2 ring-ring",
           merged.disabled && "opacity-50 cursor-not-allowed",
           "focus:outline-none"
         )}
@@ -114,8 +114,8 @@ export const DropDown: Component<DropDownProps> = (props) => {
       <Show when={isOpen()}>
         <div
           class={cn(
-            "absolute z-500 w-full mt-1 overflow-auto bg-[#36393f] rounded-md shadow-lg",
-            "border border-[#202225]",
+            "absolute z-500 w-full mt-1 overflow-auto bg-popover rounded-md shadow-lg",
+            "border border-input",
             merged.position === "top" ? "bottom-full mb-1" : "top-full mt-1"
           )}
           style={{ "max-height": `${merged.maxHeight}px` }}
@@ -129,8 +129,8 @@ export const DropDown: Component<DropDownProps> = (props) => {
                 <div
                   class={cn(
                     "flex items-center px-3 py-2 cursor-pointer",
-                    "hover:bg-[#4f545c] transition-colors",
-                    isSelected() && "bg-[#4f545c]"
+                    "hover:bg-secondary transition-colors",
+                    isSelected() && "bg-secondary"
                   )}
                   onClick={() => handleSelect(option.value)}
                   role="option"
@@ -141,18 +141,18 @@ export const DropDown: Component<DropDownProps> = (props) => {
                       <span class="flex-shrink-0">{option.icon}</span>
                     </Show>
                     <div class="flex flex-col">
-                      <span class="text-[#dcddde] font-medium">
+                      <span class="text-foreground font-medium">
                         {option.label}
                       </span>
                       <Show when={option.description}>
-                        <span class="text-xs text-[#b9bbbe]">
+                        <span class="text-xs text-secondary-text">
                           {option.description}
                         </span>
                       </Show>
                     </div>
                   </div>
                   <Show when={isSelected()}>
-                    <Check class="w-4 h-4 text-[#5865f2] ml-2" />
+                    <Check class="w-4 h-4 text-primary ml-2" />
                   </Show>
                 </div>
               );

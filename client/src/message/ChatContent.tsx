@@ -178,7 +178,7 @@ const ChatContent: Component = () => {
                 fallback={
                   <Show when={userDomain.findById(context().id)}>
                     {(user) => (
-                      <div class="flex-1 flex items-center justify-center text-[#949ba4] min-h-[400px]">
+                      <div class="flex-1 flex items-center justify-center text-muted-foreground min-h-[400px]">
                         <div class="text-center">
                           <h3 class="text-lg font-medium mb-1">
                             {user().username}
@@ -205,7 +205,7 @@ const ChatContent: Component = () => {
                 fallback={
                   <Show when={channelDomain.findById(context().id)}>
                     {(channel) => (
-                      <div class="flex-1 flex items-center justify-center text-[#949ba4] min-h-[400px]">
+                      <div class="flex-1 flex items-center justify-center text-muted-foreground min-h-[400px]">
                         <div class="text-center">
                           <h3 class="text-lg font-medium mb-1">
                             {channel().channelName}

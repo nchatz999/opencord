@@ -42,18 +42,18 @@ export const ChannelBrowser: Component<{
   return (
     <div class="p-2">
       <div class="flex items-center justify-between px-2 mb-4">
-        <h3 class="text-xs font-semibold text-[#949ba4] uppercase">Organize</h3>
+        <h3 class="text-xs font-semibold text-muted-foreground uppercase">Organize</h3>
         <div class="flex gap-1">
           <button
             onClick={handleCreateChannel}
-            class="p-1.5 bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1] rounded transition-colors"
+            class="p-1.5 bg-muted hover:bg-accent text-foreground rounded transition-colors"
             title="Create a new channel"
           >
             <Hash size={16} />
           </button>
           <button
             onClick={handleCreateGroup}
-            class="p-1.5 bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1] rounded transition-colors"
+            class="p-1.5 bg-muted hover:bg-accent text-foreground rounded transition-colors"
             title="Create a new group"
           >
             <UsersIcon size={16} />
@@ -76,7 +76,7 @@ export const ChannelBrowser: Component<{
                   e.preventDefault();
                   modalDomain.open({ type: "groupSettings", id: group.groupId })
                 }}
-                class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-[#949ba4] uppercase hover:text-[#DBDEE1] transition-colors"
+                class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors"
               >
                 <Show
                   when={!isCollapsed()}

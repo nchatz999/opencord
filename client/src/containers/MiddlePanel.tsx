@@ -37,7 +37,7 @@ const MiddlePanel: Component = () => {
   });
 
   return (
-    <div class="flex-1 flex flex-col bg-[#313338] h-full overflow-hidden">
+    <div class="flex-1 flex flex-col bg-background h-full overflow-hidden">
       <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
     </div>
   );

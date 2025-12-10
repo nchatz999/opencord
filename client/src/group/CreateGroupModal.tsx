@@ -110,7 +110,7 @@ const CreateGroupModal: Component = () => {
             <ul class="space-y-2">
               <For each={groupChannels()}>
                 {(channel) => (
-                  <li class="flex items-center justify-between bg-[#2f3136] p-2 rounded">
+                  <li class="flex items-center justify-between bg-card p-2 rounded">
                     <div class="flex items-center">
                       {channel.type === ChannelType.Text ? (
                         <Hash class="w-4 h-4 mr-2" />
@@ -121,7 +121,7 @@ const CreateGroupModal: Component = () => {
                     </div>
                     <button
                       onClick={() => removeChannel(channel.name)}
-                      class="text-[#8e9297] hover:text-white"
+                      class="text-tab-inactive hover:text-primary-foreground"
                     >
                       <X class="w-4 h-4" />
                     </button>
@@ -208,8 +208,8 @@ const CreateGroupModal: Component = () => {
   ]);
 
   return (
-    <div class="fixed inset-0 text-[#dcddde] bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="fixed inset-0 text-foreground bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Group Creation</h2>
           <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">

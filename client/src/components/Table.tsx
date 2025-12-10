@@ -24,7 +24,7 @@ export const TableHead: Component<
   const merged = mergeProps(props);
 
   return (
-    <thead class={cn("bg-[#2f3136]", merged.class)} {...merged}>
+    <thead class={cn("bg-card", merged.class)} {...merged}>
       {merged.children}
     </thead>
   );
@@ -37,7 +37,7 @@ export const TableBody: Component<
 
   return (
     <tbody
-      class={cn("bg-[#36393f] divide-y divide-[#2f3136]", merged.class)}
+      class={cn("bg-popover divide-y divide-card", merged.class)}
       {...merged}
     >
       {merged.children}
@@ -51,7 +51,7 @@ export const TableRow: Component<JSX.HTMLAttributes<HTMLTableRowElement>> = (
   const merged = mergeProps(props);
 
   return (
-    <tr class={cn("border-b border-[#2f3136]", merged.class)} {...merged}>
+    <tr class={cn("border-b border-card", merged.class)} {...merged}>
       {merged.children}
     </tr>
   );
@@ -65,8 +65,8 @@ export const TableHeader: Component<
   return (
     <th
       class={cn(
-        "py-3 px-6 text-left text-xs text-[#dcddde] font-medium uppercase tracking-wider sticky top-0 z-10 bg-[#2f3136]",
-        "first:left-0 first:z-20 first:bg-[#202225]",
+        "py-3 px-6 text-left text-xs text-foreground font-medium uppercase tracking-wider sticky top-0 z-10 bg-card",
+        "first:left-0 first:z-20 first:bg-input",
         merged.class
       )}
       {...merged}
@@ -84,8 +84,8 @@ export const TableCell: Component<
   return (
     <td
       class={cn(
-        "px-6 py-4 whitespace-nowrap text-sm text-[#dcddde]",
-        "first:sticky first:left-0 first:z-10 first:bg-[#2f3136] first:font-medium",
+        "px-6 py-4 whitespace-nowrap text-sm text-foreground",
+        "first:sticky first:left-0 first:z-10 first:bg-card first:font-medium",
         merged.class
       )}
       {...merged}

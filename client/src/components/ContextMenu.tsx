@@ -141,7 +141,7 @@ export default function ContextMenu(props: ContextMenuProps) {
           <>
             <div
               ref={menuRef}
-              class="fixed z-50 min-w-[180px] bg-[#18191c] rounded-md shadow-lg border border-[#2b2d31] py-1"
+              class="fixed z-50 min-w-[180px] bg-context-menu rounded-md shadow-lg border border-border-subtle py-1"
               style={{
                 left: `${position().x}px`,
                 top: `${position().y}px`,
@@ -151,7 +151,7 @@ export default function ContextMenu(props: ContextMenuProps) {
                 {(item, index) => (
                   <Show
                     when={!item.separator}
-                    fallback={<div class="h-px bg-[#2b2d31] my-1 mx-2" />}
+                    fallback={<div class="h-px bg-border-subtle my-1 mx-2" />}
                   >
                     <Show
                       when={!item.customContent}
@@ -167,10 +167,10 @@ export default function ContextMenu(props: ContextMenuProps) {
                         disabled={item.disabled}
                         class={cn(
                           "w-full px-3 py-2 text-sm text-left flex items-center gap-3 transition-colors",
-                          "hover:bg-[#383a40] focus:bg-[#383a40] focus:outline-none",
+                          "hover:bg-muted focus:bg-muted focus:outline-none",
                           item.danger
-                            ? "text-red-400 hover:text-red-300"
-                            : "text-[#DBDEE1] hover:text-white",
+                            ? "text-destructive hover:text-destructive"
+                            : "text-foreground hover:text-primary-foreground",
                           item.disabled &&
                           "opacity-50 cursor-not-allowed hover:bg-transparent"
                         )}

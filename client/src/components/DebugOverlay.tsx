@@ -34,15 +34,15 @@ const DebugItem: Component<DebugItemProps> = (props) => {
 
   const getTypeColor = (type: string): string => {
     switch (type) {
-      case "string": return "text-green-400";
-      case "number": return "text-blue-400";
-      case "boolean": return "text-purple-400";
-      case "null": return "text-gray-400";
-      case "undefined": return "text-gray-400";
-      case "date": return "text-yellow-400";
-      case "array": return "text-orange-400";
-      case "object": return "text-cyan-400";
-      default: return "text-white";
+      case "string": return "text-syntax-string";
+      case "number": return "text-syntax-number";
+      case "boolean": return "text-syntax-boolean";
+      case "null": return "text-syntax-null";
+      case "undefined": return "text-syntax-null";
+      case "date": return "text-syntax-date";
+      case "array": return "text-link";
+      case "object": return "text-link";
+      default: return "text-primary-foreground";
     }
   };
 
@@ -70,7 +70,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
         <Show when={!isPrimitive(props.value)}>
           <button
             onClick={() => setIsExpanded(!isExpanded())}
-            class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            class="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-primary-foreground transition-colors"
           >
             {isExpanded() ? "▼" : "▶"}
           </button>
@@ -79,7 +79,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
           <div class="w-4" />
         </Show>
         
-        <span class="text-gray-300">{props.label}:</span>
+        <span class="text-muted-foreground">{props.label}:</span>
         
         <Show when={isPrimitive(props.value)}>
           <span class={getTypeColor(getValueType(props.value))}>
@@ -90,7 +90,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
         <Show when={!isPrimitive(props.value)}>
           <span class={getTypeColor(getValueType(props.value))}>
             {getValueType(props.value)}
-            <span class="text-gray-400 ml-1">
+            <span class="text-muted-foreground ml-1">
               ({getCollectionLength(props.value)} items)
             </span>
           </span>
@@ -98,7 +98,7 @@ const DebugItem: Component<DebugItemProps> = (props) => {
       </div>
       
       <Show when={!isPrimitive(props.value) && isExpanded()}>
-        <div class="border-l border-gray-600 ml-2">
+        <div class="border-l border-secondary ml-2">
           <For each={getObjectEntries(props.value)}>
             {([key, value]) => (
               <DebugItem 
@@ -141,7 +141,7 @@ const DebugOverlay: Component = () => {
       <div class="fixed top-4 right-4 z-[9999]">
         <button
           onClick={() => setIsVisible(!isVisible())}
-          class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          class="bg-action-negative hover:bg-action-negative-hover text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           Debug {isVisible() ? "Hide" : "Show"}
         </button>
@@ -149,14 +149,14 @@ const DebugOverlay: Component = () => {
 
       <Show when={isVisible()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 z-[9998]" onClick={() => setIsVisible(false)} />
-        <div class="fixed top-4 left-4 right-4 bottom-4 bg-[#1e1f22] border border-gray-600 rounded-lg z-[9999] flex flex-col">
-          <div class="flex items-center justify-between p-4 border-b border-gray-600">
-            <h2 class="text-lg font-semibold text-white">Debug State Viewer</h2>
+        <div class="fixed top-4 left-4 right-4 bottom-4 bg-background-dark border border-secondary rounded-lg z-[9999] flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-secondary">
+            <h2 class="text-lg font-semibold text-primary-foreground">Debug State Viewer</h2>
             <div class="flex items-center gap-4">
               <select
                 value={selectedSection()}
                 onChange={(e) => setSelectedSection(e.target.value)}
-                class="bg-[#2b2d31] text-white px-3 py-1 rounded border border-gray-600 text-sm"
+                class="bg-sidebar text-primary-foreground px-3 py-1 rounded border border-secondary text-sm"
               >
                 <For each={sections}>
                   {(section) => (
@@ -166,14 +166,14 @@ const DebugOverlay: Component = () => {
               </select>
               <button
                 onClick={() => setIsVisible(false)}
-                class="text-gray-400 hover:text-white transition-colors"
+                class="text-muted-foreground hover:text-primary-foreground transition-colors"
               >
                 ✕
               </button>
             </div>
           </div>
           
-          <div class="flex-1 overflow-auto p-4 bg-[#313338]">
+          <div class="flex-1 overflow-auto p-4 bg-background">
             <DebugItem label="state" value={getStateSection()} />
           </div>
         </div>

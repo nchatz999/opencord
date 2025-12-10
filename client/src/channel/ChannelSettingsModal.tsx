@@ -128,8 +128,8 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   };
 
   return (
-    <div class="fixed inset-0 bg-black text-[#dcddde] bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="fixed inset-0 bg-black text-foreground bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold mb-6 flex items-center">
             {props.channel.channelType === ChannelType.Text ? (

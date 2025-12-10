@@ -55,15 +55,15 @@ const UserSettingsModal: Component = () => {
   const { addToast } = useToaster();
 
   const statusOptions = [
-    { value: UserStatusType.Online, label: 'Online', color: 'text-green-500' },
-    { value: UserStatusType.Away, label: 'Away', color: 'text-yellow-500' },
-    { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-red-500' },
-    { value: UserStatusType.Offline, label: 'Offline', color: 'text-gray-500' },
+    { value: UserStatusType.Online, label: 'Online', color: 'text-status-online' },
+    { value: UserStatusType.Away, label: 'Away', color: 'text-status-away' },
+    { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-status-dnd' },
+    { value: UserStatusType.Offline, label: 'Offline', color: 'text-status-offline' },
   ];
 
   const getStatusColor = (status: UserStatusType) => {
     const option = statusOptions.find(opt => opt.value === status);
-    return option?.color || 'text-gray-500';
+    return option?.color || 'text-status-offline';
   };
 
   const handleStatusChange = async (newStatus: UserStatusType) => {
@@ -189,14 +189,14 @@ const UserSettingsModal: Component = () => {
         <div class="space-y-4 mt-6">
           <Input label="Username" value={username()} onChange={setUsername} />
 
-          <div class="p-4 bg-[#2f3136] rounded-md">
+          <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-3 flex items-center">
               <Circle class="w-4 h-4 mr-2" />
               Status
             </h3>
             <div class="space-y-3">
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Current Status
                 </label>
                 <Select
@@ -214,7 +214,7 @@ const UserSettingsModal: Component = () => {
                   size={12}
                   class={`${getStatusColor(userDomain.getCurrent().status)} fill-current`}
                 />
-                <span class="text-[#b9bbbe]">
+                <span class="text-secondary-text">
                   Your status is visible to other users
                 </span>
               </div>
@@ -222,7 +222,7 @@ const UserSettingsModal: Component = () => {
           </div>
 
 
-          <div class="p-4 bg-[#2f3136] rounded-md">
+          <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-2 flex items-center">
               <Upload class="w-4 h-4 mr-2" />
               Change Avatar
@@ -237,9 +237,9 @@ const UserSettingsModal: Component = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef?.click()}
-                  class="absolute bottom-0 right-0 bg-[#5865f2] p-2 rounded-full hover:bg-[#4752c4] transition-colors"
+                  class="absolute bottom-0 right-0 bg-primary p-2 rounded-full hover:bg-primary-hover transition-colors"
                 >
-                  <Upload class="w-4 h-4 text-white" />
+                  <Upload class="w-4 h-4 text-primary-foreground" />
                 </button>
                 <input
                   ref={fileInputRef}
@@ -268,7 +268,7 @@ const UserSettingsModal: Component = () => {
                 </div>
               </Show>
 
-              <p class="text-xs text-[#b9bbbe]">
+              <p class="text-xs text-secondary-text">
                 Recommended: Square image, at least 128x128px
               </p>
             </div>
@@ -282,7 +282,7 @@ const UserSettingsModal: Component = () => {
       icon: <Volume2 class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <div class="p-4 bg-[#2f3136] rounded-md">
+          <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-2 flex items-center">
               <Mic class="w-4 h-4 mr-2" />
               Microphone
@@ -290,7 +290,7 @@ const UserSettingsModal: Component = () => {
 
             <div class="space-y-4">
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Input Device
                 </label>
                 <Select
@@ -321,7 +321,7 @@ const UserSettingsModal: Component = () => {
             </div>
           </div>
 
-          <div class="p-4 bg-[#2f3136] rounded-md">
+          <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-2 flex items-center">
               <Headphones class="w-4 h-4 mr-2" />
               Output
@@ -329,7 +329,7 @@ const UserSettingsModal: Component = () => {
 
             <div class="space-y-4">
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Output Device
                 </label>
                 <Select
@@ -351,7 +351,7 @@ const UserSettingsModal: Component = () => {
               </div>
 
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Output Volume
                 </label>
                 <div class="flex items-center space-x-2">
@@ -378,7 +378,7 @@ const UserSettingsModal: Component = () => {
       icon: <Shield class="w-4 h-4" />,
       content: (
         <div class="space-y-4">
-          <div class="p-4 bg-[#2f3136] rounded-md">
+          <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-2 flex items-center">
               <Lock class="w-4 h-4 mr-2" />
               Change Password
@@ -418,7 +418,7 @@ const UserSettingsModal: Component = () => {
       icon: <Settings class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <div class="p-4 bg-[#2f3136] rounded-md">
+          <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-4 flex items-center">
               <Settings class="w-4 h-4 mr-2" />
               Bitrate Settings
@@ -426,7 +426,7 @@ const UserSettingsModal: Component = () => {
 
             <div class="space-y-6">
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Camera Quality: {camera.getQuality()} bps
                 </label>
                 <Slider
@@ -437,13 +437,13 @@ const UserSettingsModal: Component = () => {
                     camera.setQuality(value);
                   }}
                 />
-                <p class="text-xs text-[#b9bbbe] mt-1">
+                <p class="text-xs text-secondary-text mt-1">
                   Adjusts video quality for camera stream
                 </p>
               </div>
 
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Screen Share Quality: {screenShare.getQuality()} bps
                 </label>
                 <Slider
@@ -454,13 +454,13 @@ const UserSettingsModal: Component = () => {
                     screenShare.setQuality(value);
                   }}
                 />
-                <p class="text-xs text-[#b9bbbe] mt-1">
+                <p class="text-xs text-secondary-text mt-1">
                   Adjusts video quality for screen sharing
                 </p>
               </div>
 
               <div>
-                <label class="block mb-2 text-sm font-medium text-[#dcddde]">
+                <label class="block mb-2 text-sm font-medium text-foreground">
                   Audio Quality: {microphone.getQuality()} bps
                 </label>
                 <Slider
@@ -471,7 +471,7 @@ const UserSettingsModal: Component = () => {
                     microphone.setQuality(value);
                   }}
                 />
-                <p class="text-xs text-[#b9bbbe] mt-1">
+                <p class="text-xs text-secondary-text mt-1">
                   Adjusts audio bitrate for microphone
                 </p>
               </div>
@@ -488,8 +488,8 @@ const UserSettingsModal: Component = () => {
         <div class="space-y-6 mt-6">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <Monitor class="w-5 h-5 text-[#dcddde]" />
-              <h3 class="text-lg font-semibold text-[#dcddde]">Active Sessions</h3>
+              <Monitor class="w-5 h-5 text-foreground" />
+              <h3 class="text-lg font-semibold text-foreground">Active Sessions</h3>
             </div>
             <Button
               onClick={loadSessions}
@@ -500,11 +500,11 @@ const UserSettingsModal: Component = () => {
             </Button>
           </div>
 
-          <div class="bg-[#2f3136] rounded-lg p-4">
+          <div class="bg-card rounded-lg p-4">
             <Show
               when={sessions().length > 0}
               fallback={
-                <div class="text-center py-8 text-[#72767d]">
+                <div class="text-center py-8 text-muted-foreground-dark">
                   {"No active sessions found."}
                 </div>
               }
@@ -521,10 +521,10 @@ const UserSettingsModal: Component = () => {
                 <TableBody>
                   <For each={sessions()}>
                     {(session) => (
-                      <TableRow class="hover:bg-[#383a40]">
+                      <TableRow class="hover:bg-muted">
                         <TableCell>
                           <div class="flex items-center gap-2">
-                            <span class="text-[#dcddde] font-medium">
+                            <span class="text-foreground font-medium">
                               Session #{session.sessionId}
                             </span>
                             <Show when={isCurrentSession(session.sessionToken)}>
@@ -534,16 +534,16 @@ const UserSettingsModal: Component = () => {
                             </Show>
                           </div>
                         </TableCell>
-                        <TableCell class="text-[#b9bbbe] text-sm">
+                        <TableCell class="text-secondary-text text-sm">
                           <div class="flex items-center gap-1">
                             <Calendar class="w-4 h-4" />
                             {formatDate(session.createdAt)}
                           </div>
                         </TableCell>
-                        <TableCell class="text-[#b9bbbe] text-sm">
+                        <TableCell class="text-secondary-text text-sm">
                           <Show
                             when={session.expiresAt}
-                            fallback={<span class="text-[#72767d]">Never</span>}
+                            fallback={<span class="text-muted-foreground-dark">Never</span>}
                           >
                             {formatDate(session.expiresAt)}
                           </Show>
@@ -565,9 +565,9 @@ const UserSettingsModal: Component = () => {
               </Table>
             </Show>
 
-            <div class="mt-4 p-3 bg-[#202225] rounded-lg">
-              <h4 class="text-sm font-medium text-[#dcddde] mb-2">Session Information</h4>
-              <ul class="text-xs text-[#b9bbbe] space-y-1">
+            <div class="mt-4 p-3 bg-input rounded-lg">
+              <h4 class="text-sm font-medium text-foreground mb-2">Session Information</h4>
+              <ul class="text-xs text-secondary-text space-y-1">
                 <li>• Sessions allow you to stay logged in across different devices</li>
                 <li>• You can terminate sessions from other devices for security</li>
                 <li>• Your current session cannot be terminated from this interface</li>
@@ -581,8 +581,8 @@ const UserSettingsModal: Component = () => {
   ]);
 
   return (
-    <div class="fixed inset-0 bg-black text-[#dcddde] bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div class="fixed inset-0 bg-black text-foreground bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">User Settings</h2>
           <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">

@@ -5,10 +5,10 @@ import { Wifi } from 'lucide-solid'
 const ConnectionIndicator: Component = () => {
   const statusConfig = createMemo(() => {
     return {
-      color: 'text-green-500',
+      color: 'text-status-online',
       icon: Wifi,
       label: 'Connected',
-      pulseColor: 'bg-green-500',
+      pulseColor: 'bg-status-online',
       showPulse: false,
     }
   })

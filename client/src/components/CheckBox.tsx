@@ -38,12 +38,12 @@ export const Checkbox: Component<CheckboxProps> = (props) => {
       <span
         class={cn(
           "w-5 h-5 flex items-center justify-center",
-          merged.checked ? "bg-[#5865f2]" : "bg-[#202225]",
+          merged.checked ? "bg-primary" : "bg-input",
           merged.disabled && "opacity-50"
         )}
       >
         <Show when={merged.checked}>
-          <Check class="w-4 h-4 text-white" />
+          <Check class="w-4 h-4 text-primary-foreground" />
         </Show>
       </span>
       <Show when={merged.label}>

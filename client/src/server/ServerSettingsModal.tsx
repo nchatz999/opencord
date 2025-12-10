@@ -250,12 +250,12 @@ const ServerSettingsModal: Component = () => {
         <div class="space-y-4 mt-6">
           <Show when={serverConfig()}>
             {(config) => (
-              <div class="flex items-center gap-4 p-4 bg-[#2f3136] rounded-lg">
+              <div class="flex items-center gap-4 p-4 bg-card rounded-lg">
                 <div class="relative">
                   <Show
                     when={config().avatarFileId}
                     fallback={
-                      <div class="w-20 h-20 rounded-full bg-[#5865f2] flex items-center justify-center text-2xl font-bold">
+                      <div class="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-2xl font-bold">
                         {config().serverName.charAt(0)}
                       </div>
                     }
@@ -271,9 +271,9 @@ const ServerSettingsModal: Component = () => {
                   <Show when={isAdmin()}>
                     <button
                       onClick={() => avatarInputRef?.click()}
-                      class="absolute bottom-0 right-0 bg-[#5865f2] hover:bg-[#4752c4] rounded-full p-1.5 transition-colors disabled:opacity-50"
+                      class="absolute bottom-0 right-0 bg-primary hover:bg-primary-hover rounded-full p-1.5 transition-colors disabled:opacity-50"
                     >
-                      <Upload class="w-4 h-4 text-white" />
+                      <Upload class="w-4 h-4 text-primary-foreground" />
                     </button>
                   </Show>
                   <input
@@ -288,7 +288,7 @@ const ServerSettingsModal: Component = () => {
                   <Show
                     when={isAdmin()}
                     fallback={
-                      <h3 class="text-lg font-semibold text-[#dcddde]">{config().serverName}</h3>
+                      <h3 class="text-lg font-semibold text-foreground">{config().serverName}</h3>
                     }
                   >
                     <Input
@@ -302,20 +302,20 @@ const ServerSettingsModal: Component = () => {
             )}
           </Show>
 
-          <div class="mt-6 pt-4 border-t border-gray-700">
+          <div class="mt-6 pt-4 border-t border-border">
             <h3 class="text-lg font-semibold mb-2">Version Information</h3>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">
+                <label class="block text-sm font-medium text-muted-foreground mb-1">
                   Server Version
                 </label>
-                <p class="text-sm text-gray-400">{serverVersion}</p>
+                <p class="text-sm text-muted-foreground-dark">{serverVersion}</p>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">
+                <label class="block text-sm font-medium text-muted-foreground mb-1">
                   Client Version
                 </label>
-                <p class="text-sm text-gray-400">{clientVersion}</p>
+                <p class="text-sm text-muted-foreground-dark">{clientVersion}</p>
               </div>
             </div>
           </div>
@@ -345,7 +345,7 @@ const ServerSettingsModal: Component = () => {
               <TableBody>
                 <For each={filteredUsers()}>
                   {(user) => (
-                    <TableRow class="hover:bg-[#383a40]">
+                    <TableRow class="hover:bg-muted">
                       <TableCell class="text-center">
                         <div class="flex items-center space-x-3">
                           <img
@@ -424,20 +424,20 @@ const ServerSettingsModal: Component = () => {
         <Show
           when={isAdmin()}
           fallback={
-            <div class="text-center py-8 text-[#72767d]">
+            <div class="text-center py-8 text-muted-foreground-dark">
               You don't have permission to manage invitations.
             </div>
           }
         >
           <div class="space-y-6 mt-6">
             <div class="flex items-center gap-2 mb-4">
-              <Users class="w-5 h-5 text-[#dcddde]" />
-              <h3 class="text-lg font-semibold text-[#dcddde]">Invitation Management</h3>
+              <Users class="w-5 h-5 text-foreground" />
+              <h3 class="text-lg font-semibold text-foreground">Invitation Management</h3>
             </div>
 
             {}
-            <div class="bg-[#2f3136] rounded-lg p-4">
-              <h4 class="text-md font-medium text-[#dcddde] mb-4">Create New Invitation</h4>
+            <div class="bg-card rounded-lg p-4">
+              <h4 class="text-md font-medium text-foreground mb-4">Create New Invitation</h4>
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="md:col-span-1">
                   <Input
@@ -482,9 +482,9 @@ const ServerSettingsModal: Component = () => {
               </div>
             </div>
 
-            <div class="bg-[#2f3136] rounded-lg p-4">
+            <div class="bg-card rounded-lg p-4">
               <div class="flex items-center justify-between mb-4">
-                <h4 class="text-md font-medium text-[#dcddde]">Active Invitations</h4>
+                <h4 class="text-md font-medium text-foreground">Active Invitations</h4>
                 <Button
                   onClick={loadInvites}
                   variant="secondary"
@@ -496,7 +496,7 @@ const ServerSettingsModal: Component = () => {
               <Show
                 when={invites().length > 0}
                 fallback={
-                  <div class="text-center py-8 text-[#72767d]">
+                  <div class="text-center py-8 text-muted-foreground-dark">
                     No invitations found. Create one to get started.
                   </div>
                 }
@@ -513,10 +513,10 @@ const ServerSettingsModal: Component = () => {
                   <TableBody>
                     <For each={invites()}>
                       {(invite) => (
-                        <TableRow class="hover:bg-[#383a40]">
+                        <TableRow class="hover:bg-muted">
                           <TableCell style={{ width: "200px" }}>
                             <div class="flex items-center gap-2">
-                              <code class="bg-[#202225] px-2 py-1 rounded font-mono text-sm">
+                              <code class="bg-input px-2 py-1 rounded font-mono text-sm">
                                 {invite.code}
                               </code>
                               <Button
@@ -524,7 +524,7 @@ const ServerSettingsModal: Component = () => {
                                 variant='ghost'
                                 title="Copy invite code"
                               >
-                                <Copy class="w-4 h-4 text-[#b9bbbe]" />
+                                <Copy class="w-4 h-4 text-secondary-text" />
                               </Button>
                             </div>
                           </TableCell>
@@ -568,25 +568,25 @@ const ServerSettingsModal: Component = () => {
         <Show
           when={isAdmin()}
           fallback={
-            <div class="text-center py-8 text-[#72767d]">
+            <div class="text-center py-8 text-muted-foreground-dark">
               You don't have permission to view logs.
             </div>
           }
         >
           <div class="space-y-6 mt-6">
             <div class="flex items-center gap-2 mb-4">
-              <FileText class="w-5 h-5 text-[#dcddde]" />
-              <h3 class="text-lg font-semibold text-[#dcddde]">Server Logs</h3>
+              <FileText class="w-5 h-5 text-foreground" />
+              <h3 class="text-lg font-semibold text-foreground">Server Logs</h3>
             </div>
 
-            <div class="bg-[#2f3136] rounded-lg p-4">
+            <div class="bg-card rounded-lg p-4">
               <div class="flex flex-wrap items-center gap-4 mb-4">
                 <div class="flex-1 min-w-[200px]">
                   <Input
                     value={logSearchTerm()}
                     onChange={setLogSearchTerm}
                     placeholder="Search logs..."
-                    icon={<Search class="w-4 h-4 text-gray-400" />}
+                    icon={<Search class="w-4 h-4 text-muted-foreground-dark" />}
                   />
                 </div>
                 <div class="min-w-[150px]">
@@ -627,7 +627,7 @@ const ServerSettingsModal: Component = () => {
               <Show
                 when={filteredLogs().length > 0}
                 fallback={
-                  <div class="text-center py-8 text-[#72767d]">
+                  <div class="text-center py-8 text-muted-foreground-dark">
                     No logs found. Click Refresh to load logs.
                   </div>
                 }
@@ -644,8 +644,8 @@ const ServerSettingsModal: Component = () => {
                     <TableBody>
                       <For each={filteredLogs()}>
                         {(log) => (
-                          <TableRow class="hover:bg-[#383a40]">
-                            <TableCell class="text-xs text-[#72767d] whitespace-nowrap">
+                          <TableRow class="hover:bg-muted">
+                            <TableCell class="text-xs text-muted-foreground-dark whitespace-nowrap">
                               {formatLogDate(log.date)}
                             </TableCell>
                             <TableCell>
@@ -653,7 +653,7 @@ const ServerSettingsModal: Component = () => {
                                 {log.category}
                               </span>
                             </TableCell>
-                            <TableCell class="text-sm font-mono text-[#dcddde] break-all">
+                            <TableCell class="text-sm font-mono text-foreground break-all">
                               {log.log}
                             </TableCell>
                           </TableRow>
@@ -662,7 +662,7 @@ const ServerSettingsModal: Component = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <div class="mt-4 text-sm text-[#72767d]">
+                <div class="mt-4 text-sm text-muted-foreground-dark">
                   Showing {filteredLogs().length} of {logs().length} entries
                 </div>
               </Show>
@@ -686,7 +686,7 @@ const ServerSettingsModal: Component = () => {
 
   return (
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-[#36393f] text-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div class="bg-popover text-primary-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Server Settings</h2>
           <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">

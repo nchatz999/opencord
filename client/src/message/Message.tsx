@@ -77,16 +77,16 @@ const MessageComponent: Component<MessageProps> = (props) => {
               <div class={`flex flex-col min-w-0 ${isOwner() ? "items-end" : "items-start"}`}>
                 <div class={`flex items-baseline gap-2 ${isOwner() ? "flex-row-reverse" : "flex-row"}`}>
                   <span class="text-dis-white font-semibold">{user().username}</span>
-                  <time class="text-[#949ba4] text-xs">
+                  <time class="text-muted-foreground text-xs">
                     {new Date(props.message.createdAt).toLocaleString()}
                   </time>
                   <Show when={props.message.modifiedAt && props.message.modifiedAt !== props.message.createdAt}>
-                    <span class="text-[#949ba4] text-xs">(edited)</span>
+                    <span class="text-muted-foreground text-xs">(edited)</span>
                   </Show>
                 </div>
 
                 <Show when={props.message.replyToMessageId}>
-                  <div class="text-[#949ba4] text-sm mb-1">
+                  <div class="text-muted-foreground text-sm mb-1">
                     <ReplyIcon size={12} class="inline mr-1" />
                     Replying to a message
                   </div>
@@ -94,10 +94,10 @@ const MessageComponent: Component<MessageProps> = (props) => {
 
                 <div class={`flex flex-col gap-2 ${isOwner() ? "items-end" : "items-start"}`}>
                   <Show when={props.message.messageText}>
-                    <div class="rounded-lg px-4 py-2 bg-[#383a40] hover:bg-opacity-90 transition-colors duration-200 max-w-md">
+                    <div class="rounded-lg px-4 py-2 bg-muted hover:bg-opacity-90 transition-colors duration-200 max-w-md">
                       <Show when={isEditing()} fallback={
                         <>
-                          <span class="text-[#DBDEE1] font-normal break-words">
+                          <span class="text-foreground font-normal break-words">
                             {formatMessageText(props.message.messageText || '', isOwner(), props.type)}
                           </span>
                           <For each={youtubeIds()}>
@@ -108,7 +108,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
                                 rel="noopener noreferrer"
                                 class="block mt-2 w-full max-w-xs"
                               >
-                                <div class="relative rounded-md border border-[#4f545c] overflow-hidden group">
+                                <div class="relative rounded-md border border-border-card overflow-hidden group">
                                   <img
                                     src={`https://img.youtube.com/vi/${id}/0.jpg`}
                                     alt="Youtube thumbnail"
@@ -116,7 +116,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
                                     height={360}
                                     class="w-full h-auto object-cover group-hover:brightness-110 transition-all"
                                   />
-                                  <div class="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                  <div class="absolute top-1 right-1 bg-action-negative text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded">
                                     YouTube
                                   </div>
                                 </div>
@@ -129,8 +129,8 @@ const MessageComponent: Component<MessageProps> = (props) => {
                           <ContentEditable
                             textContent={editedContent()}
                             onTextContent={setEditedContent}
-                            render={(content) => formatLinks(content(), "text-[#00A8FC] hover:underline")}
-                            class="min-h-[50px] w-auto overflow-auto max-h-[50vh] bg-transparent text-[#DBDEE1] resize-none outline-none overflow-x-hidden whitespace-pre-wrap break-words p-1"
+                            render={(content) => formatLinks(content(), "text-link hover:underline")}
+                            class="min-h-[50px] w-auto overflow-auto max-h-[50vh] bg-transparent text-foreground resize-none outline-none overflow-x-hidden whitespace-pre-wrap break-words p-1"
                           />
                           <div class="flex gap-2 mt-2">
                             <Button size="sm" variant="primary" onClick={handleSaveEdit}>Save</Button>

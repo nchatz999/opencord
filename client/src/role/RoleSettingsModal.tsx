@@ -53,7 +53,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             value={searchTerm()}
             onChange={setSearchTerm}
             placeholder="Search users..."
-            icon={<Search class="w-4 h-4 text-gray-400" />}
+            icon={<Search class="w-4 h-4 text-muted-foreground-dark" />}
           />
           <div class="grid grid-cols-2 gap-4">
             <div>
@@ -61,7 +61,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
               <ul class="space-y-2 max-h-96 overflow-y-auto">
                 <For each={filteredUsers()}>
                   {(user) => (
-                    <li class="flex items-center justify-between bg-gray-700 p-2 rounded">
+                    <li class="flex items-center justify-between bg-muted p-2 rounded">
                       <div class="flex items-center space-x-2">
                         <img
                           src={
@@ -190,8 +190,8 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
   }
 
   return (
-    <div class="fixed inset-0 bg-black text-[#dcddde] bg-opacity-50 flex items-center justify-center">
-      <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div class="fixed inset-0 bg-black text-foreground bg-opacity-50 flex items-center justify-center">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">
             Role Settings: {props.role.roleName}
@@ -201,7 +201,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             <X class="w-6 h-6" />
           </Button>
         </div>
-        <p class="text-sm text-gray-400 mt-1"></p>
+        <p class="text-sm text-muted-foreground-dark mt-1"></p>
         <Tabs items={tabItems()} />
         <div class="mt-6 flex justify-between items-center">
           <Button

@@ -17,7 +17,7 @@ const ChatHeader: Component<{
       <Show when={props.context.type == "dm"}>
         <Show when={userDomain.findById(props.context.id)}>
           {(user) => (
-            <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-[#1e1f22] bg-[#313338] shrink-0">
+            <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background shrink-0">
               {}
               <div class="relative flex items-center">
                 {}
@@ -25,10 +25,10 @@ const ChatHeader: Component<{
                   <img
                     src={`/user/${user().avatarFileId}/avatar`}
                     alt={user().username}
-                    class="w-10 h-10 rounded-full object-cover border-2 border-[#313338]"
+                    class="w-10 h-10 rounded-full object-cover border-2 border-background"
                   />
                   <div
-                    class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#313338] ${userDomain.getUserColorStatusById(user().userId)}`}
+                    class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${userDomain.getUserColorStatusById(user().userId)}`}
                   />
                 </div>
 
@@ -38,7 +38,7 @@ const ChatHeader: Component<{
                     <img
                       src={`/user/${user().avatarFileId}/avatar`}
                       alt="You"
-                      class="w-8 h-8 rounded-full object-cover border-2 border-[#313338]"
+                      class="w-8 h-8 rounded-full object-cover border-2 border-background"
                     />
                   </div>
                 </Show>
@@ -47,20 +47,20 @@ const ChatHeader: Component<{
               {}
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
-                  <h2 class="text-[#DBDEE1] font-semibold truncate">
+                  <h2 class="text-foreground font-semibold truncate">
                     {user().username}
                   </h2>
-                  <span class="text-xs text-[#949ba4] capitalize">
+                  <span class="text-xs text-muted-foreground capitalize">
                     {user().status}
                   </span>
                 </div>
-                <p class="text-xs text-[#949ba4]">{user().status}</p>
+                <p class="text-xs text-muted-foreground">{user().status}</p>
               </div>
 
               {}
               <div class="flex items-center gap-2">
                 <div
-                  class="w-2 h-2 bg-[#00A8FC] rounded-full"
+                  class="w-2 h-2 bg-link rounded-full"
                   title="Direct Message"
                 />
               </div>
@@ -72,21 +72,21 @@ const ChatHeader: Component<{
       <Show when={props.context.type == "channel"}>
         <Show when={channelDomain.findById(props.context.id)}>
           {(channel) => (
-            <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-[#1e1f22] bg-[#313338]">
+            <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background">
               {}
-              <div class="text-[#949ba4]">
+              <div class="text-muted-foreground">
                 <Hash size={20} />
               </div>
 
               {}
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
-                  <h2 class="text-[#DBDEE1] font-semibold truncate">
+                  <h2 class="text-foreground font-semibold truncate">
                     {channel().channelName}
                   </h2>
                   <Show when={groupDomain.findById(channel().groupId)}>
                     {(group) => (
-                      <span class="text-xs text-[#949ba4] bg-[#2b2d31] px-2 py-0.5 rounded">
+                      <span class="text-xs text-muted-foreground bg-sidebar px-2 py-0.5 rounded">
                         {group().groupName}
                       </span>
                     )}

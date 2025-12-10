@@ -10,13 +10,13 @@ const ServerSettings: Component = () => {
         onClick={() => {
           modalDomain.open({ type: 'serverSettings', id: 0 })
         }}
-        class="relative flex items-center hover:bg-gray-700 h-10 px-2 w-full font-semibold text-dis-white py-1"
+        class="relative flex items-center hover:bg-muted h-10 px-2 w-full font-semibold text-foreground-bright py-1"
       >
         Papa sourluone
         <svg
-          fill="#f2f3f5"
+          fill="currentColor"
           width="14px"
-          class="absolute right-2"
+          class="absolute right-2 text-foreground-bright"
           height="14px"
           viewBox="0 0 1920 1920"
           xmlns="http://www.w3.org/2000/svg"

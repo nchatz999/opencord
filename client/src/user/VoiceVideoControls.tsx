@@ -107,7 +107,7 @@ const VoiceVideoControls: Component = () => {
             onClick={() => handleScreenShare(voip().publishScreen)}
             class={`p-2 rounded transition-colors ${voip().publishScreen
               ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1]'
+              : 'bg-muted hover:bg-accent text-foreground'
               }`}
             title={voip().publishScreen ? 'Stop Screen Share' : 'Share Screen'}
           >
@@ -124,7 +124,7 @@ const VoiceVideoControls: Component = () => {
             onClick={() => handleCamera(voip().publishCamera)}
             class={`p-2 rounded transition-colors ${voip().publishCamera
               ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1]'
+              : 'bg-muted hover:bg-accent text-foreground'
               }`}
             title={voip().publishCamera ? 'Turn Off Camera' : 'Turn On Camera'}
           >

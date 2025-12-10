@@ -87,20 +87,20 @@ const AuthPage: Component = () => {
           value={serverUrl()}
           onChange={setServerUrlSignal}
           placeholder="Server URL"
-          icon={<Globe class="w-5 h-5 text-[#72767d]" />}
+          icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
           value={username()}
           onChange={setUsername}
           placeholder="Username"
-          icon={<User class="w-5 h-5 text-[#72767d]" />}
+          icon={<User class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
           value={password()}
           onChange={setPassword}
           type="password"
           placeholder="Password"
-          icon={<Lock class="w-5 h-5 text-[#72767d]" />}
+          icon={<Lock class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Checkbox
           label="Remember me"
@@ -111,11 +111,11 @@ const AuthPage: Component = () => {
           Log In
         </Button>
       </form>
-      <p class="mt-4 text-sm text-center text-[#72767d]">
+      <p class="mt-4 text-sm text-center text-muted-foreground-dark">
         Need an account?{" "}
         <button
           onClick={() => setActiveForm("register")}
-          class="text-[#5865f2] hover:underline"
+          class="text-primary hover:underline"
         >
           Register
         </button>
@@ -130,43 +130,43 @@ const AuthPage: Component = () => {
           value={serverUrl()}
           onChange={setServerUrlSignal}
           placeholder="Server URL"
-          icon={<Globe class="w-5 h-5 text-[#72767d]" />}
+          icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
           value={username()}
           onChange={setUsername}
           placeholder="Username"
-          icon={<User class="w-5 h-5 text-[#72767d]" />}
+          icon={<User class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
           value={password()}
           onChange={setPassword}
           type="password"
           placeholder="Password"
-          icon={<Lock class="w-5 h-5 text-[#72767d]" />}
+          icon={<Lock class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
           value={repeatPassword()}
           onChange={setRepeatPassword}
           type="password"
           placeholder="Repeat Password"
-          icon={<Lock class="w-5 h-5 text-[#72767d]" />}
+          icon={<Lock class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
           value={inviteCode()}
           onChange={setInviteCode}
           placeholder="Invite Code"
-          icon={<Ticket class="w-5 h-5 text-[#72767d]" />}
+          icon={<Ticket class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Button type="submit" class="w-full">
           Register
         </Button>
       </form>
-      <p class="mt-4 text-sm text-center text-[#72767d]">
+      <p class="mt-4 text-sm text-center text-muted-foreground-dark">
         Already have an account?{" "}
         <button
           onClick={() => setActiveForm("login")}
-          class="text-[#5865f2] hover:underline"
+          class="text-primary hover:underline"
         >
           Log in
         </button>
@@ -175,9 +175,9 @@ const AuthPage: Component = () => {
   );
 
   return (
-    <div class="min-h-screen bg-[#36393f] flex items-center justify-center p-4">
-      <div class="w-full max-w-md bg-[#2f3136] p-8 rounded-lg shadow-lg">
-        <h1 class="text-3xl font-bold text-white mb-6 text-center">
+    <div class="min-h-screen bg-popover flex items-center justify-center p-4">
+      <div class="w-full max-w-md bg-card p-8 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold text-primary-foreground mb-6 text-center">
           <Switch>
             <Match when={activeForm() === "login"}>Welcome Back!</Match>
             <Match when={activeForm() === "register"}>Create an Account</Match>

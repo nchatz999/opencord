@@ -9,15 +9,15 @@ const UserSection: Component = () => {
   const getStatusColor = (status: UserStatusType) => {
     switch (status) {
       case UserStatusType.Online:
-        return 'text-green-500'
+        return 'text-status-online'
       case UserStatusType.Away:
-        return 'text-yellow-500'
+        return 'text-status-away'
       case UserStatusType.DoNotDisturb:
-        return 'text-red-500'
+        return 'text-status-dnd'
       case UserStatusType.Offline:
-        return 'text-gray-500'
+        return 'text-status-offline'
       default:
-        return 'text-gray-500'
+        return 'text-status-offline'
     }
   }
 
@@ -59,10 +59,10 @@ const UserSection: Component = () => {
         </div>
 
         <div class="flex-1 min-w-0">
-          <div class="text-sm text-[#DBDEE1] font-medium truncate">
+          <div class="text-sm text-foreground font-medium truncate">
             {userDomain.getCurrent().username}
           </div>
-          <div class="flex items-center gap-1 text-xs text-[#949ba4] truncate">
+          <div class="flex items-center gap-1 text-xs text-muted-foreground truncate">
             <Circle
               size={8}
               class={`${getStatusColor(userDomain.getCurrent().status)} fill-current`}
@@ -77,7 +77,7 @@ const UserSection: Component = () => {
           onClick={handleMuteToggle}
           class={`p-2 rounded transition-colors ${microphone.getMuted()
             ? 'bg-red-600 hover:bg-red-700 text-white'
-            : 'bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1]'
+            : 'bg-muted hover:bg-accent text-foreground'
             }`}
           title={microphone.getMuted() ? 'Unmute' : 'Mute'}
         >
@@ -90,7 +90,7 @@ const UserSection: Component = () => {
           onClick={handleDeafenToggle}
           class={`p-2 rounded transition-colors ${outputManager.getDeafened()
             ? 'bg-red-600 hover:bg-red-700 text-white'
-            : 'bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1]'
+            : 'bg-muted hover:bg-accent text-foreground'
             }`}
           title={outputManager.getDeafened() ? 'Undeafen' : 'Deafen'}
         >
@@ -100,7 +100,7 @@ const UserSection: Component = () => {
 
       <button
         onClick={handleUserSettings}
-        class="p-2 bg-[#383a40] hover:bg-[#2e3035] text-[#DBDEE1] rounded transition-colors"
+        class="p-2 bg-muted hover:bg-accent text-foreground rounded transition-colors"
         title="User Settings"
       >
         <Settings size={16} />

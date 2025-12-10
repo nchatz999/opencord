@@ -35,15 +35,15 @@ export const Tabs: Component<TabsProps> = (props) => {
 
   return (
     <div class={cn("flex flex-col", merged.class)}>
-      <div class="flex border-b border-[#202225]">
+      <div class="flex border-b border-input">
         <For each={merged.items}>
           {(item) => (
             <button
               class={cn(
                 "py-2 px-4 font-semibold",
                 activeTab() === item.id
-                  ? "text-white border-b-2 border-[#5865f2]"
-                  : "text-[#8e9297]"
+                  ? "text-primary-foreground border-b-2 border-primary"
+                  : "text-tab-inactive"
               )}
               onClick={() => setActiveTab(item.id)}
             >

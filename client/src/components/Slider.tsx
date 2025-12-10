@@ -82,19 +82,19 @@ const Slider: Component<SliderProps> = (props) => {
   return (
     <div class={`w-full ${props.class || ''}`}>
       <Show when={props.title}>
-        <div class="text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wide">
+        <div class="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
           {props.title}
         </div>
       </Show>
       <div class="flex items-center gap-3">
         <div
           id="slider-track"
-          class={`relative flex-1 h-2 bg-[#1e1f22] rounded-full cursor-pointer ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''
+          class={`relative flex-1 h-2 bg-background-dark rounded-full cursor-pointer ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           onMouseDown={handleMouseDown}
         >
           <div
-            class="absolute h-full bg-[#5865f2] rounded-full "
+            class="absolute h-full bg-primary rounded-full "
             style={{ width: `${percentage()}%` }}
           />
           <div

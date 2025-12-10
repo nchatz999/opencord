@@ -17,11 +17,11 @@ export const UserEntry: Component<{ user: User; }> = (
 
 
   const statusColors: Record<UserStatusType | number, string> = {
-    [UserStatusType.Online]: "bg-green-500",
-    [UserStatusType.Away]: "bg-yellow-500",
-    [UserStatusType.DoNotDisturb]: "bg-red-500",
-    [UserStatusType.Offline]: "bg-gray-500",
-    0: "bg-gray-500",
+    [UserStatusType.Online]: "bg-status-online",
+    [UserStatusType.Away]: "bg-status-away",
+    [UserStatusType.DoNotDisturb]: "bg-status-dnd",
+    [UserStatusType.Offline]: "bg-status-offline",
+    0: "bg-status-offline",
   };
 
   const isOffline = () => props.user.status === UserStatusType.Offline;
@@ -65,7 +65,7 @@ export const UserEntry: Component<{ user: User; }> = (
   return (
     <button
       onClick={async () => await handleUserClick(props.user)}
-      class={`flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-[#383a40] transition-all group ${isOffline() ? "opacity-60" : ""
+      class={`flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-muted transition-all group ${isOffline() ? "opacity-60" : ""
         }`}
     >
       <div class="relative shrink-0">
@@ -76,25 +76,25 @@ export const UserEntry: Component<{ user: User; }> = (
         />
 
         <div
-          class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#2b2d31] ${statusColors[props.user.status || UserStatusType.Offline] ||
-            "bg-gray-500"
+          class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-sidebar ${statusColors[props.user.status || UserStatusType.Offline] ||
+            "bg-status-offline"
             }`}
         />
       </div>
       <div class="flex-1 text-left min-w-0">
         <div class="flex items-center gap-1">
-          <p class="text-sm text-[#DBDEE1] truncate">{props.user.username}</p>
+          <p class="text-sm text-foreground truncate">{props.user.username}</p>
           {isUserCallingMe() && (
-            <Phone size={12} class="text-green-500 flex-shrink-0" />
+            <Phone size={12} class="text-status-online flex-shrink-0" />
           )}
         </div>
-        <p class="text-xs text-[#949ba4] truncate">{statusText()}</p>
+        <p class="text-xs text-muted-foreground truncate">{statusText()}</p>
       </div>
 
       {}
       <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
         <div
-          class="p-1 hover:bg-[#2e3035] rounded"
+          class="p-1 hover:bg-card rounded"
           title="Send Message"
           onClick={async (e) => {
             e.stopPropagation();
@@ -103,15 +103,15 @@ export const UserEntry: Component<{ user: User; }> = (
         >
           <MessageCircle
             size={14}
-            class="text-[#949ba4] hover:text-[#DBDEE1]"
+            class="text-muted-foreground hover:text-foreground"
           />
         </div>
         <div
-          class="p-1 hover:bg-[#2e3035] rounded"
+          class="p-1 hover:bg-card rounded"
           title="Start Voice Call"
           onClick={handleVoiceCall}
         >
-          <Phone size={14} class="text-[#949ba4] hover:text-[#DBDEE1]" />
+          <Phone size={14} class="text-muted-foreground hover:text-foreground" />
         </div>
       </div>
     </button>

@@ -16,7 +16,7 @@ const LeftPanel: Component = () => {
       label: "Channels",
       icon: <Hash size={16} />,
       content: (
-        <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1e1f22] scrollbar-track-transparent">
+        <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
           <ChannelBrowser
             groups={groupDomain.list()}
           />
@@ -28,7 +28,7 @@ const LeftPanel: Component = () => {
       label: "Users",
       icon: <UsersIcon size={16} />,
       content: (
-        <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1e1f22] scrollbar-track-transparent">
+        <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
           <UserBrowser users={userDomain.list()} />
         </div>
       ),
@@ -36,11 +36,11 @@ const LeftPanel: Component = () => {
   ]);
 
   return (
-    <div class="w-60 bg-[#2b2d31] flex flex-col h-full">
-      <div class="h-12 px-4 flex items-center justify-between border-b border-[#1e1f22] shadow-sm">
+    <div class="w-60 bg-sidebar flex flex-col h-full">
+      <div class="h-12 px-4 flex items-center justify-between border-b border-border shadow-sm">
         <div class="flex items-center gap-2">
           <Show when={serverConfig()} fallback={
-            <div class="w-7 h-7 rounded-full bg-[#5865f2] flex items-center justify-center text-sm font-bold text-white">
+            <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground">
               S
             </div>
           }>
@@ -49,7 +49,7 @@ const LeftPanel: Component = () => {
                 <Show
                   when={config().avatarFileId}
                   fallback={
-                    <div class="w-7 h-7 rounded-full bg-[#5865f2] flex items-center justify-center text-sm font-bold text-white">
+                    <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground">
                       {config().serverName.charAt(0)}
                     </div>
                   }
@@ -62,19 +62,19 @@ const LeftPanel: Component = () => {
                     />
                   )}
                 </Show>
-                <h2 class="text-[#DBDEE1] font-semibold truncate">
+                <h2 class="text-foreground font-semibold truncate">
                   {config().serverName}
                 </h2>
               </>
             )}
           </Show>
           <Show when={!serverConfig()}>
-            <h2 class="text-[#DBDEE1] font-semibold">OpenCord</h2>
+            <h2 class="text-foreground font-semibold">OpenCord</h2>
           </Show>
         </div>
         <button
           onClick={() => modalDomain.open({ type: "serverSettings", id: 0 })}
-          class="p-1.5 hover:bg-[#383a40] text-[#949ba4] hover:text-[#DBDEE1] rounded transition-all"
+          class="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-all"
           title="Server Settings"
         >
           <Settings size={18} />

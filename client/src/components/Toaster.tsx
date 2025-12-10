@@ -59,21 +59,21 @@ const Toaster: Component<ToasterProps> = (props) => {
         <div class="fixed inset-0 flex items-end justify-center px-4 py-6 pointer-events-none sm:p-6 sm:items-start sm:justify-end z-50">
           <div
             class={`
-              max-w-sm w-full bg-[#36393f] text-white rounded-lg shadow-lg
+              max-w-sm w-full bg-popover text-primary-foreground rounded-lg shadow-lg
               pointer-events-auto flex items-center p-4 gap-4
               ${
                 merged.type === "success"
-                  ? "border-l-4 border-green-500"
-                  : "border-l-4 border-red-500"
+                  ? "border-l-4 border-toast-success"
+                  : "border-l-4 border-toast-error"
               }
             `}
           >
             <div class="flex-shrink-0">
               <Show
                 when={merged.type === "success"}
-                fallback={<AlertCircle class="w-6 h-6 text-red-500" />}
+                fallback={<AlertCircle class="w-6 h-6 text-toast-error" />}
               >
-                <CheckCircle class="w-6 h-6 text-green-500" />
+                <CheckCircle class="w-6 h-6 text-toast-success" />
               </Show>
             </div>
             <div class="flex-grow">
@@ -84,7 +84,7 @@ const Toaster: Component<ToasterProps> = (props) => {
                 setIsVisible(false);
                 merged.onClose();
               }}
-              class="flex-shrink-0 ml-4 text-gray-400 hover:text-white focus:outline-none"
+              class="flex-shrink-0 ml-4 text-muted-foreground hover:text-primary-foreground focus:outline-none"
             >
               <X class="w-5 h-5" />
             </button>

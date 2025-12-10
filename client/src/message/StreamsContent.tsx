@@ -102,7 +102,7 @@ const StreamsContent: Component = () => {
     <Show
       when={voipDomain.getCurrent()}
       fallback={
-        <div class="flex-1 flex items-center justify-center text-[#949ba4]">
+        <div class="flex-1 flex items-center justify-center text-muted-foreground">
           <div class="text-center">
             <Video size={48} class="mx-auto mb-4 mt-4 opacity-50" />
             <h3 class="text-lg font-medium mb-1">No active stream</h3>
@@ -114,7 +114,7 @@ const StreamsContent: Component = () => {
       <Show
         when={getCurrentParticipants().length > 0}
         fallback={
-          <div class="flex-1 flex items-center justify-center text-[#949ba4] mt-6">
+          <div class="flex-1 flex items-center justify-center text-muted-foreground mt-6">
             <div class="text-center">
               <Users size={48} class="mx-auto mb-4 mt-4 opacity-50" />
               <h3 class="text-lg font-medium mb-1">No one in voice</h3>
@@ -126,10 +126,10 @@ const StreamsContent: Component = () => {
         }
       >
         <div class="flex-1 flex flex-col min-h-0">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-[#1e1f22] bg-[#313338] shrink-0">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-background shrink-0">
             <div class="flex items-center gap-2">
-              <Video size={20} class="text-[#949ba4]" />
-              <h3 class="text-[#DBDEE1] font-medium">
+              <Video size={20} class="text-muted-foreground" />
+              <h3 class="text-foreground font-medium">
                 <Show when={messageDomain.getContext()}>
                   {(context) =>
                     context().type === 'channel'
@@ -140,7 +140,7 @@ const StreamsContent: Component = () => {
               </h3>
             </div>
 
-            <div class="flex items-center gap-2 text-sm text-[#949ba4]">
+            <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <Users size={16} />
               <span>
                 {streamCount()} stream{streamCount() !== 1 ? "s" : ""}
@@ -157,7 +157,7 @@ const StreamsContent: Component = () => {
                   <>
                     {}
                     <Show when={participant.publishCamera}>
-                      <div class="relative bg-[#2b2d31] rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
+                      <div class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
                         <video
                           ref={(ref) => {
                             if (participant.cameraPlayback) {
@@ -212,7 +212,7 @@ const StreamsContent: Component = () => {
                     <Show when={participant.publishScreen}>
                       <ContextMenu
                         items={createVolumeMenuItems(participant.user.userId)}
-                        class="relative bg-[#2b2d31] rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]"
+                        class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]"
                       >
                         <video
                           ref={(ref) => {

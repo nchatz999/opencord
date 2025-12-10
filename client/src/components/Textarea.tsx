@@ -26,12 +26,12 @@ export const Textarea: Component<TextareaProps> = (props) => {
 
   const textareaClasses = createMemo(() =>
     cn(
-      "flex-grow w-full px-3 py-2 bg-[#40444b] text-[#dcddde]",
-      "focus:outline-none focus:ring-2 focus:ring-[#5865f2] focus:border-transparent",
-      "placeholder-[#72767d]",
+      "flex-grow w-full px-3 py-2 bg-muted text-foreground",
+      "focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
+      "placeholder-muted-foreground-dark",
       "resize-none",
-      "scrollbar scrollbar-thumb-[#202225] scrollbar-track-[#2f3136] scrollbar-thin",
-      merged.error && "border border-red-500",
+      "scrollbar scrollbar-thumb-input scrollbar-track-card scrollbar-thin",
+      merged.error && "border border-destructive",
       merged.class
     )
   );
@@ -45,7 +45,7 @@ export const Textarea: Component<TextareaProps> = (props) => {
       <Show when={merged.label}>
         <label
           for={textareaId()}
-          class="mb-1 text-sm font-medium text-[#dcddde]"
+          class="mb-1 text-sm font-medium text-foreground"
         >
           {merged.label}
         </label>
@@ -63,7 +63,7 @@ export const Textarea: Component<TextareaProps> = (props) => {
       </div>
 
       <Show when={merged.error}>
-        <p class="mt-1 text-sm text-[#f04747]">{merged.error}</p>
+        <p class="mt-1 text-sm text-destructive">{merged.error}</p>
       </Show>
     </div>
   );

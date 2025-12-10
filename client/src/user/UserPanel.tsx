@@ -6,7 +6,7 @@ import UserSection from './UserSection'
 
 const UserPanel: Component = () => {
   return (
-    <div class="bg-[#232428] px-2 py-3 w-full flex flex-col gap-3 border-t border-[#1e1f22]">
+    <div class="bg-background-dark px-2 py-3 w-full flex flex-col gap-3 border-t border-border">
       <PrivateCallStatusPanel />
       <ConnectionIndicator />
       <VoiceVideoControls />

@@ -63,7 +63,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
         onClick: () => { },
         customContent: (
           <div class="flex flex-col gap-2">
-            <div class="flex items-center gap-2 text-sm text-[#DBDEE1]">
+            <div class="flex items-center gap-2 text-sm text-foreground">
               <VolumeIcon volume={volume()} />
               <span>Volume: {volume()}%</span>
             </div>
@@ -105,7 +105,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
   return (
 
     <ContextMenu items={contextMenuItems()}>
-      <div class="flex items-center gap-2 px-2 py-1 text-[#949ba4] hover:bg-[#383a40] rounded transition-all">
+      <div class="flex items-center gap-2 px-2 py-1 text-muted-foreground hover:bg-muted rounded transition-all">
         <div class="relative shrink-0">
           <div class={`rounded-full p-0.5 transition-all duration-200 ${isSpeaking() ? 'bg-green-500 shadow-lg shadow-green-500/50' : ''}`}>
             <img
@@ -114,7 +114,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
               class="w-6 h-6 rounded-full"
             />
           </div>
-          <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#2b2d31] bg-green-500" />
+          <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar bg-status-online" />
         </div>
         <div class="flex items-center gap-1 flex-1 min-w-0">
           <span class="text-xs truncate">{props.participant.user.username}</span>

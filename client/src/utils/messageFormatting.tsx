@@ -32,8 +32,8 @@ export function formatMessageText(
   type: "direct" | "channel"
 ): JSX.Element {
   const linkClass = type === "direct" && isOwner
-    ? "text-[#d0d5ff] hover:text-[#ffffff] hover:underline"
-    : "text-blue-400 hover:text-blue-300 hover:underline";
+    ? "text-link hover:text-primary-foreground hover:underline"
+    : "text-link hover:text-foreground-bright hover:underline";
 
   const segments: Array<{ type: "text" | "code"; content: string }> = [];
   let lastIndex = 0;
@@ -55,7 +55,7 @@ export function formatMessageText(
     <>
       {segments.map((segment) =>
         segment.type === "code" ? (
-          <pre class="bg-[#2f3136] p-3 my-2 rounded overflow-auto whitespace-pre-wrap break-words">
+          <pre class="bg-card p-3 my-2 rounded overflow-auto whitespace-pre-wrap break-words">
             <code>{segment.content}</code>
           </pre>
         ) : (

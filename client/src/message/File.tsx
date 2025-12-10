@@ -51,7 +51,7 @@ const FileItem: Component<FileProps> = (props) => {
           alt="File preview"
         />
       ) : (
-        <div class="bg-[#2b2d31] p-4 mt-2 rounded-xl">
+        <div class="bg-sidebar p-4 mt-2 rounded-xl">
           <div class="flex flex-row gap-3">
             <svg
               fill="none"
@@ -70,10 +70,10 @@ const FileItem: Component<FileProps> = (props) => {
               />
             </svg>
             <div class="flex flex-col">
-              <a href="#" onClick={handleDownload} class="text-[#00A8FC] cursor-pointer">
+              <a href="#" onClick={handleDownload} class="text-link cursor-pointer">
                 {props.file.fileName}
               </a>
-              <div class="text-sm text-[#80848E]">
+              <div class="text-sm text-muted-foreground-dark">
                 {props.file.fileSize} bytes
               </div>
             </div>

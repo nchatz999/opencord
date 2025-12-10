@@ -24,16 +24,16 @@ const RightPanel: Component<RightPanelProps> = (props) => {
   };
 
   return (
-    <div class={`bg-[#2b2d31] w-64 flex flex-col h-full ${props.class || ""}`}>
+    <div class={`bg-sidebar w-64 flex flex-col h-full ${props.class || ""}`}>
       {}
-      <div class="h-12 px-4 flex items-center justify-between border-b border-[#1e1f22] shadow-sm shrink-0">
-        <h2 class="text-[#DBDEE1] font-semibold text-sm uppercase">Roles</h2>
+      <div class="h-12 px-4 flex items-center justify-between border-b border-border shadow-sm shrink-0">
+        <h2 class="text-foreground font-semibold text-sm uppercase">Roles</h2>
         <Show when={userDomain.getCurrent().roleId == 0}>
           <Button
             onClick={handleCreateRole}
             variant="ghost"
             size="sm"
-            class="text-[#949ba4] hover:text-[#DBDEE1] transition-colors"
+            class="text-muted-foreground hover:text-foreground transition-colors"
             title="Create Role"
           >
             <Plus size={16} />
@@ -42,7 +42,7 @@ const RightPanel: Component<RightPanelProps> = (props) => {
       </div>
 
       {}
-      <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1e1f22] scrollbar-track-transparent">
+      <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         <div class="p-2 space-y-1">
           <For each={roleDomain.list()}>
             {(role) => (

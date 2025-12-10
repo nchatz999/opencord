@@ -138,8 +138,8 @@ const CreateChannelModal: Component = () => {
   }
 
   return (
-    <div class="fixed inset-0 text-[#dcddde] bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="fixed inset-0 text-foreground bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold mb-6 flex items-center">
             {type() === ChannelType.Text ? (

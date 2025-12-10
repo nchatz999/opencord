@@ -29,13 +29,13 @@ const FilePreview: Component<FilePreviewProps> = (props) => {
   };
 
   return (
-    <div class="relative bg-[#2b2d31] rounded-lg overflow-hidden group">
+    <div class="relative bg-sidebar rounded-lg overflow-hidden group">
       <button
-        class="absolute top-2 right-2 z-10 p-1.5 bg-[#313338] rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        class="absolute top-2 right-2 z-10 p-1.5 bg-background rounded opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={props.onRemove}
         title="Remove file"
       >
-        <Trash2 class="text-[#F23F42]" size={16} />
+        <Trash2 class="text-destructive" size={16} />
       </button>
 
       {isImage() && imageUrl() ? (
@@ -52,15 +52,15 @@ const FilePreview: Component<FilePreviewProps> = (props) => {
       ) : (
         <div class="w-44 h-44 flex flex-col items-center justify-center p-4">
           {props.file.type.startsWith("video/") ? (
-            <Video class="text-[#939bf9]" size={48} />
+            <Video class="text-primary" size={48} />
           ) : props.file.type.includes("pdf") ? (
-            <FileText class="text-[#e85d75]" size={48} />
+            <FileText class="text-destructive" size={48} />
           ) : (
-            <FileText class="text-[#939bf9]" size={48} />
+            <FileText class="text-primary" size={48} />
           )}
           <div class="mt-3 text-center w-full">
-            <p class="text-sm text-[#DBDEE1] truncate">{props.file.name}</p>
-            <p class="text-xs text-[#949ba4] mt-1">
+            <p class="text-sm text-foreground truncate">{props.file.name}</p>
+            <p class="text-xs text-muted-foreground mt-1">
               {formatFileSize(props.file.size)}
             </p>
           </div>

@@ -117,7 +117,7 @@ export const ContextMenuProvider: Component<{ children: JSX.Element }> = (
         <Portal>
           <div
             ref={menuRef}
-            class="fixed z-50 min-w-[180px] bg-[#18191c] shadow-lg text-[#dcddde] border border-[#202225]"
+            class="fixed z-50 min-w-[180px] bg-context-menu shadow-lg text-foreground border border-input"
             style={{ left: `${position().x}px`, top: `${position().y}px` }}
           >
             <For each={menuItems()}>
@@ -211,10 +211,10 @@ export const ContextMenuItem: Component<ContextMenuItemProps> = (props) => {
         "px-3 py-2 flex items-center text-sm cursor-pointer relative",
         merged.disabled
           ? "opacity-50 cursor-not-allowed"
-          : "hover:bg-[#4752c4] hover:text-white",
+          : "hover:bg-primary-hover hover:text-primary-foreground",
         merged.danger &&
         !merged.disabled &&
-        "text-[#f04747] hover:text-white hover:bg-[#f04747]"
+        "text-destructive hover:text-primary-foreground hover:bg-destructive"
       )}
       onClick={!merged.disabled ? merged.onClick : undefined}
     >
@@ -231,7 +231,7 @@ export const ContextMenuItem: Component<ContextMenuItemProps> = (props) => {
       >
         <div
           ref={subMenuRef}
-          class="fixed z-50 min-w-[180px] bg-[#18191c] shadow-lg text-[#dcddde] border border-[#202225]"
+          class="fixed z-50 min-w-[180px] bg-context-menu shadow-lg text-foreground border border-input"
         >
           <For each={merged.subMenu}>
             {(item) => (
@@ -251,7 +251,7 @@ export const ContextMenuItem: Component<ContextMenuItemProps> = (props) => {
 
 
 export const ContextMenuSeparator: Component = () => {
-  return <div class="h-px bg-[#2f3136] my-1" />;
+  return <div class="h-px bg-card my-1" />;
 };
 
 

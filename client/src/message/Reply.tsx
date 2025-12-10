@@ -16,20 +16,20 @@ const Reply: Component<MessageProps> = (props) => {
   };
 
   return (
-    <div class="flex items-center mb-1 bg-[#2e3035] rounded p-2 text-sm">
-      <div class="w-1 h-full bg-[#4f545c] mr-2"></div>
+    <div class="flex items-center mb-1 bg-accent rounded p-2 text-sm">
+      <div class="w-1 h-full bg-secondary mr-2"></div>
       <div class="flex flex-col flex-grow overflow-hidden">
         <div class="flex items-center">
-          <span class="font-medium text-[#00A8FC] mr-2">{props.author}</span>
-          {hasAttachments() && <Paperclip class="w-4 h-4 text-[#b9bbbe]" />}
+          <span class="font-medium text-link mr-2">{props.author}</span>
+          {hasAttachments() && <Paperclip class="w-4 h-4 text-secondary-text" />}
         </div>
         {props.content && (
-          <span class="text-[#b9bbbe] whitespace-nowrap overflow-hidden text-ellipsis">
+          <span class="text-secondary-text whitespace-nowrap overflow-hidden text-ellipsis">
             {truncateText(props.content, 100)}
           </span>
         )}
         {!props.content && hasAttachments() && (
-          <span class="text-[#b9bbbe] italic">Attachment</span>
+          <span class="text-secondary-text italic">Attachment</span>
         )}
       </div>
     </div>

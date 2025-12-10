@@ -122,8 +122,8 @@ const CreateRoleModal: Component = () => {
     modalDomain.open({ type: "close", id: 0 })
   }
   return (
-    <div class="fixed inset-0 bg-black text-[#dcddde] bg-opacity-50 flex items-center justify-center">
-      <div class="bg-[#36393f] rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div class="fixed inset-0 bg-black text-foreground bg-opacity-50 flex items-center justify-center">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Create Role</h2>
           <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
