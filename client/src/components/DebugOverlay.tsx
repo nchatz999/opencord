@@ -1,6 +1,5 @@
 import type { Component } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
-import { state } from "../store";
 
 interface DebugItemProps {
   label: string;
@@ -131,9 +130,7 @@ const DebugOverlay: Component = () => {
   ];
 
   const getStateSection = () => {
-    const section = selectedSection();
-    if (section === "all") return state;
-    return { [section]: (state as any)[section] };
+    return { message: "Debug overlay not yet migrated to new store pattern" };
   };
 
   return (

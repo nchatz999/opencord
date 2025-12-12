@@ -3,7 +3,7 @@ import { createSignal, For, Show } from "solid-js";
 import { ChevronDown, ChevronRight, Users } from "lucide-solid";
 import RoleUser from "./RoleUser";
 import type { Role } from "../model";
-import { userDomain } from "../store";
+import { useUser } from "../store/index";
 
 interface RoleSectionProps {
   role: Role;
@@ -11,6 +11,7 @@ interface RoleSectionProps {
 }
 
 const RoleSection: Component<RoleSectionProps> = (props) => {
+  const [, userActions] = useUser();
   const [isCollapsed, setIsCollapsed] = createSignal(false);
 
   const toggleCollapse = (e: MouseEvent) => {
@@ -52,7 +53,7 @@ const RoleSection: Component<RoleSectionProps> = (props) => {
             <div class="flex items-center gap-1 text-muted-foreground">
               <Users size={12} />
               <span class="text-xs">
-                {userDomain.list().filter(u => u.roleId == props.role.roleId).length} </span>
+                {userActions.list().filter(u => u.roleId == props.role.roleId).length} </span>
             </div>
           </div>
 
@@ -65,10 +66,10 @@ const RoleSection: Component<RoleSectionProps> = (props) => {
 
       {}
       <Show
-        when={!isCollapsed() && userDomain.list().filter(u => u.roleId == props.role.roleId).length > 0}
+        when={!isCollapsed() && userActions.list().filter(u => u.roleId == props.role.roleId).length > 0}
       >
         <div class="ml-6 mt-1 space-y-0.5">
-          <For each={userDomain.list().filter(u => u.roleId == props.role.roleId)}>
+          <For each={userActions.list().filter(u => u.roleId == props.role.roleId)}>
             {(user) => <RoleUser user={user} />}
           </For>
         </div>
@@ -76,7 +77,7 @@ const RoleSection: Component<RoleSectionProps> = (props) => {
 
       {}
       <Show
-        when={!isCollapsed() && userDomain.list().filter(u => u.roleId == props.role.roleId).length === 0}
+        when={!isCollapsed() && userActions.list().filter(u => u.roleId == props.role.roleId).length === 0}
       >
         <div class="ml-6 mt-1 px-2 py-1">
           <span class="text-xs text-muted-foreground-dark italic">

@@ -1,20 +1,20 @@
 import { type Component } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
 import { UserStatusType, type User } from "../model";
-import { userDomain, voipDomain, microphone, messageDomain } from "../store";
-import { fetchApi } from "../utils";
+import { useVoip, usePlayback, useContext, useAuth, useMicrophone } from "../store/index";
 import { useToaster } from "../components/Toaster";
-
-const handleUserClick = async (user: User) => {
-  messageDomain.setContext({ type: "dm", id: user.userId })
-
-};
 
 export const UserEntry: Component<{ user: User; }> = (
   props
 ) => {
   const { addToast } = useToaster();
+  const [, authActions] = useAuth();
+  const [, voipActions] = useVoip();
+  const [, playbackActions] = usePlayback();
+  const [, contextActions] = useContext();
+  const [, microphoneActions] = useMicrophone();
 
+  const currentUser = () => authActions.getUser();
 
   const statusColors: Record<UserStatusType | number, string> = {
     [UserStatusType.Online]: "bg-status-online",
@@ -40,28 +40,31 @@ export const UserEntry: Component<{ user: User; }> = (
   };
 
   const isUserCallingMe = () => {
-    const currentUserId = userDomain.getCurrent().userId;
-    if (!currentUserId) return false;
+    const userParticipant = voipActions.findById(props.user.userId);
+    return userParticipant?.recipientId === currentUser().userId;
+  };
 
-    const userParticipant = voipDomain.findById(props.user.userId);
-    return userParticipant?.recipientId === currentUserId;
+  const handleUserClick = async (user: User) => {
+    contextActions.set({ type: "dm", id: user.userId });
   };
 
   const handleVoiceCall = async (e: MouseEvent) => {
     e.stopPropagation();
-    const result = await fetchApi(
-      `/voip/private/${props.user.userId}/join/${microphone.getMuted()}/false`,
-      { method: "POST" }
+    const result = await voipActions.joinPrivate(
+      props.user.userId,
+      microphoneActions.getMuted(),
+      false
     );
 
     if (result.isErr()) {
-      addToast(`Failed to join private call: ${result.error.reason}`, 'error');
+      addToast(`Failed to join private call: ${result.error}`, 'error');
       return;
     }
 
-    await microphone.start();
-    await voipDomain.resume();
+    await microphoneActions.start();
+    await playbackActions.resume();
   };
+
   return (
     <button
       onClick={async () => await handleUserClick(props.user)}

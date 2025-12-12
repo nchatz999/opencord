@@ -1,11 +1,9 @@
 import type { Result } from "opencord-utils";
 import { err, ok } from "opencord-utils";
-import { userDomain } from "../store";
 
 const saveSession = (token: string, id: number) => {
   document.cookie = `session_token=${token}; path=/; SameSite=Lax`;
   document.cookie = `user_id=${id}; path=/; SameSite=Lax`;
-  userDomain.setCurrentUser(id)
 };
 
 interface AuthToken {

@@ -1,20 +1,19 @@
 import type { Component } from "solid-js";
 import { createSignal, createEffect } from "solid-js";
 import type { File } from "../model";
-import { fetchApi } from "../utils";
+import { useFile } from "../store/index";
 
 interface FileProps {
   file: File;
 }
 
 const FileItem: Component<FileProps> = (props) => {
+  const [, fileActions] = useFile();
   const [imageUrl, setImageUrl] = createSignal<string>("");
 
   createEffect(async () => {
     if (props.file.fileType.startsWith("image/")) {
-      const result = await fetchApi<Blob>(`/message/files/${props.file.fileId}`, {
-        method: "GET",
-      });
+      const result = await fileActions.downloadFile(props.file.fileId);
 
       if (result.isErr()) return;
 
@@ -25,9 +24,7 @@ const FileItem: Component<FileProps> = (props) => {
   });
 
   const handleDownload = async () => {
-    const result = await fetchApi<Blob>(`/message/files/${props.file.fileId}`, {
-      method: "GET",
-    });
+    const result = await fileActions.downloadFile(props.file.fileId);
 
     if (result.isErr()) return;
 

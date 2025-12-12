@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createMemo, Show } from "solid-js";
-import { messageDomain } from "../store";
+import { useContext } from "../store/index";
 import ChatHeader from "../message/ChatHeader";
 import ChatContent from "../message/ChatContent";
 import MessageInput from "../message/MessageInput";
@@ -8,6 +8,8 @@ import StreamsContent from "../message/StreamsContent";
 import { Tabs } from "../components/Tabs";
 
 const MiddlePanel: Component = () => {
+  const [contextState] = useContext();
+
   const tabItems = createMemo(() => {
     const items = [
       {
@@ -15,12 +17,12 @@ const MiddlePanel: Component = () => {
         label: "Messages",
         content: (
           <div class="flex flex-col h-[calc(100vh-50px)] overflow-hidden">
-            <Show when={messageDomain.getContext()}>
+            <Show when={contextState.context}>
               {(ctx) => <ChatHeader context={ctx()} />}
             </Show>
 
             <ChatContent />
-            <Show when={messageDomain.getContext()}>
+            <Show when={contextState.context}>
               {(ctx) => <MessageInput context={ctx()} />}
             </Show>
           </div>

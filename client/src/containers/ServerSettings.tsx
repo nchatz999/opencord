@@ -1,14 +1,15 @@
 import type { Component } from "solid-js";
 import logo from "../../assets/librecord.png";
-import { modalDomain } from "../store";
+import { useModal } from "../store/index";
 
 const ServerSettings: Component = () => {
+  const [, modalActions] = useModal();
 
   return (
     <div>
       <button
         onClick={() => {
-          modalDomain.open({ type: 'serverSettings', id: 0 })
+          modalActions.open({ type: 'serverSettings' })
         }}
         class="relative flex items-center hover:bg-muted h-10 px-2 w-full font-semibold text-foreground-bright py-1"
       >

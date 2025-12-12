@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from "solid-js";
-import { voipDomain } from "../store";
+import { usePlayback } from "../store/index";
 
 export interface AudioOutputDevice {
   deviceId: string;
@@ -31,7 +31,8 @@ export class OutputManager {
     this.getDeafenedSignal = deafened
     this.setDeafenedSignal = setDeafened
 
-    this.audioContext = voipDomain.getAudioContext();
+    const [, playbackActions] = usePlayback();
+    this.audioContext = playbackActions.getAudioContext();
     this.gainNode = this.audioContext.createGain();
     this.gainNode.connect(this.audioContext.destination);
 

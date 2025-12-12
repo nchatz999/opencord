@@ -4,8 +4,8 @@ import { Send, Paperclip, Smile } from "lucide-solid";
 import FilePreview from "./FilePreview";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import { useToaster } from "../components/Toaster";
-import { channelDomain, userDomain } from "../store";
-import { fetchApi, toBase64 } from "../utils";
+import { useChannel, useUser, useMessage } from "../store/index";
+import { toBase64 } from "../utils";
 import Button from "../components/Button";
 import { formatLinks } from "../utils/messageFormatting";
 
@@ -17,6 +17,10 @@ const formatContent = (text: string) => {
 const MessageInput: Component<{
   context: { type: "channel" | "dm"; id: number };
 }> = (props) => {
+  const [, channelActions] = useChannel();
+  const [, userActions] = useUser();
+  const [, messageActions] = useMessage();
+
   const [content, setContent] = createSignal("");
   const [files, setFiles] = createSignal<File[]>([]);
   const [isDragging, setIsDragging] = createSignal(false);
@@ -27,10 +31,10 @@ const MessageInput: Component<{
   const { addToast } = useToaster();
 
   const channel = createMemo(() =>
-    props.context.type === "channel" ? channelDomain.findById(props.context.id) : null
+    props.context.type === "channel" ? channelActions.findById(props.context.id) : null
   );
   const dmUser = createMemo(() =>
-    props.context.type === "dm" ? userDomain.findById(props.context.id) : null
+    props.context.type === "dm" ? userActions.findById(props.context.id) : null
   );
 
   const placeholder = createMemo(() => {
@@ -58,19 +62,15 @@ const MessageInput: Component<{
       }))
     );
 
-    const result = await fetchApi(
-      `/message/${props.context.type}/${props.context.id}/messages`,
-      {
-        method: "POST",
-        body: {
-          messageText: content().trim() || undefined,
-          files: fileUploads,
-        },
-      }
+    const result = await messageActions.send(
+      props.context.type,
+      props.context.id,
+      content().trim() || undefined,
+      fileUploads
     );
 
     if (result.isErr()) {
-      addToast(`Failed to send message: ${result.error.reason}`, "error");
+      addToast(`Failed to send message: ${result.error}`, "error");
       return;
     }
 

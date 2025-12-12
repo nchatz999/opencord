@@ -9,23 +9,25 @@ import {
 
 import { ChannelEntry } from "./ChannelEntry";
 import type { Group } from "../model";
-import { groupDomain, modalDomain } from "../store";
-
-const handleCreateChannel = () => {
-  modalDomain.open({ type: "createChannel", id: 0 })
-};
-
-const handleCreateGroup = () => {
-  modalDomain.open({ type: "createGroup", id: 0 })
-};
+import { useModal, useChannel } from "../store/index";
 
 export const ChannelBrowser: Component<{
   groups: Group[];
 }> = (props) => {
+  const [, modalActions] = useModal();
+  const [, channelActions] = useChannel();
 
   const [collapsedGroups, setCollapsedGroups] = createSignal<Set<number>>(
     new Set()
   );
+
+  const handleCreateChannel = () => {
+    modalActions.open({ type: "createChannel", groupId: 0 });
+  };
+
+  const handleCreateGroup = () => {
+    modalActions.open({ type: "createGroup" });
+  };
 
   const toggleGroup = (groupId: number) => {
     setCollapsedGroups((prev) => {
@@ -65,7 +67,7 @@ export const ChannelBrowser: Component<{
       {}
       <For each={props.groups}>
         {(group) => {
-          const groupChannels = () => groupDomain.getChannels(group.groupId);
+          const groupChannels = () => channelActions.findByGroup(group.groupId);
           const isCollapsed = () => collapsedGroups().has(group.groupId);
 
           return (
@@ -74,7 +76,7 @@ export const ChannelBrowser: Component<{
                 onClick={() => toggleGroup(group.groupId)}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  modalDomain.open({ type: "groupSettings", id: group.groupId })
+                  modalActions.open({ type: "groupSettings", groupId: group.groupId });
                 }}
                 class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors"
               >

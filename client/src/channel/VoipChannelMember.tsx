@@ -8,7 +8,7 @@ import {
 } from "lucide-solid";
 import type { VoipParticipantWithUser } from "../model";
 import { useToaster } from "../components/Toaster";
-import { aclDomain, voipDomain } from "../store";
+import { useAcl, usePlayback } from "../store/index";
 import type { ContextMenuItem } from "../components/ContextMenu";
 import Slider from "../components/Slider";
 import ContextMenu from "../components/ContextMenu";
@@ -48,9 +48,11 @@ const VolumeIcon: Component<{ volume: number }> = (props) => (
 );
 
 export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser; channelId: number }> = (props) => {
+  const [, aclActions] = useAcl();
+  const [, playbackActions] = usePlayback();
 
-  const volume = () => Math.round(voipDomain.getVolume(props.participant.user.userId));
-  const isSpeaking = () => voipDomain.getSpeakingState(props.participant.user.userId);
+  const volume = () => Math.round(playbackActions.getVolume(props.participant.user.userId));
+  const isSpeaking = () => playbackActions.getSpeakingState(props.participant.user.userId);
 
   const { addToast } = useToaster();
   const contextMenuItems = (): ContextMenuItem[] => {
@@ -72,7 +74,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
               min={0}
               max={200}
               onChange={(value) => {
-                voipDomain.adjustVolume(props.participant.user.userId, value)
+                playbackActions.adjustVolume(props.participant.user.userId, value)
               }}
             />
           </div>
@@ -139,7 +141,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipantWithUser
             </Show>
 
             {}
-            <Show when={aclDomain.getChannelRights(props.channelId, props.participant.user.roleId) <= 2}>
+            <Show when={aclActions.getChannelRights(props.channelId, props.participant.user.roleId) <= 2}>
               <div class="p-0.5 bg-red-800 rounded-full" title="Server muted">
                 <MicOff size={8} class="text-white" />
               </div>

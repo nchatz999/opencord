@@ -9,10 +9,8 @@ import {
   Match,
   Switch,
 } from "solid-js";
-import { channelDomain, fileDomain, messageDomain, userDomain } from "../store";
+import { useChannel, useFile, useMessage, useUser, useContext } from "../store/index";
 import { useToaster } from "../components/Toaster";
-import type { File, Message } from "../model";
-import { fetchApi } from "../utils";
 import MessageComponent from "./Message";
 
 
@@ -29,10 +27,15 @@ const waitForImages = (container: HTMLElement): Promise<void> => {
       img.addEventListener('error', () => resolve(), { once: true });
     });
   });
-  return Promise.all(promises).then(() => {});
+  return Promise.all(promises).then(() => { });
 };
 
 const ChatContent: Component = () => {
+  const [, channelActions] = useChannel();
+  const [, fileActions] = useFile();
+  const [messageState, messageActions] = useMessage();
+  const [, userActions] = useUser();
+  const [contextState] = useContext();
 
   let messagesEndRef: HTMLDivElement | undefined;
   let messagesContainerRef: HTMLDivElement | undefined;
@@ -41,14 +44,14 @@ const ChatContent: Component = () => {
 
   const { addToast } = useToaster();
 
-  const ctx = createMemo(() => messageDomain.getContext());
+  const ctx = createMemo(() => contextState.context);
 
   const messages = () => {
     const context = ctx();
     if (!context) return [];
     return context.type === "dm"
-      ? messageDomain.findByRecipient(context.id)
-      : messageDomain.findByChannel(context.id);
+      ? messageActions.findByRecipient(context.id)
+      : messageActions.findByChannel(context.id);
   };
 
   const latestMessageId = createMemo(() => {
@@ -86,45 +89,24 @@ const ChatContent: Component = () => {
     const previousScrollHeight = container.scrollHeight;
     const firstMessage = msgs[0];
 
-    let createdAt;
-    if (firstMessage)
-      createdAt = firstMessage.createdAt
-    else
-      createdAt = new Date().toISOString()
+    const createdAt = firstMessage
+      ? firstMessage.createdAt
+      : new Date().toISOString();
 
-    const messagesEndpoint = context.type === "dm"
-      ? `/message/dm/${context.id}/messages`
-      : `/message/channel/${context.id}/messages`;
-
-    const result = await fetchApi<Message[]>(messagesEndpoint, {
-      method: "GET",
-      query: {
-        limit: MESSAGES_LIMIT,
-        timestamp: createdAt
-      }
-    });
+    const result = await messageActions.fetchMessages(
+      context.type,
+      context.id,
+      MESSAGES_LIMIT,
+      createdAt
+    );
 
     if (result.isErr()) {
-      addToast(`Error: ${result.error.reason}`, "error");
+      addToast(`Error: ${result.error}`, "error");
       setIsLoadingMore(false);
       return;
     }
 
-    messageDomain.insertMany(result.value);
-    const filesEndpoint = context.type === "dm"
-      ? `/message/dm/${context.id}/files`
-      : `/message/channel/${context.id}/files`;
-
-    const filesResult = await fetchApi<File[]>(filesEndpoint, {
-      method: "GET",
-      query: {
-        limit: MESSAGES_LIMIT,
-        timestamp: createdAt
-      }
-    });
-    if (!filesResult.isErr()) {
-      fileDomain.addMany(filesResult.value);
-    }
+    await fileActions.fetchFiles(context.type, context.id, MESSAGES_LIMIT, createdAt);
 
     requestAnimationFrame(() => {
       const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
@@ -176,7 +158,7 @@ const ChatContent: Component = () => {
               <Show
                 when={messages().length > 0}
                 fallback={
-                  <Show when={userDomain.findById(context().id)}>
+                  <Show when={userActions.findById(context().id)}>
                     {(user) => (
                       <div class="flex-1 flex items-center justify-center text-muted-foreground min-h-[400px]">
                         <div class="text-center">
@@ -203,7 +185,7 @@ const ChatContent: Component = () => {
               <Show
                 when={messages().length > 0}
                 fallback={
-                  <Show when={channelDomain.findById(context().id)}>
+                  <Show when={channelActions.findById(context().id)}>
                     {(channel) => (
                       <div class="flex-1 flex items-center justify-center text-muted-foreground min-h-[400px]">
                         <div class="text-center">

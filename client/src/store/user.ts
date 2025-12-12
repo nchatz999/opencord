@@ -1,0 +1,138 @@
+import { createStore, produce } from "solid-js/store";
+import { createRoot } from "solid-js";
+import type { User, UserStatusType } from "../model";
+import type { Result } from "opencord-utils";
+import { ok, err } from "opencord-utils";
+import { fetchApi } from "../utils";
+import { useConnection } from "./connection";
+
+interface UserState {
+  users: User[];
+}
+
+interface UserActions {
+  init: () => Promise<Result<void, string>>;
+  list: () => User[];
+  findById: (id: number) => User | undefined;
+  replaceAll: (users: User[]) => void;
+  update: (user: User) => void;
+  remove: (id: number) => void;
+  updateStatus: (userId: number, status: UserStatusType) => Promise<Result<void, string>>;
+  updateAvatar: (fileName: string, contentType: string, base64Data: string) => Promise<Result<void, string>>;
+  updateRole: (userId: number, roleId: number) => Promise<Result<void, string>>;
+}
+
+export type UserStore = [UserState, UserActions];
+
+function createUserStore(): UserStore {
+  const [state, setState] = createStore<UserState>({
+    users: [],
+  });
+
+  const connection = useConnection();
+
+  const actions: UserActions = {
+    async init() {
+      const result = await fetchApi<User[]>("/user", { method: "GET" });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      actions.replaceAll(result.value);
+
+      connection.onServerEvent((event) => {
+        if (event.type === "userUpdated") {
+          console.log(event)
+          actions.update(event.user as User);
+        } else if (event.type === "userDeleted") {
+          actions.remove(event.userId as number);
+        }
+      });
+
+      return ok(undefined);
+    },
+
+    list() {
+      return state.users;
+    },
+
+    findById(id) {
+      return state.users.find((u) => u.userId === id);
+    },
+
+    replaceAll(users) {
+      setState("users", users);
+    },
+
+    update(user) {
+      setState(
+        "users",
+        produce((users) => {
+          const index = users.findIndex((u) => u.userId === user.userId);
+          if (index !== -1) {
+            users[index] = user;
+          } else {
+            users.push(user);
+          }
+        })
+      );
+    },
+
+    remove(id) {
+      setState(
+        "users",
+        produce((users) => {
+          const index = users.findIndex((u) => u.userId === id);
+          if (index !== -1) {
+            users.splice(index, 1);
+          }
+        })
+      );
+    },
+
+    async updateStatus(userId, status) {
+      const result = await fetchApi(`/user/${userId}/manual-status`, {
+        method: "PUT",
+        body: { manualStatus: status },
+      });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      return ok(undefined);
+    },
+
+    async updateAvatar(fileName, contentType, base64Data) {
+      const result = await fetchApi("/user/avatar", {
+        method: "PUT",
+        body: { fileName, contentType, data: base64Data },
+      });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      return ok(undefined);
+    },
+
+    async updateRole(userId, roleId) {
+      const result = await fetchApi(`/user/${userId}/role`, {
+        method: "PUT",
+        body: { roleId },
+      });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      return ok(undefined);
+    },
+  };
+
+  return [state, actions];
+}
+
+let instance: UserStore | null = null;
+
+export function useUser(): UserStore {
+  if (!instance) {
+    createRoot(() => {
+      instance = createUserStore();
+    });
+  }
+  return instance!;
+}

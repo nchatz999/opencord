@@ -2,22 +2,27 @@ import type { Component } from "solid-js";
 import { createSignal, createMemo, For } from "solid-js";
 import { Hash, Plus, Volume2, X } from "lucide-solid";
 import { ChannelType, RIGHTS } from "../model";
-import { modalDomain, roleDomain } from "../store";
+import { useModal, useRole, useGroup, useAcl, useChannel } from "../store/index";
 import { Input } from "../components/Input";
 import Select from "../components/Select";
 import Button from "../components/Button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/Table";
 import Checkbox from "../components/CheckBox";
 import { Tabs } from "../components/Tabs";
-import { fetchApi } from "../utils";
 
 const CreateGroupModal: Component = () => {
+  const [, modalActions] = useModal();
+  const [, roleActions] = useRole();
+  const [, groupActions] = useGroup();
+  const [, aclActions] = useAcl();
+  const [, channelActions] = useChannel();
+
   const [name, setName] = createSignal<string>("");
   const [newChannelTitle, setNewChannelTitle] = createSignal("");
   const [newChannelType, setNewChannelType] = createSignal(ChannelType.Text);
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
-      roleDomain.list()
+      roleActions.list()
         .filter((role) => role.roleId > 1)
         .map((role) => [role.roleId, [0, 1].includes(role.roleId) ? 16 : 0])
     )
@@ -48,56 +53,37 @@ const CreateGroupModal: Component = () => {
       return;
     }
 
-    const createResult = await fetchApi('/group', {
-      method: 'POST',
-      body: { name: name().trim() }
-    });
+    const createResult = await groupActions.create(name().trim());
 
     if (createResult.isErr()) {
-      alert(`Error creating group: ${createResult.error.reason}`);
+      alert(`Error creating group: ${createResult.error}`);
       return;
     }
 
     const groupId = createResult.value.groupId;
 
-
-    const aclResult = await fetchApi('/acl/group-role-rights', {
-      method: 'PUT',
-      body:
-        Array.from(Object.entries(roleRights())).map(
-          ([roleId, right]) => ({
-            groupId,
-            roleId: Number(roleId),
-            rights: right,
-          })
-        ),
-
-    });
-
-    if (aclResult.isErr()) {
-      alert(`Failed to set group permissions: ${aclResult.error.reason}`);
-
-    }
-
-
-    for (const channel of groupChannels()) {
-      const channelResult = await fetchApi('/channel', {
-        method: 'POST',
-        body: {
-          name: channel.name,
-          channel_id: groupId,
-          type: channel.type,
-        },
+    for (const [roleId, right] of Object.entries(roleRights())) {
+      const aclResult = await aclActions.grant({
+        groupId,
+        roleId: Number(roleId),
+        rights: right,
       });
 
-      if (channelResult.isErr()) {
-        console.error(`Failed to create channel ${channel.name}:`, channelResult.error.reason);
+      if (aclResult.isErr()) {
+        alert(`Failed to set group permissions: ${aclResult.error}`);
+        return;
       }
     }
 
+    for (const channel of groupChannels()) {
+      const channelResult = await channelActions.create(groupId, channel.name, channel.type);
 
-    modalDomain.open({ type: "close", id: 0 })
+      if (channelResult.isErr()) {
+        console.error(`Failed to create channel ${channel.name}:`, channelResult.error);
+      }
+    }
 
+    modalActions.close();
   };
 
   const tabItems = createMemo(() => [
@@ -169,7 +155,7 @@ const CreateGroupModal: Component = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
+                <For each={roleActions.list().filter((role) => role.roleId > 1)}>
                   {(role) => (
                     <TableRow>
                       <TableCell>{role.roleName}</TableCell>
@@ -212,7 +198,7 @@ const CreateGroupModal: Component = () => {
       <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Group Creation</h2>
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -224,7 +210,7 @@ const CreateGroupModal: Component = () => {
         />
         <Tabs items={tabItems()} class="flex-grow" />
         <div class="mt-6 flex justify-end space-x-2">
-          <Button variant="secondary" onClick={() => modalDomain.open({ type: "close", id: 0 })}>
+          <Button variant="secondary" onClick={() => modalActions.close()}>
             Cancel
           </Button>
           <Button onClick={handleSave} >

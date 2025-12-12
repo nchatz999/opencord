@@ -1,33 +1,38 @@
 import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { Video, VideoOff, Monitor, MonitorOff, PhoneOff } from 'lucide-solid'
-import { microphone, screenShare, camera, userDomain, voipDomain } from '../store'
-import { fetchApi } from '../utils'
+import { useAuth, useVoip, useMicrophone, useScreenShare, useCamera } from '../store/index'
 import Button from '../components/Button'
 import { useToaster } from '../components/Toaster'
 
 const VoiceVideoControls: Component = () => {
   const { addToast } = useToaster()
+  const [, authActions] = useAuth()
+  const [, voipActions] = useVoip()
+  const [, microphoneActions] = useMicrophone()
+  const [, screenShareActions] = useScreenShare()
+  const [, cameraActions] = useCamera()
+  const user = () => authActions.getUser()
 
   const handleLeaveCall = async () => {
-    const voipStatus = voipDomain.findById(userDomain.getCurrent().userId)
+    const voipStatus = voipActions.findById(user().userId)
     if (!voipStatus) return
 
     try {
-      if (microphone.isRecording()) {
-        microphone.stop()
+      if (microphoneActions.isRecording()) {
+        microphoneActions.stop()
       }
-      if (screenShare.isRecording()) {
-        screenShare.stop()
+      if (screenShareActions.isRecording()) {
+        screenShareActions.stop()
       }
-      if (camera.isRecording()) {
-        camera.stop()
+      if (cameraActions.isRecording()) {
+        cameraActions.stop()
       }
 
-      const result = await fetchApi('/voip/leave', { method: 'POST' })
+      const result = await voipActions.leave()
 
       if (result.isErr()) {
-        addToast(`Failed to leave VoIP channel: ${result.error.reason}`, 'error')
+        addToast(`Failed to leave VoIP channel: ${result.error}`, 'error')
       }
     } catch (error) {
       addToast('Error leaving VoIP channel', 'error')
@@ -37,29 +42,23 @@ const VoiceVideoControls: Component = () => {
   const handleScreenShare = async (isPublishing: boolean) => {
     if (isPublishing) {
       try {
-        await screenShare.stop()
+        await screenShareActions.stop()
       } catch {
         addToast('Failed to stop screen sharing', 'error')
       }
 
-      const result = await fetchApi('/voip/screen/publish', {
-        method: 'PUT',
-        body: { publish: false }
-      })
+      const result = await voipActions.publishScreen(false)
       if (result.isErr()) {
-        addToast(`Failed to unpublish screen stream: ${result.error.reason}`, 'error')
+        addToast(`Failed to unpublish screen stream: ${result.error}`, 'error')
       }
       return
     }
 
     try {
-      await screenShare.start()
-      const result = await fetchApi('/voip/screen/publish', {
-        method: 'PUT',
-        body: { publish: true }
-      })
+      await screenShareActions.start()
+      const result = await voipActions.publishScreen(true)
       if (result.isErr()) {
-        addToast(`Failed to publish screen stream: ${result.error.reason}`, 'error')
+        addToast(`Failed to publish screen stream: ${result.error}`, 'error')
       }
     } catch {
       addToast('Failed to start screen sharing', 'error')
@@ -69,38 +68,34 @@ const VoiceVideoControls: Component = () => {
   const handleCamera = async (isPublishing: boolean) => {
     if (isPublishing) {
       try {
-        await camera.stop()
+        await cameraActions.stop()
       } catch {
         addToast('Failed to stop camera', 'error')
       }
 
-      const result = await fetchApi('/voip/camera/publish', {
-        method: 'PUT',
-        body: { publish: false }
-      })
+      const result = await voipActions.publishCamera(false)
       if (result.isErr()) {
-        addToast(`Failed to unpublish video stream: ${result.error.reason}`, 'error')
+        addToast(`Failed to unpublish video stream: ${result.error}`, 'error')
       }
       return
     }
 
     try {
-      await camera.start()
-      const result = await fetchApi('/voip/camera/publish', {
-        method: 'PUT',
-        body: { publish: true }
-      })
+      await cameraActions.start()
+      const result = await voipActions.publishCamera(true)
       if (result.isErr()) {
-        addToast(`Failed to publish video stream: ${result.error.reason}`, 'error')
+        addToast(`Failed to publish video stream: ${result.error}`, 'error')
       }
     } catch {
       addToast('Failed to start camera', 'error')
     }
   }
 
+  const currentVoip = () => voipActions.findById(user().userId)
+
   return (
     <div class="flex items-center gap-1">
-      <Show when={voipDomain.getCurrent()}>
+      <Show when={currentVoip()}>
         {(voip) => (
           <Button
             variant='ghost'
@@ -118,7 +113,7 @@ const VoiceVideoControls: Component = () => {
         )}
       </Show>
 
-      <Show when={voipDomain.getCurrent()}>
+      <Show when={currentVoip()}>
         {(voip) => (
           <button
             onClick={() => handleCamera(voip().publishCamera)}
@@ -135,7 +130,7 @@ const VoiceVideoControls: Component = () => {
         )}
       </Show>
 
-      <Show when={voipDomain.getCurrent()}>
+      <Show when={currentVoip()}>
         <button
           onClick={handleLeaveCall}
           class="p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"

@@ -2,25 +2,26 @@ import type { Component } from 'solid-js'
 import { createSignal, createMemo, For } from 'solid-js'
 import { Search, X } from 'lucide-solid'
 import { RIGHTS, type Role } from '../model'
-import { aclDomain, groupDomain, modalDomain, userDomain } from '../store'
+import { useAuth, useAcl, useGroup, useModal, useUser, useRole } from '../store/index'
 import { useToaster } from '../components/Toaster'
 import { Input } from '../components/Input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/Table'
 import Checkbox from '../components/CheckBox'
 import Button from '../components/Button'
 import { Tabs } from '../components/Tabs'
-import { fetchApi } from '../utils'
 
 interface RoleSettingsModalProps {
   role: Role
 }
 
 export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
-  const user = userDomain.getCurrent()
-
-  if (!user) {
-    return null
-  }
+  const [, authActions] = useAuth()
+  const [, aclActions] = useAcl()
+  const [, groupActions] = useGroup()
+  const [, modalActions] = useModal()
+  const [, userActions] = useUser()
+  const [, roleActions] = useRole()
+  const user = () => authActions.getUser()
   const { addToast } = useToaster()
 
   const [searchTerm, setSearchTerm] = createSignal('')
@@ -28,15 +29,15 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
 
   const [groupRights, setGroupRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
-      groupDomain.list().map((group) => [
+      groupActions.list().map((group) => [
         group.groupId,
-        aclDomain.getGroupRights(group.groupId, props.role.roleId) ?? 0,
+        aclActions.getGroupRights(group.groupId, props.role.roleId) ?? 0,
       ])
     )
   )
 
   const filteredUsers = createMemo(() =>
-    userDomain.list()
+    userActions.list()
       .filter((user) => user.roleId === props.role.roleId)
       .filter((user) =>
         user.username.toLowerCase().includes(searchTerm().toLowerCase())
@@ -100,7 +101,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              <For each={groupDomain.list()}>
+              <For each={groupActions.list()}>
                 {(group) => (
                   <TableRow>
                     <TableCell>{group.groupName}</TableCell>
@@ -137,7 +138,6 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
   ])
 
   const handleSave = async () => {
-
     const groupRightsPayload = Array.from(Object.entries(groupRights())).map(
       ([groupId, right]) => ({
         groupId: Number(groupId),
@@ -147,16 +147,10 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
     )
 
     if (groupRightsPayload.length > 0) {
-      const aclGroupResult = await fetchApi<void>('/acl/group-role-rights', {
-        method: 'PUT',
-        body: groupRightsPayload
-      })
+      const aclGroupResult = await aclActions.grantMany(groupRightsPayload)
 
       if (aclGroupResult.isErr()) {
-        addToast(
-          `Failed to update role acl: ${aclGroupResult.error.reason}`,
-          'error'
-        )
+        addToast(`Failed to update role acl: ${aclGroupResult.error}`, 'error')
         return
       }
     }
@@ -166,7 +160,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
       'success'
     )
 
-    modalDomain.open({ type: "close", id: 0 })
+    modalActions.close()
   }
 
   const handleDelete = async () => {
@@ -175,18 +169,16 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
     }
 
     setIsDeleting(true)
-    const result = await fetchApi<void>(`/role/${props.role.roleId}`, {
-      method: 'DELETE'
-    })
+    const result = await roleActions.delete(props.role.roleId)
 
     if (result.isErr()) {
-      addToast(`Failed to delete role: ${result.error.reason}`, 'error')
+      addToast(`Failed to delete role: ${result.error}`, 'error')
       setIsDeleting(false)
       return
     }
 
     addToast(`Role "${props.role.roleName}" deleted successfully!`, 'success')
-    modalDomain.open({ type: "close", id: 0 })
+    modalActions.close()
   }
 
   return (
@@ -197,7 +189,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             Role Settings: {props.role.roleName}
           </h2>
 
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -212,7 +204,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             {isDeleting() ? "Deleting..." : "Delete Role"}
           </Button>
           <div class="flex space-x-2">
-            <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
+            <Button onClick={() => modalActions.close()} variant="secondary">
               Cancel
             </Button>
             <Button onClick={handleSave}>Save Changes</Button>

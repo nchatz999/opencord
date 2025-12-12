@@ -1,6 +1,14 @@
 import type { Component } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
-import { state, type EventLogEntry } from "../store";
+
+export interface EventLogEntry {
+  id: number;
+  timestamp: string;
+  type: string;
+  data: unknown;
+}
+
+const eventLog: EventLogEntry[] = [];
 
 
 interface DebugItemProps {
@@ -129,7 +137,7 @@ const EventDebugOverlay: Component = () => {
   };
 
   const clearEvents = () => {
-    state.eventLog.splice(0, state.eventLog.length);
+    eventLog.splice(0, eventLog.length);
     setSelectedEvent(null);
   };
 
@@ -150,7 +158,7 @@ const EventDebugOverlay: Component = () => {
 
           <div class="w-1/3 border-r border-secondary flex flex-col">
             <div class="flex items-center justify-between p-4 border-b border-secondary">
-              <h3 class="text-lg font-semibold text-primary-foreground">Events ({state.eventLog.length})</h3>
+              <h3 class="text-lg font-semibold text-primary-foreground">Events ({eventLog.length})</h3>
               <div class="flex gap-2">
                 <button
                   onClick={clearEvents}
@@ -168,7 +176,7 @@ const EventDebugOverlay: Component = () => {
             </div>
 
             <div class="flex-1 overflow-auto">
-              <For each={[...state.eventLog].reverse()}>
+              <For each={[...eventLog].reverse()}>
                 {(event) => (
                   <div
                     class={`p-3 border-b border-secondary cursor-pointer hover:bg-sidebar transition-colors ${selectedEvent()?.id === event.id ? "bg-accent" : ""
@@ -189,7 +197,7 @@ const EventDebugOverlay: Component = () => {
                   </div>
                 )}
               </For>
-              <Show when={state.eventLog.length === 0}>
+              <Show when={eventLog.length === 0}>
                 <div class="p-4 text-center text-muted-foreground">
                   No events logged yet
                 </div>

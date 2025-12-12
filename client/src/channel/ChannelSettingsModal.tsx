@@ -2,12 +2,11 @@ import type { Component } from "solid-js";
 import { createSignal, createMemo, createEffect, For } from "solid-js";
 import { Hash, Volume2, X } from "lucide-solid";
 import { ChannelType, RIGHTS, type Channel } from "../model";
-import { aclDomain, modalDomain, roleDomain } from "../store";
+import { useAcl, useModal, useRole, useChannel } from "../store/index";
 import { useToaster } from "../components/Toaster";
 import Button from "../components/Button";
 import { Tabs } from "../components/Tabs";
 import { Input } from "../components/Input";
-import { fetchApi } from "../utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/Table";
 import Checkbox from "../components/CheckBox";
 
@@ -17,6 +16,10 @@ interface ChannelSettingsProps {
 
 const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   const { addToast } = useToaster();
+  const [, aclActions] = useAcl();
+  const [, modalActions] = useModal();
+  const [, roleActions] = useRole();
+  const [, channelActions] = useChannel();
 
 
   const [name, setName] = createSignal(props.channel.channelName);
@@ -25,11 +28,11 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   createEffect(() => {
     setRoleRights(
       Object.fromEntries(
-        roleDomain.list()
+        roleActions.list()
           .filter((role) => role.roleId > 1)
           .map((role) => [
             role.roleId,
-            aclDomain.getGroupRights(props.channel.groupId, role.roleId) || 0,
+            aclActions.getGroupRights(props.channel.groupId, role.roleId) || 0,
           ])
       )
     );
@@ -62,7 +65,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
+                <For each={roleActions.list().filter((role) => role.roleId > 1)}>
                   {(role) => (
                     <TableRow>
                       <TableCell>{role.roleName}</TableCell>
@@ -95,36 +98,32 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
     if (!name().trim()) return;
 
     if (name() !== props.channel.channelName) {
-      const updateResult = await fetchApi(`/channel/${props.channel.channelId}`, {
-        method: 'PUT',
-        body: { name: name().trim() }
-      });
+      const updateResult = await channelActions.updateChannel(
+        props.channel.channelId,
+        name().trim(),
+        props.channel.channelType
+      );
 
       if (updateResult.isErr()) {
-        addToast(
-          `Failed to update channel: ${updateResult.error.reason}`,
-          "error"
-        );
+        addToast(`Failed to update channel: ${updateResult.error}`, "error");
         return;
       }
     }
-    modalDomain.open({ type: "close", id: 0 });
+    modalActions.close();
   };
 
   const handleDelete = async () => {
     if (!confirm(`Are you sure you want to delete the channel "${name()}"?`)) {
       return;
     }
-    const result = await fetchApi(`/channel/${props.channel.channelId}`, {
-      method: 'DELETE'
-    });
+    const result = await channelActions.delete(props.channel.channelId);
 
     if (result.isErr()) {
-      addToast(`Failed to delete channel: ${result.error.reason}`, "error");
+      addToast(`Failed to delete channel: ${result.error}`, "error");
       return;
     }
 
-    modalDomain.open({ type: "close", id: 0 });
+    modalActions.close();
   };
 
   return (
@@ -140,7 +139,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
             {props.channel.channelType} Channel Settings
           </h2>
 
-          <Button onClick={() => { modalDomain.open({ type: "close", id: 0 }) }} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -154,7 +153,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
             Delete Channel
           </Button>
           <div class="flex space-x-2">
-            <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
+            <Button onClick={() => modalActions.close()} variant="secondary">
               Cancel
             </Button>
             <Button

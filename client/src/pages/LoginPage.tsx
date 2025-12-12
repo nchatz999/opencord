@@ -4,80 +4,63 @@ import { useToaster } from "../components/Toaster";
 import { Input } from "../components/Input";
 import Checkbox from "../components/CheckBox";
 import Button from "../components/Button";
-import { match } from "opencord-utils";
-import { fetchApi } from "../utils";
-import { userDomain } from "../store";
-import { saveSession } from "../contexts/Session";
-import { getServerUrlOrDefault, setServerUrl } from "../contexts/ServerConfig";
-import type { RegisterResponse } from "../model";
+import { getServerUrlOrDefault } from "../contexts/ServerConfig";
+import { useAuth } from "../store/auth";
+import { useApp } from "../store/app";
 
 type FormType = "login" | "register";
 
-const AuthPage: Component = () => {
+const LoginPage: Component = () => {
+  const [, authActions] = useAuth();
+  const [, appActions] = useApp();
+  const { addToast } = useToaster();
+
   const [password, setPassword] = createSignal("");
   const [repeatPassword, setRepeatPassword] = createSignal("");
   const [username, setUsername] = createSignal("");
   const [inviteCode, setInviteCode] = createSignal("");
   const [rememberMe, setRememberMe] = createSignal(false);
   const [activeForm, setActiveForm] = createSignal<FormType>("login");
-  const [serverUrl, setServerUrlSignal] = createSignal(getServerUrlOrDefault());
-
-  const { addToast } = useToaster();
+  const [serverUrl, setServerUrl] = createSignal(getServerUrlOrDefault());
 
   const handleLogin = async (e: Event) => {
     e.preventDefault();
-    if (username() && password() && serverUrl()) {
-      setServerUrl(serverUrl());
-
-      const ans = await fetchApi<{ session_token: string; expires_at?: string, user_id: number }>("/auth/login", {
-        method: "POST",
-        body: { username: username(), password: password() },
-      });
-      match(ans, {
-        ok: (val) => {
-          saveSession(val.session_token, val.user_id);
-          userDomain.setAppState({ type: "loading" })
-        },
-        err: (error) => {
-          const message =
-            (error as any)?.reason || (error as any)?.message || "Login failed";
-          addToast(message, "error");
-        },
-      });
-    } else {
+    if (!username() || !password() || !serverUrl()) {
       addToast("Please fill in all fields", "error");
+      return;
     }
+
+    const result = await authActions.login(username(), password(), serverUrl());
+
+    if (result.isErr()) {
+      addToast(result.error, "error");
+      return;
+    }
+
+    appActions.setView("loading");
   };
 
   const handleRegister = async (e: Event) => {
     e.preventDefault();
-    if (password() && username() && repeatPassword() && inviteCode() && serverUrl()) {
-      if (password() !== repeatPassword()) {
-        addToast("Passwords do not match", "error");
-      } else {
-        setServerUrl(serverUrl());
-
-        const ans = await fetchApi<RegisterResponse>("/auth/register", {
-          method: "POST",
-          body: {
-            username: username(),
-            password: password(),
-            invite_code: inviteCode(),
-          },
-        });
-        match(ans, {
-          ok: () => {
-            addToast("Account created successfully!", "success");
-            setActiveForm("login");
-          },
-          err: (error) => {
-            addToast(error.reason, "error");
-          },
-        });
-      }
-    } else {
+    if (!password() || !username() || !repeatPassword() || !inviteCode() || !serverUrl()) {
       addToast("Please fill in all fields", "error");
+      return;
     }
+
+    if (password() !== repeatPassword()) {
+      addToast("Passwords do not match", "error");
+      return;
+    }
+
+    const result = await authActions.register(username(), password(), inviteCode(), serverUrl());
+
+    if (result.isErr()) {
+      addToast(result.error, "error");
+      return;
+    }
+
+    addToast("Account created successfully!", "success");
+    setActiveForm("login");
   };
 
   const loginForm = () => (
@@ -85,7 +68,7 @@ const AuthPage: Component = () => {
       <form onSubmit={handleLogin} class="space-y-4">
         <Input
           value={serverUrl()}
-          onChange={setServerUrlSignal}
+          onChange={setServerUrl}
           placeholder="Server URL"
           icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
@@ -128,7 +111,7 @@ const AuthPage: Component = () => {
       <form onSubmit={handleRegister} class="space-y-4">
         <Input
           value={serverUrl()}
-          onChange={setServerUrlSignal}
+          onChange={setServerUrl}
           placeholder="Server URL"
           icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
@@ -193,4 +176,4 @@ const AuthPage: Component = () => {
   );
 };
 
-export default AuthPage;
+export default LoginPage;

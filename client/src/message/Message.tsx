@@ -5,9 +5,8 @@ import { Edit2Icon, ReplyIcon, Trash2Icon } from "lucide-solid";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import type { Message } from "../model";
 import { useToaster } from "../components/Toaster";
-import { messageDomain, userDomain } from "../store";
+import { useAuth, useMessage, useUser } from "../store/index";
 import Button from "../components/Button";
-import { fetchApi } from "../utils";
 import { formatLinks, formatMessageText, extractYoutubeIds } from "../utils/messageFormatting";
 
 interface MessageProps {
@@ -19,8 +18,12 @@ const MessageComponent: Component<MessageProps> = (props) => {
   const [isEditing, setIsEditing] = createSignal(false);
   const [editedContent, setEditedContent] = createSignal(props.message.messageText || "");
   const { addToast } = useToaster();
+  const [, authActions] = useAuth();
+  const [, messageActions] = useMessage();
+  const [, userActions] = useUser();
+  const currentUser = () => authActions.getUser();
 
-  const isOwner = createMemo(() => userDomain.getCurrent().userId === props.message.senderId);
+  const isOwner = createMemo(() => currentUser().userId === props.message.senderId);
   const youtubeIds = createMemo(() => extractYoutubeIds(props.message.messageText));
 
   const handleSaveEdit = async () => {
@@ -35,13 +38,10 @@ const MessageComponent: Component<MessageProps> = (props) => {
       return;
     }
 
-    const result = await fetchApi(`/message/${props.message.id}`, {
-      method: "PUT",
-      body: { message_text: trimmed },
-    });
+    const result = await messageActions.updateMessage(props.message.id, trimmed);
 
     if (result.isErr()) {
-      addToast(`Error: ${result.error.reason}`, "error");
+      addToast(`Error: ${result.error}`, "error");
     }
   };
 
@@ -53,15 +53,15 @@ const MessageComponent: Component<MessageProps> = (props) => {
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this message?")) return;
 
-    const result = await fetchApi(`/message/${props.message.id}`, { method: "DELETE" });
+    const result = await messageActions.delete(props.message.id);
 
     if (result.isErr()) {
-      addToast(`Error: ${result.error.reason}`, "error");
+      addToast(`Error: ${result.error}`, "error");
     }
   };
 
   return (
-    <Show when={userDomain.findById(props.message.senderId)}>
+    <Show when={userActions.findById(props.message.senderId)}>
       {(user) => (
         <div class={`flex p-2 ${isOwner() ? "justify-end" : "justify-start"}`}>
           <div class={`flex flex-col group max-w-[70%] ${isOwner() ? "items-end" : "items-start"}`}>
@@ -141,9 +141,9 @@ const MessageComponent: Component<MessageProps> = (props) => {
                     </div>
                   </Show>
 
-                  <Show when={messageDomain.getAttachments(props.message.id).length > 0}>
+                  <Show when={messageActions.getAttachments(props.message.id).length > 0}>
                     <div class="flex flex-col gap-2 mt-2">
-                      <For each={messageDomain.getAttachments(props.message.id)}>
+                      <For each={messageActions.getAttachments(props.message.id)}>
                         {(file) => <FileItem file={file} />}
                       </For>
                     </div>

@@ -4,14 +4,14 @@ import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw, Upload } fro
 import { useToaster } from '../components/Toaster'
 import Button from '../components/Button'
 import { Tabs } from '../components/Tabs'
-import { modalDomain, roleDomain, userDomain, serverDomain } from '../store'
+import { useAuth, useModal, useRole, useServer, useUser } from '../store/index'
 import { Input } from '../components/Input'
 import Select from '../components/Select'
 import Checkbox from '../components/CheckBox'
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../components/Table'
 import { fetchApi } from '../utils'
 import { match } from 'opencord-utils'
-import type { User, ServerConfig } from '../model'
+import type { User } from '../model'
 
 
 interface Invite {
@@ -30,6 +30,12 @@ interface LogEntry {
 }
 
 const ServerSettingsModal: Component = () => {
+  const [, authActions] = useAuth()
+  const [, modalActions] = useModal()
+  const [, roleActions] = useRole()
+  const [, serverActions] = useServer()
+  const [, userActions] = useUser()
+  const currentUser = () => authActions.getUser()
   const [isRegistrationOpen, setIsRegistrationOpen] = createSignal(true)
   const [searchTerm, setSearchTerm] = createSignal('')
   let avatarInputRef: HTMLInputElement | undefined;
@@ -52,31 +58,27 @@ const ServerSettingsModal: Component = () => {
 
 
   const filteredUsers = createMemo(() =>
-    userDomain.list().filter((user: User) =>
+    userActions.list().filter((user: User) =>
       user.username.toLowerCase().includes(searchTerm().toLowerCase())
     )
   )
 
 
   const isAdmin = () => {
-    const user = userDomain.getCurrent();
-    return user && user.roleId <= 1;
+    return currentUser().roleId <= 1;
   };
 
-  const serverConfig = () => serverDomain.get();
+  const serverConfig = () => serverActions.get();
 
   const saveServerName = async (name: string) => {
     if (!isAdmin()) return;
     const currentConfig = serverConfig();
     if (!currentConfig || name === currentConfig.serverName) return;
 
-    const result = await fetchApi<ServerConfig>('/server/name', {
-      method: 'PUT',
-      body: { serverName: name },
-    });
+    const result = await serverActions.updateName(name);
 
     if (result.isErr()) {
-      addToast(result.error.reason, 'error');
+      addToast(result.error, 'error');
     }
   };
 
@@ -90,17 +92,10 @@ const ServerSettingsModal: Component = () => {
     reader.onloadend = async () => {
       const base64data = (reader.result as string).split(',')[1];
 
-      const result = await fetchApi<ServerConfig>('/server/avatar', {
-        method: 'PUT',
-        body: {
-          fileName: file.name,
-          contentType: file.type,
-          data: base64data,
-        },
-      });
+      const result = await serverActions.updateAvatar(file.name, file.type, base64data);
 
       if (result.isErr()) {
-        addToast(result.error.reason, 'error');
+        addToast(result.error, 'error');
       }
     };
     reader.readAsDataURL(file);
@@ -360,17 +355,12 @@ const ServerSettingsModal: Component = () => {
                         <Select
                           value={user.roleId}
                           onChange={async (roleId) => {
-                            const result = await fetchApi(`/user/${user.userId}/role`, {
-                              method: "PUT",
-                              body: {
-                                roleId: roleId,
-                              }
-                            });
-                            if (result.error) {
-                              addToast(result.error.reason, "error")
+                            const result = await userActions.updateRole(user.userId, roleId as number);
+                            if (result.isErr()) {
+                              addToast(result.error, "error")
                             }
                           }}
-                          options={roleDomain.list().map((role) => ({
+                          options={roleActions.list().map((role) => ({
                             value: role.roleId,
                             label: role.roleName,
                           }))}
@@ -464,7 +454,7 @@ const ServerSettingsModal: Component = () => {
                   <Select
                     value={newInviteRoleId()}
                     onChange={setNewInviteRoleId}
-                    options={roleDomain.list().filter((role) => role.roleId != 0).map((role) => ({
+                    options={roleActions.list().filter((role) => role.roleId != 0).map((role) => ({
                       value: role.roleId.toString(),
                       label: role.roleName,
                     }))}
@@ -538,7 +528,7 @@ const ServerSettingsModal: Component = () => {
                           </TableCell>
                           <TableCell class="text-center">
                             <span class="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
-                              {roleDomain.findById(invite.roleId)?.roleName || 'Unknown'}
+                              {roleActions.findById(invite.roleId)?.roleName || 'Unknown'}
                             </span>
                           </TableCell>
                           <TableCell class="text-center">
@@ -689,7 +679,7 @@ const ServerSettingsModal: Component = () => {
       <div class="bg-popover text-primary-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Server Settings</h2>
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>

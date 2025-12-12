@@ -21,24 +21,33 @@ import {
   Calendar,
   Settings,
 } from "lucide-solid";
-import { microphone, modalDomain, outputManager, userDomain, camera, screenShare, voipDomain, connection } from "../store";
+import { connection } from "../store";
+import { useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice } from "../store/index";
+import { useApp } from "../store/app";
 import { Input } from "../components/Input";
 import Button from "../components/Button";
 import Select from "../components/Select";
 import Slider from "../components/Slider";
 import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
-import { fetchApi } from "../utils";
-import { clearSession, loadSession } from "../contexts/Session";
+import { loadSession } from "../contexts/Session";
 import { UserStatusType, type Session } from "../model";
 import { useToaster } from "../components/Toaster";
-import type { AudioOutputDevice } from "../contexts/OutputProvider";
 
 const UserSettingsModal: Component = () => {
-  const user = userDomain.getCurrent();
+  const [, authActions] = useAuth();
+  const [, appActions] = useApp();
+  const [, modalActions] = useModal();
+  const [, playbackActions] = usePlayback();
+  const [, userActions] = useUser();
+  const [microphoneState, microphoneActions] = useMicrophone();
+  const [cameraState, cameraActions] = useCamera();
+  const [screenShareState, screenShareActions] = useScreenShare();
+  const [outputState, outputActions] = useOutput();
+  const user = () => authActions.getUser();
 
 
-  const [username, setUsername] = createSignal(user.username);
+  const [username, setUsername] = createSignal(user().username);
   const [avatarFile, setAvatarFile] = createSignal<File | null>(null);
   const [_avatarPreview, setAvatarPreview] = createSignal<string | null>(null);
   let fileInputRef: HTMLInputElement | undefined;
@@ -67,40 +76,32 @@ const UserSettingsModal: Component = () => {
   };
 
   const handleStatusChange = async (newStatus: UserStatusType) => {
-    const result = await fetchApi(`/user/${user.userId}/manual-status`, {
-      method: 'PUT',
-      body: { manualStatus: newStatus }
-    });
+    const result = await userActions.updateStatus(user().userId, newStatus);
     if (result.isErr()) {
-      addToast(result.error.reason, "error");
+      addToast(result.error, "error");
     }
   };
 
   onMount(async () => {
-    await voipDomain.resume()
+    await playbackActions.resume()
     loadSessions();
   });
 
   const loadSessions = async () => {
-    const result = await fetchApi<Session[]>("/auth/sessions", {
-      method: "GET",
-    });
+    const result = await authActions.getSessions();
 
     if (result.isErr()) {
-      addToast(result.error.reason, "error");
+      addToast(result.error, "error");
       return
     }
     setSessions(result.value);
   };
 
   const terminateSession = async (sessionToken: string) => {
-    const result = await fetchApi("/auth/logout", {
-      method: "POST",
-      body: { session_token: sessionToken },
-    });
+    const result = await authActions.terminateSession(sessionToken);
 
     if (result.isErr()) {
-      addToast(result.error.reason, "error");
+      addToast(result.error, "error");
       return;
     }
 
@@ -157,17 +158,10 @@ const UserSettingsModal: Component = () => {
       reader.onloadend = async () => {
         const base64data = (reader.result as string).split(',')[1];
 
-        const result = await fetchApi('/user/avatar', {
-          method: 'PUT',
-          body: {
-            fileName: file.name,
-            contentType: file.type,
-            data: base64data
-          }
-        });
+        const result = await userActions.updateAvatar(file.name, file.type, base64data);
 
         if (result.isErr()) {
-          addToast(result.error.reason, "error");
+          addToast(result.error, "error");
         }
       };
       reader.readAsDataURL(file);
@@ -204,7 +198,7 @@ const UserSettingsModal: Component = () => {
                     value: option.value,
                     label: option.label
                   }))}
-                  value={userDomain.getCurrent().status}
+                  value={user().status}
                   onChange={(value) => handleStatusChange(value as UserStatusType)}
                   class="w-full"
                 />
@@ -212,7 +206,7 @@ const UserSettingsModal: Component = () => {
               <div class="flex items-center space-x-2 text-sm">
                 <Circle
                   size={12}
-                  class={`${getStatusColor(userDomain.getCurrent().status)} fill-current`}
+                  class={`${getStatusColor(user().status)} fill-current`}
                 />
                 <span class="text-secondary-text">
                   Your status is visible to other users
@@ -230,7 +224,7 @@ const UserSettingsModal: Component = () => {
             <div class="flex flex-col items-center space-y-3">
               <div class="relative w-24 h-24">
                 <img
-                  src={`/user/${userDomain.getCurrent().avatarFileId}/avatar`}
+                  src={`/user/${user().avatarFileId}/avatar`}
                   alt="Avatar"
                   class="w-24 h-24 rounded-full object-cover"
                 />
@@ -294,13 +288,13 @@ const UserSettingsModal: Component = () => {
                   Input Device
                 </label>
                 <Select
-                  options={microphone.listDevices().map((device: MediaDeviceInfo) => ({
+                  options={microphoneActions.listDevices().map((device: MediaDeviceInfo) => ({
                     value: device.deviceId,
                     label: device.label,
                   }))}
-                  value={microphone.getDevice()}
+                  value={microphoneActions.getDevice()}
                   onChange={(device) => {
-                    microphone.setDevice(device as string)
+                    microphoneActions.setDevice(device as string)
                   }}
                   class="w-full"
                 />
@@ -312,8 +306,8 @@ const UserSettingsModal: Component = () => {
                 <Slider
                   min={0}
                   max={200}
-                  value={microphone.getVolume()}
-                  onChange={(e) => microphone.setVolume(e)}
+                  value={microphoneActions.getVolume()}
+                  onChange={(e) => microphoneActions.setVolume(e)}
                   class="w-full"
                 />
               </div>
@@ -333,17 +327,17 @@ const UserSettingsModal: Component = () => {
                   Output Device
                 </label>
                 <Select
-                  options={outputManager.getAvailableOutputs().map(
+                  options={outputActions.getAvailableOutputs().map(
                     (device: AudioOutputDevice) => ({
                       value: device.deviceId,
                       label: device.label,
                     })
                   )}
-                  value={outputManager.getSelectedOutput()?.deviceId || ""}
+                  value={outputActions.getSelectedOutput()?.deviceId || ""}
                   onChange={(deviceId) => {
-                    const device = outputManager.getAvailableOutputs().find(d => d.deviceId === deviceId);
+                    const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
                     if (device) {
-                      outputManager.setOutput(device);
+                      outputActions.setOutput(device);
                     }
                   }}
                   class="w-full"
@@ -427,14 +421,14 @@ const UserSettingsModal: Component = () => {
             <div class="space-y-6">
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
-                  Camera Quality: {camera.getQuality()} bps
+                  Camera Quality: {cameraActions.getQuality()} bps
                 </label>
                 <Slider
-                  value={camera.getQuality()}
+                  value={cameraActions.getQuality()}
                   min={500000}
                   max={8000000}
                   onChange={(value) => {
-                    camera.setQuality(value);
+                    cameraActions.setQuality(value);
                   }}
                 />
                 <p class="text-xs text-secondary-text mt-1">
@@ -444,14 +438,14 @@ const UserSettingsModal: Component = () => {
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
-                  Screen Share Quality: {screenShare.getQuality()} bps
+                  Screen Share Quality: {screenShareActions.getQuality()} bps
                 </label>
                 <Slider
-                  value={screenShare.getQuality()}
+                  value={screenShareActions.getQuality()}
                   min={500000}
                   max={8000000}
                   onChange={(value) => {
-                    screenShare.setQuality(value);
+                    screenShareActions.setQuality(value);
                   }}
                 />
                 <p class="text-xs text-secondary-text mt-1">
@@ -461,14 +455,14 @@ const UserSettingsModal: Component = () => {
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
-                  Audio Quality: {microphone.getQuality()} bps
+                  Audio Quality: {microphoneActions.getQuality()} bps
                 </label>
                 <Slider
-                  value={microphone.getQuality()}
+                  value={microphoneActions.getQuality()}
                   min={64000}
                   max={320000}
                   onChange={(value) => {
-                    microphone.setQuality(value);
+                    microphoneActions.setQuality(value);
                   }}
                 />
                 <p class="text-xs text-secondary-text mt-1">
@@ -585,28 +579,21 @@ const UserSettingsModal: Component = () => {
       <div class="bg-popover rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">User Settings</h2>
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
         <Tabs items={tabItems()} />
         <div class="mt-6 flex justify-end space-x-2">
           <Button onClick={async () => {
-            await microphone.stop()
-            let session = loadSession()
-            if (session.isOk()) {
-              await fetchApi("/auth/logout", {
-                method: "POST",
-                body: { session_token: session.value.sessionToken },
-              });
-              clearSession()
-            }
-            await connection.disconnect()
-            userDomain.setAppState({ type: "unauthenticated" })
-
+            await microphoneActions.stop();
+            await authActions.logout();
+            await connection.disconnect();
+            modalActions.close();
+            appActions.setView("unauthenticated");
           }}
             variant="destructive">Logout</Button>
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
+          <Button onClick={() => modalActions.close()} variant="secondary">
             Close
           </Button>
         </div>

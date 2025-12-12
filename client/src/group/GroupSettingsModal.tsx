@@ -3,13 +3,12 @@ import { createSignal, createMemo, For } from 'solid-js'
 import { Hash, Volume2, X } from 'lucide-solid'
 import { RIGHTS, type Group } from '../model'
 import { useToaster } from '../components/Toaster'
-import { aclDomain, groupDomain, modalDomain, roleDomain, userDomain } from '../store'
+import { useAuth, useAcl, useGroup, useModal, useRole } from '../store/index'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/Table'
 import Checkbox from '../components/CheckBox'
 import { Tabs } from '../components/Tabs'
 import { Input } from '../components/Input'
 import Button from '../components/Button'
-import { fetchApi } from '../utils'
 
 interface GroupSettingsProps {
   group: Group
@@ -17,18 +16,23 @@ interface GroupSettingsProps {
 
 const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const { addToast } = useToaster()
-  const user = userDomain.getCurrent()
+  const [, authActions] = useAuth()
+  const [, aclActions] = useAcl()
+  const [, groupActions] = useGroup()
+  const [, modalActions] = useModal()
+  const [, roleActions] = useRole()
+  const user = () => authActions.getUser()
 
   const [name, setName] = createSignal(props.group.groupName)
   const [isDeleting, setIsDeleting] = createSignal(false)
 
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
-      roleDomain.list()
+      roleActions.list()
         .filter((role) => role.roleId > 1)
         .map((role) => [
           role.roleId,
-          aclDomain.getGroupRights(props.group.groupId, role.roleId) ?? 0,
+          aclActions.getGroupRights(props.group.groupId, role.roleId) ?? 0,
         ])
     )
   )
@@ -41,7 +45,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
         <div class="flex flex-col h-96 mt-6">
           <div class="flex-grow overflow-y-auto mb-4 pr-2 custom-scrollbar">
             <ul class="space-y-2">
-              <For each={groupDomain.getChannels(props.group.groupId)}>
+              <For each={groupActions.getChannels(props.group.groupId)}>
                 {(channel) => (
                   <li class="flex items-center justify-between bg-card p-2 rounded">
                     <div class="flex items-center">
@@ -81,7 +85,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
+                <For each={roleActions.list().filter((role) => role.roleId > 1)}>
                   {(role) => (
                     <TableRow>
                       <TableCell>{role.roleName}</TableCell>
@@ -95,12 +99,12 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
                               }
                               disabled={
 
-                                roleRights()[user.roleId] < 16 ||
+                                roleRights()[user().roleId] < 16 ||
 
-                                (user.roleId > 1 &&
-                                  (roleRights()[user.roleId] <=
+                                (user().roleId > 1 &&
+                                  (roleRights()[user().roleId] <=
                                     roleRights()[role.roleId] ||
-                                    roleRights()[user.roleId] <=
+                                    roleRights()[user().roleId] <=
                                     (right as number)))
                               }
                               onChange={(checked) => {
@@ -138,20 +142,17 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       })
     )
 
-    if (groupRightsPayload.length > 0) {
-      const aclResult = await fetchApi<void>('/acl/group-role-rights', {
-        method: 'PUT',
-        body: groupRightsPayload
-      })
+    for (const payload of groupRightsPayload) {
+      const aclResult = await aclActions.grant(payload)
 
       if (aclResult.isErr()) {
-        addToast(`Failed to update group permissions: ${aclResult.error.reason}`, 'error')
+        addToast(`Failed to update group permissions: ${aclResult.error}`, 'error')
         return
       }
     }
 
     addToast('Group settings saved successfully', 'success')
-    modalDomain.open({ type: "close", id: 0 })
+    modalActions.close()
   }
 
   const handleDelete = async () => {
@@ -159,17 +160,15 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       return
     }
 
-    const result = await fetchApi<void>(`/group/${props.group.groupId}`, {
-      method: 'DELETE'
-    })
+    const result = await groupActions.delete(props.group.groupId)
 
     if (result.isErr()) {
-      addToast(`Failed to delete group: ${result.error.reason}`, 'error')
+      addToast(`Failed to delete group: ${result.error}`, 'error')
       setIsDeleting(false)
       return
     }
 
-    modalDomain.open({ type: "close", id: 0 })
+    modalActions.close()
   }
 
   return (
@@ -177,7 +176,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-2xl font-bold">Group Settings</h2>
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -197,7 +196,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
             {isDeleting() ? "Deleting..." : "Delete Group"}
           </Button>
           <div class="flex space-x-2">
-            <Button variant="secondary" onClick={() => modalDomain.open({ type: "close", id: 0 })}>
+            <Button variant="secondary" onClick={() => modalActions.close()}>
               Cancel
             </Button>
             <Button onClick={handleSave}>Save Changes</Button>

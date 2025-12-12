@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { For, Show } from "solid-js";
 import { Plus } from "lucide-solid";
-import { modalDomain, roleDomain, userDomain } from "../store";
+import { useModal, useRole, useAuth } from "../store/index";
 import type { Role } from "../model";
 import Button from "../components/Button";
 import RoleSection from "../role/RoleSection";
@@ -11,16 +11,18 @@ interface RightPanelProps {
 }
 
 const RightPanel: Component<RightPanelProps> = (props) => {
+  const [, modalActions] = useModal();
+  const [, roleActions] = useRole();
+  const [, authActions] = useAuth();
+  const user = () => authActions.getUser();
 
   const handleCreateRole = () => {
-    modalDomain.open({ type: "createRole", id: 0 })
+    modalActions.open({ type: "createRole" })
   };
 
   const handleRoleClick = (role: Role) => {
-
     if (role.roleId === 0 || role.roleId === 1) return;
-
-    modalDomain.open({ type: "roleSettings", id: role.roleId })
+    modalActions.open({ type: "roleSettings", roleId: role.roleId })
   };
 
   return (
@@ -28,7 +30,7 @@ const RightPanel: Component<RightPanelProps> = (props) => {
       {}
       <div class="h-12 px-4 flex items-center justify-between border-b border-border shadow-sm shrink-0">
         <h2 class="text-foreground font-semibold text-sm uppercase">Roles</h2>
-        <Show when={userDomain.getCurrent().roleId == 0}>
+        <Show when={user().roleId == 0}>
           <Button
             onClick={handleCreateRole}
             variant="ghost"
@@ -44,7 +46,7 @@ const RightPanel: Component<RightPanelProps> = (props) => {
       {}
       <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         <div class="p-2 space-y-1">
-          <For each={roleDomain.list()}>
+          <For each={roleActions.list()}>
             {(role) => (
               <RoleSection role={role} onClick={() => handleRoleClick(role)} />
             )}

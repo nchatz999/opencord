@@ -4,45 +4,45 @@ import { Hash, Volume2 } from "lucide-solid";
 
 import { VoipChannelMember } from "./VoipChannelMember";
 import { ChannelType, type Channel } from "../model";
-import { messageDomain, microphone, modalDomain, voipDomain } from "../store";
-import { fetchApi } from "../utils";
+import { useContext, useModal, useVoip, usePlayback, useMicrophone } from "../store/index";
 import { useToaster } from "../components/Toaster";
 
 export const ChannelEntry: Component<{
   channel: Channel;
 }> = (props) => {
+  const [, contextActions] = useContext();
+  const [, modalActions] = useModal();
+  const [, voipActions] = useVoip();
+  const [, playbackActions] = usePlayback();
+  const [, microphoneActions] = useMicrophone();
 
   const { addToast } = useToaster();
 
   const handleChannelClick = async (channel: Channel) => {
-
     if (channel.channelType === ChannelType.Text) {
-      messageDomain.setContext({ type: "channel", id: channel.channelId })
+      contextActions.set({ type: "channel", id: channel.channelId });
     }
 
     if (channel.channelType === ChannelType.VoIP) {
-
-      await microphone.start()
-      await voipDomain.resume()
-      const result = await fetchApi(
-        `/voip/channel/${channel.channelId}/join/${microphone.getMuted()}/false`,
-        {
-          method: "POST",
-        }
-      )
+      await microphoneActions.start();
+      await playbackActions.resume();
+      const result = await voipActions.joinChannel(
+        channel.channelId,
+        microphoneActions.getMuted(),
+        false
+      );
       if (result.isErr()) {
-        addToast(`Failed to join channel: ${result.error.reason}`, "error");
-        return
+        addToast(`Failed to join channel: ${result.error}`, "error");
+        return;
       }
     }
   };
 
-
-  const joinedUsers = () => voipDomain.findByChannel(props.channel.channelId);
+  const joinedUsers = () => voipActions.findByChannel(props.channel.channelId);
 
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
-    modalDomain.open({ type: "channelSettings", id: props.channel.channelId })
+    modalActions.open({ type: "channelSettings", channelId: props.channel.channelId });
   };
 
   return (

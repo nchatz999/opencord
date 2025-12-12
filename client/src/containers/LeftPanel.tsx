@@ -1,14 +1,19 @@
 import type { Component } from "solid-js";
 import { createMemo, Show } from "solid-js";
 import { Hash, Settings, UsersIcon } from "lucide-solid";
-import { groupDomain, modalDomain, userDomain, serverDomain } from "../store";
+import { useGroup, useModal, useUser, useServer } from "../store/index";
 import { ChannelBrowser } from "../channel/ChannelBrowser";
 import { UserBrowser } from "../user/UserBrowser";
 import { Tabs } from "../components/Tabs";
 import UserPanel from "../user/UserPanel";
 
 const LeftPanel: Component = () => {
-  const serverConfig = () => serverDomain.get();
+  const [, groupActions] = useGroup();
+  const [, modalActions] = useModal();
+  const [, userActions] = useUser();
+  const [, serverActions] = useServer();
+
+  const serverConfig = () => serverActions.get();
 
   const tabItems = createMemo(() => [
     {
@@ -18,7 +23,7 @@ const LeftPanel: Component = () => {
       content: (
         <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
           <ChannelBrowser
-            groups={groupDomain.list()}
+            groups={groupActions.list()}
           />
         </div>
       ),
@@ -29,7 +34,7 @@ const LeftPanel: Component = () => {
       icon: <UsersIcon size={16} />,
       content: (
         <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-          <UserBrowser users={userDomain.list()} />
+          <UserBrowser users={userActions.list()} />
         </div>
       ),
     },
@@ -73,7 +78,7 @@ const LeftPanel: Component = () => {
           </Show>
         </div>
         <button
-          onClick={() => modalDomain.open({ type: "serverSettings", id: 0 })}
+          onClick={() => modalActions.open({ type: "serverSettings" })}
           class="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-all"
           title="Server Settings"
         >

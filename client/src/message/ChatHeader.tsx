@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { Show } from "solid-js";
 import { Hash } from "lucide-solid";
-import { channelDomain, groupDomain, userDomain } from "../store";
+import { useChannel, useGroup, useUser } from "../store/index";
 
 
 const ChatHeader: Component<{
@@ -10,12 +10,14 @@ const ChatHeader: Component<{
     id: number;
   };
 }> = (props) => {
-
+  const [, channelActions] = useChannel();
+  const [, groupActions] = useGroup();
+  const [, userActions] = useUser();
 
   return (
     <div>
       <Show when={props.context.type == "dm"}>
-        <Show when={userDomain.findById(props.context.id)}>
+        <Show when={userActions.findById(props.context.id)}>
           {(user) => (
             <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background shrink-0">
               {}
@@ -28,7 +30,7 @@ const ChatHeader: Component<{
                     class="w-10 h-10 rounded-full object-cover border-2 border-background"
                   />
                   <div
-                    class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${userDomain.getUserColorStatusById(user().userId)}`}
+                    class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${userActions.getUserColorStatusById(user().userId)}`}
                   />
                 </div>
 
@@ -70,7 +72,7 @@ const ChatHeader: Component<{
         </Show >
       </Show>
       <Show when={props.context.type == "channel"}>
-        <Show when={channelDomain.findById(props.context.id)}>
+        <Show when={channelActions.findById(props.context.id)}>
           {(channel) => (
             <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background">
               {}
@@ -84,7 +86,7 @@ const ChatHeader: Component<{
                   <h2 class="text-foreground font-semibold truncate">
                     {channel().channelName}
                   </h2>
-                  <Show when={groupDomain.findById(channel().groupId)}>
+                  <Show when={groupActions.findById(channel().groupId)}>
                     {(group) => (
                       <span class="text-xs text-muted-foreground bg-sidebar px-2 py-0.5 rounded">
                         {group().groupName}

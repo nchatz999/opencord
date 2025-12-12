@@ -1,29 +1,34 @@
 import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { MicOff, Headphones, Video, Monitor } from 'lucide-solid'
-import { userDomain, voipDomain } from '../store'
+import { useAuth, useUser, useVoip } from '../store/index'
 
 const PrivateCallStatusPanel: Component = () => {
+  const [, authActions] = useAuth()
+  const [, userActions] = useUser()
+  const [, voipActions] = useVoip()
+  const currentUser = () => authActions.getUser()
+
   const privateCallInfo = () => {
-    const isInPrivateCall = voipDomain.getCurrent();
+    const user = currentUser();
+    const isInPrivateCall = voipActions.findById(user.userId);
     if (!isInPrivateCall) return null
     if (!isInPrivateCall.recipientId) return null
 
-    const currentUser = userDomain.getCurrent();
-    const currentUserVoip = voipDomain.findById(currentUser.userId);
-    const otherUser = userDomain.findById(isInPrivateCall.recipientId)
+    const currentUserVoip = voipActions.findById(user.userId);
+    const otherUser = userActions.findById(isInPrivateCall.recipientId)
     if (!otherUser) return null
-    const otherUserVoip = voipDomain.findById(otherUser.userId)
+    const otherUserVoip = voipActions.findById(otherUser.userId)
 
     return {
-      currentUser,
+      currentUser: user,
       currentUserVoip,
       otherUser,
       otherUserVoip,
       currentUserConnected: true,
       otherUserConnected: otherUserVoip
         && otherUserVoip.recipientId
-        && otherUserVoip.recipientId == currentUser.userId
+        && otherUserVoip.recipientId == user.userId
     }
   }
 

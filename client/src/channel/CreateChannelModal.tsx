@@ -3,14 +3,13 @@ import { createSignal, createMemo, For, createEffect } from 'solid-js'
 import { Hash, Volume2, X } from 'lucide-solid'
 import { useToaster } from '../components/Toaster'
 import { ChannelType, RIGHTS } from '../model'
-import { aclDomain, groupDomain, modalDomain, roleDomain } from '../store'
+import { useAcl, useGroup, useModal, useRole, useChannel } from '../store/index'
 import Select from '../components/Select'
 import { Input } from '../components/Input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/Table'
 import Checkbox from '../components/CheckBox'
 import Button from '../components/Button'
 import { Tabs } from '../components/Tabs'
-import { fetchApi } from '../utils'
 
 
 
@@ -18,6 +17,11 @@ import { fetchApi } from '../utils'
 
 const CreateChannelModal: Component = () => {
   const { addToast } = useToaster()
+  const [, aclActions] = useAcl()
+  const [, groupActions] = useGroup()
+  const [, modalActions] = useModal()
+  const [, roleActions] = useRole()
+  const [, channelActions] = useChannel()
 
   const [isCreating, setIsCreating] = createSignal(false)
   const [name, setName] = createSignal('')
@@ -28,10 +32,10 @@ const CreateChannelModal: Component = () => {
 
   createEffect(() => {
     setRoleRights(Object.fromEntries(
-      roleDomain.list()
+      roleActions.list()
         .filter((role) => role.roleId > 1)
         .map((role) => [role.roleId,
-        aclDomain.getGroupRights(group(), role.roleId) || 0,
+        aclActions.getGroupRights(group(), role.roleId) || 0,
         ])
     ))
   })
@@ -66,7 +70,7 @@ const CreateChannelModal: Component = () => {
             <h3 class="text-lg font-semibold">Role Permissions</h3>
           </div>
           <Select
-            options={groupDomain.list().map((group) => ({ value: group.groupId, label: group.groupName }))}
+            options={groupActions.list().map((group) => ({ value: group.groupId, label: group.groupName }))}
             value={group()}
             onChange={(value) => setGroup(value as number)}
           />
@@ -81,7 +85,7 @@ const CreateChannelModal: Component = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              <For each={roleDomain.list().filter((role) => role.roleId > 1)}>
+              <For each={roleActions.list().filter((role) => role.roleId > 1)}>
                 {(role) => (
                   <TableRow>
                     <TableCell>{role.roleName}</TableCell>
@@ -117,24 +121,14 @@ const CreateChannelModal: Component = () => {
       return
     }
 
-    const createResult = await fetchApi('/channel', {
-      method: 'POST',
-      body: {
-        name: name().trim(),
-        groupId: group(),
-        type: type(),
-      },
-    })
+    const createResult = await channelActions.create(group(), name().trim(), type())
 
     if (createResult.isErr()) {
-      addToast(
-        `Failed to create channel: ${createResult.error.reason}`,
-        'error'
-      )
+      addToast(`Failed to create channel: ${createResult.error}`, 'error')
       return
     }
 
-    modalDomain.open({ type: "close", id: 0 })
+    modalActions.close()
   }
 
   return (
@@ -149,7 +143,7 @@ const CreateChannelModal: Component = () => {
             )}
             Create New Channel
           </h2>
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="ghost" size="sm">
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
@@ -157,7 +151,7 @@ const CreateChannelModal: Component = () => {
         <Tabs items={tabItems()} />
 
         <div class="mt-6 flex justify-end space-x-2">
-          <Button onClick={() => modalDomain.open({ type: "close", id: 0 })} variant="secondary">
+          <Button onClick={() => modalActions.close()} variant="secondary">
             Cancel
           </Button>
           <Button
