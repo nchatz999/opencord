@@ -169,7 +169,7 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                 acl.rights,
             )?;
 
-            let new_right = tx
+            let previous_rights = tx
                 .set_group_role_rights(acl.group_id, acl.role_id, acl.rights)
                 .await
                 .map_err(|e| match e {
@@ -201,7 +201,8 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                 ))
                 .await;
 
-            if new_right > 0 && acl.rights == 0 {
+            // Role lost access to group
+            if previous_rights > 0 && acl.rights == 0 {
                 tx.delete_voip_participants_by_role(acl.role_id, acl.group_id)
                     .await?;
                 tx.delete_messages_by_role(acl.role_id, acl.group_id)
@@ -221,31 +222,65 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                     .await;
             }
 
-            if new_right == 0 && acl.rights > 0 {
+            // Role gained access to group - send individual events
+            if previous_rights == 0 && acl.rights > 0 {
                 let group = tx.find_group(acl.group_id).await?;
                 let channels = tx.find_channels_by_group(acl.group_id).await?;
                 let voip_participants = tx.find_voip_participants_by_group(acl.group_id).await?;
-
-                let reveal_event = EventPayload::GroupReveal {
-                    group_id: acl.group_id,
-                    group_name: group.group_name,
-                    channels,
-                    voip_participants,
-                    right: GroupRoleRights {
-                        group_id: acl.group_id,
-                        role_id: acl.role_id,
-                        rights: acl.rights,
-                    },
+                let routing = ControlRoutingPolicy::Role {
+                    role_id: acl.role_id,
                 };
+
+                // 1. Send group first
                 let _ = self
                     .notifier
                     .notify(ServerMessage::Control(
-                        reveal_event,
-                        ControlRoutingPolicy::Role {
-                            role_id: acl.role_id,
+                        EventPayload::GroupUpdated {
+                            group: Group {
+                                group_id: acl.group_id,
+                                group_name: group.group_name,
+                            },
                         },
+                        routing.clone(),
                     ))
                     .await;
+
+                // 2. Send ACL right (so client knows permissions before channels arrive)
+                let _ = self
+                    .notifier
+                    .notify(ServerMessage::Control(
+                        EventPayload::GroupRoleRightUpdated {
+                            right: GroupRoleRights {
+                                group_id: acl.group_id,
+                                role_id: acl.role_id,
+                                rights: acl.rights,
+                            },
+                        },
+                        routing.clone(),
+                    ))
+                    .await;
+
+                // 3. Send each channel
+                for channel in channels {
+                    let _ = self
+                        .notifier
+                        .notify(ServerMessage::Control(
+                            EventPayload::ChannelUpdated { channel },
+                            routing.clone(),
+                        ))
+                        .await;
+                }
+
+                // 4. Send each voip participant
+                for participant in voip_participants {
+                    let _ = self
+                        .notifier
+                        .notify(ServerMessage::Control(
+                            EventPayload::VoipParticipantUpdated { user: participant },
+                            routing.clone(),
+                        ))
+                        .await;
+                }
             }
         }
 

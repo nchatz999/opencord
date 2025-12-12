@@ -98,15 +98,6 @@ pub enum EventPayload {
     #[serde(rename = "messageDeleted")]
     #[serde(rename_all = "camelCase")]
     MessageDeleted { message_id: i64 },
-    #[serde(rename = "groupReveal")]
-    #[serde(rename_all = "camelCase")]
-    GroupReveal {
-        group_id: i64,
-        group_name: String,
-        channels: Vec<Channel>,
-        voip_participants: Vec<VoipParticipant>,
-        right: GroupRoleRights,
-    },
     #[serde(rename = "groupHide")]
     #[serde(rename_all = "camelCase")]
     GroupHide { group_id: i64 },
