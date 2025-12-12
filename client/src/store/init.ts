@@ -1,12 +1,15 @@
-import { useUser } from "./user";
+import {
+  useUser,
+  useRole,
+  useGroup,
+  useChannel,
+  useMessage,
+  useFile,
+  useVoip,
+  useAcl,
+  useSubscription,
+} from "./entities";
 import { useServer } from "./server";
-import { useRole } from "./role";
-import { useGroup } from "./group";
-import { useChannel } from "./channel";
-import { useMessage } from "./message";
-import { useAcl } from "./acl";
-import { useSubscription } from "./subscription";
-import { useVoip } from "./voip";
 import { useMicrophone } from "./microphone";
 import { useCamera } from "./camera";
 import { useScreenShare } from "./screenShare";
@@ -18,6 +21,7 @@ export async function initializeStores() {
   const [, groupActions] = useGroup();
   const [, channelActions] = useChannel();
   const [, messageActions] = useMessage();
+  const [, fileActions] = useFile();
   const [, aclActions] = useAcl();
   const [, subscriptionActions] = useSubscription();
   const [, voipActions] = useVoip();
@@ -38,6 +42,7 @@ export async function initializeStores() {
     groupActions.init(),
     channelActions.init(),
     messageActions.init(),
+    fileActions.init(),
     aclActions.init(),
     subscriptionActions.init(),
     voipActions.init(),
