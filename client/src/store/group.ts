@@ -1,13 +1,11 @@
 import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
-import type { Group, Channel, VoipParticipant, GroupRoleRights } from "../model";
+import type { Group } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { fetchApi } from "../utils";
 import { useConnection } from "./connection";
 import { useChannel } from "./channel";
-import { useVoip } from "./voip";
-import { useAcl } from "./acl";
 
 interface GroupState {
   groups: Group[];
@@ -34,8 +32,6 @@ function createGroupStore(): GroupStore {
 
   const connection = useConnection();
   const [, channelActions] = useChannel();
-  const [, voipActions] = useVoip();
-  const [, aclActions] = useAcl();
 
   const actions: GroupActions = {
     async init() {
@@ -50,28 +46,6 @@ function createGroupStore(): GroupStore {
           actions.update(event.group as Group);
         } else if (event.type === "groupDeleted") {
           actions.remove(event.groupId as number);
-        } else if (event.type === "groupReveal") {
-          const data = event as unknown as {
-            groupId: number;
-            groupName: string;
-            channels: Channel[];
-            voipParticipants: VoipParticipant[];
-            right: GroupRoleRights;
-          };
-
-          if (!actions.findById(data.groupId)) {
-            actions.add({ groupId: data.groupId, groupName: data.groupName });
-          }
-
-          for (const channel of data.channels) {
-            channelActions.add(channel);
-          }
-
-          for (const participant of data.voipParticipants) {
-            voipActions.update(participant);
-          }
-
-          aclActions.updateLocal(data.right);
         } else if (event.type === "groupHide") {
           actions.remove(event.groupId as number);
         }
