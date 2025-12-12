@@ -4,46 +4,61 @@ import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { fetchApi } from "../utils";
 import { useConnection } from "./connection";
+import { dependencyGraph } from "./dependencies";
 
 // ============================================================================
-// Cascade Event System
+// Store Registry (for cascade resolution)
 // ============================================================================
 
-export type CascadeEvent =
-  | { type: "group:removed"; groupId: number }
-  | { type: "channel:removed"; channelId: number }
-  | { type: "voip:removed"; userId: number };
+type StoreRegistry = Map<string, { actions: BaseActions<unknown, KeyConfig<unknown>> }>;
+const storeRegistry: StoreRegistry = new Map();
 
-type CascadeHandler = (event: CascadeEvent) => void;
-
-const cascadeHandlers = new Set<CascadeHandler>();
-
-export function onCascade(handler: CascadeHandler): () => void {
-  cascadeHandlers.add(handler);
-  return () => cascadeHandlers.delete(handler);
+export function registerStore<T, K extends KeyConfig<T>>(
+  name: string,
+  actions: BaseActions<T, K>
+): void {
+  storeRegistry.set(name, { actions: actions as BaseActions<unknown, KeyConfig<unknown>> });
 }
 
-export function emitCascade(event: CascadeEvent): void {
-  cascadeHandlers.forEach((handler) => handler(event));
+function getStore(name: string): BaseActions<unknown, KeyConfig<unknown>> | undefined {
+  return storeRegistry.get(name)?.actions;
+}
+
+// ============================================================================
+// Cascade Resolution
+// ============================================================================
+
+function executeCascade(entityName: string, keyValue: unknown): void {
+  const config = dependencyGraph[entityName];
+  if (!config?.cascadeTo) return;
+
+  for (const dep of config.cascadeTo) {
+    const targetStore = getStore(dep.entity);
+    if (targetStore) {
+      targetStore.removeBy(dep.foreignKey, keyValue);
+    }
+  }
 }
 
 // ============================================================================
 // API Helpers
 // ============================================================================
 
-function unwrapResult<T>(result: Result<T, { reason: string }>): Result<T, string> {
+type ErrorResponse = { reason: string };
+
+function unwrapResult<T>(result: Result<T, ErrorResponse>): Result<T, string> {
   return result.isErr() ? err(result.error.reason) : ok(result.value);
 }
 
 export const api = {
   get: <T>(endpoint: string, query?: Record<string, unknown>): Promise<Result<T, string>> =>
-    fetchApi<T>(endpoint, { method: "GET", query }).then(unwrapResult),
+    fetchApi<T>(endpoint, { method: "GET", query: query as Record<string, string | number | boolean | undefined | null> }).then(unwrapResult),
 
   post: <T = void>(endpoint: string, body?: unknown): Promise<Result<T, string>> =>
-    fetchApi<T>(endpoint, { method: "POST", body }).then(unwrapResult),
+    fetchApi<T>(endpoint, { method: "POST", body: body as Record<string, unknown> }).then(unwrapResult),
 
   put: <T = void>(endpoint: string, body?: unknown): Promise<Result<T, string>> =>
-    fetchApi<T>(endpoint, { method: "PUT", body }).then(unwrapResult),
+    fetchApi<T>(endpoint, { method: "PUT", body: body as Record<string, unknown> }).then(unwrapResult),
 
   del: <T = void>(endpoint: string): Promise<Result<T, string>> =>
     fetchApi<T>(endpoint, { method: "DELETE" }).then(unwrapResult),
@@ -114,9 +129,6 @@ export interface StoreConfig<T, K extends KeyConfig<T>, Custom = {}> {
     custom?: Record<string, (event: unknown, actions: BaseActions<T, K>) => void>;
   };
 
-  emitOnRemove?: (id: KeyType<T, K>) => CascadeEvent;
-  cascadeOn?: Partial<Record<CascadeEvent["type"], (event: CascadeEvent, actions: BaseActions<T, K>) => void>>;
-
   skipInit?: boolean;
 
   custom?: (
@@ -137,6 +149,8 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
   type Actions = BaseActions<T, K> & Custom;
   type Store = [State, Actions];
 
+  const deps = dependencyGraph[config.name];
+
   function create(): Store {
     const [state, setState] = createStore<State>({ items: [] });
     const connection = useConnection();
@@ -145,6 +159,8 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
 
     const baseActions: BaseActions<T, K> = {
       async init() {
+        registerStore(config.name, baseActions);
+
         if (config.skipInit) {
           return ok(undefined);
         }
@@ -153,7 +169,6 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
         if (result.isErr()) return result;
         baseActions.replaceAll(result.value);
 
-        // Subscribe to server events
         connection.onServerEvent((event) => {
           const eventType = event.type as string;
 
@@ -166,7 +181,6 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
             baseActions.remove(id);
           }
 
-          // Custom event handlers
           if (config.events?.custom) {
             const customHandler = config.events.custom[eventType];
             if (customHandler) {
@@ -174,16 +188,6 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
             }
           }
         });
-
-        // Subscribe to cascade events
-        if (config.cascadeOn) {
-          onCascade((event) => {
-            const handler = config.cascadeOn?.[event.type];
-            if (handler) {
-              handler(event, baseActions);
-            }
-          });
-        }
 
         return ok(undefined);
       },
@@ -194,34 +198,55 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
 
       findBy: (field, value) => state.items.filter((item) => item[field] === value),
 
-      replaceAll: (items) => setState("items", items),
+      replaceAll: (items) => {
+        setState("items", items);
+        if (deps?.onAdd) {
+          for (const item of items) {
+            const id = getKeyValue(item, config.key);
+            deps.onAdd(id);
+          }
+        }
+      },
 
-      add: (item) =>
+      add: (item) => {
         setState(
           "items",
           produce((items) => {
             items.push(item);
           })
-        ),
+        );
+        if (deps?.onAdd) {
+          const id = getKeyValue(item, config.key);
+          deps.onAdd(id);
+        }
+      },
 
-      update: (item) =>
+      update: (item) => {
+        const id = getKeyValue(item, config.key);
+        const existingIndex = state.items.findIndex((i) => matchesKey(i, id, config.key));
+        const isNew = existingIndex === -1;
+
         setState(
           "items",
           produce((items) => {
-            const id = getKeyValue(item, config.key);
-            const index = items.findIndex((i) => matchesKey(i, id, config.key));
-            if (index !== -1) {
-              items[index] = item;
+            if (existingIndex !== -1) {
+              items[existingIndex] = item;
             } else {
               items.push(item);
             }
           })
-        ),
+        );
+
+        if (isNew && deps?.onAdd) {
+          deps.onAdd(id);
+        }
+      },
 
       remove: (id) => {
-        // Emit cascade event before removing
-        if (config.emitOnRemove) {
-          emitCascade(config.emitOnRemove(id));
+        executeCascade(config.name, id);
+
+        if (deps?.onRemove) {
+          deps.onRemove(id);
         }
 
         setState(
@@ -250,7 +275,6 @@ export function createEntityStore<T, K extends KeyConfig<T>, Custom = {}>(
     return [state, actions];
   }
 
-  // Singleton instance
   let instance: Store | null = null;
 
   const useStore = (): Store => {

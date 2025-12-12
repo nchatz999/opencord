@@ -23,8 +23,12 @@ export type {
 } from "./entities";
 
 // Factory utilities
-export { api, onCascade, emitCascade, createEntityStore } from "./factory";
-export type { BaseActions, ApiHelpers, CascadeEvent } from "./factory";
+export { api, createEntityStore } from "./factory";
+export type { BaseActions, ApiHelpers } from "./factory";
+
+// Dependency graph
+export { dependencyGraph } from "./dependencies";
+export type { EntityDependency } from "./dependencies";
 
 // Non-entity stores (keep separate)
 export { useServer } from "./server";

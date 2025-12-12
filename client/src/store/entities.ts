@@ -1,11 +1,6 @@
 import type { Result } from "opencord-utils";
-import { ok, err } from "opencord-utils";
-import {
-  createEntityStore,
-  api,
-  type BaseActions,
-  type CascadeEvent,
-} from "./factory";
+import { ok } from "opencord-utils";
+import { createEntityStore, api, type BaseActions } from "./factory";
 import type {
   User,
   Role,
@@ -20,7 +15,6 @@ import type {
   MediaType,
   UserStatusType,
 } from "../model";
-import { usePlayback } from "./playback";
 import { useAuth } from "./auth";
 
 // ============================================================================
@@ -111,8 +105,6 @@ export const useGroup = createEntityStore<Group, "groupId", GroupCustomActions>(
     delete: "groupDeleted",
   },
 
-  emitOnRemove: (groupId) => ({ type: "group:removed", groupId }),
-
   custom: (_getState, _baseActions, api) => ({
     create: async (name) => {
       const result = await api.post<{ groupId: number }>("/group", { name });
@@ -146,16 +138,6 @@ export const useChannel = createEntityStore<Channel, "channelId", ChannelCustomA
   events: {
     update: "channelUpdated",
     delete: "channelDeleted",
-  },
-
-  emitOnRemove: (channelId) => ({ type: "channel:removed", channelId }),
-
-  cascadeOn: {
-    "group:removed": (event, actions) => {
-      if (event.type === "group:removed") {
-        actions.removeBy("groupId", event.groupId);
-      }
-    },
   },
 
   custom: (getState, _baseActions, api) => ({
@@ -259,14 +241,6 @@ export const useMessage = createEntityStore<Message, "id", MessageCustomActions>
           });
         }
       },
-    },
-  },
-
-  cascadeOn: {
-    "channel:removed": (event, actions) => {
-      if (event.type === "channel:removed") {
-        actions.removeBy("channelId", event.channelId);
-      }
     },
   },
 
@@ -432,75 +406,32 @@ export const useVoip = createEntityStore<VoipParticipant, "userId", VoipCustomAc
     delete: "voipParticipantDeleted",
   },
 
-  emitOnRemove: (userId) => ({ type: "voip:removed", userId }),
+  custom: (getState, baseActions, api) => ({
+    findByChannel: (channelId) => getState().filter((p) => p.channelId === channelId),
 
-  cascadeOn: {
-    "channel:removed": (event, actions) => {
-      if (event.type === "channel:removed") {
-        actions.removeBy("channelId", event.channelId);
+    unpublishAll: (userId) => {
+      const participants = getState().filter((p) => p.userId === userId);
+      for (const p of participants) {
+        baseActions.remove(p.userId);
       }
     },
-  },
 
-  custom: (getState, baseActions, api) => {
-    const [, playbackActions] = usePlayback();
+    joinChannel: (channelId, muted, deafened) =>
+      api.post(`/voip/channel/${channelId}/join/${muted}/${deafened}`),
 
-    // Store original methods
-    const originalAdd = baseActions.add;
-    const originalUpdate = baseActions.update;
-    const originalRemove = baseActions.remove;
-    const originalReplaceAll = baseActions.replaceAll;
+    joinPrivate: (userId, muted, deafened) =>
+      api.post(`/voip/private/${userId}/join/${muted}/${deafened}`),
 
-    // Override to handle playback initialization
-    baseActions.add = (participant) => {
-      originalAdd(participant);
-      playbackActions.initializeForUser(participant.userId);
-    };
+    leave: () => api.post("/voip/leave"),
 
-    baseActions.update = (participant) => {
-      originalUpdate(participant);
-      playbackActions.initializeForUser(participant.userId);
-    };
+    setMuted: (muted) => api.put("/voip/mute", { mute: muted }),
 
-    baseActions.remove = (userId) => {
-      originalRemove(userId);
-      playbackActions.cleanupForUser(userId);
-    };
+    setDeafened: (deafened) => api.put("/voip/deafen", { deafen: deafened }),
 
-    baseActions.replaceAll = (participants) => {
-      originalReplaceAll(participants);
-      for (const participant of participants) {
-        playbackActions.initializeForUser(participant.userId);
-      }
-    };
+    publishScreen: (publish) => api.put("/voip/screen/publish", { publish }),
 
-    return {
-      findByChannel: (channelId) => getState().filter((p) => p.channelId === channelId),
-
-      unpublishAll: (userId) => {
-        const participants = getState().filter((p) => p.userId === userId);
-        for (const p of participants) {
-          baseActions.remove(p.userId);
-        }
-      },
-
-      joinChannel: (channelId, muted, deafened) =>
-        api.post(`/voip/channel/${channelId}/join/${muted}/${deafened}`),
-
-      joinPrivate: (userId, muted, deafened) =>
-        api.post(`/voip/private/${userId}/join/${muted}/${deafened}`),
-
-      leave: () => api.post("/voip/leave"),
-
-      setMuted: (muted) => api.put("/voip/mute", { mute: muted }),
-
-      setDeafened: (deafened) => api.put("/voip/deafen", { deafen: deafened }),
-
-      publishScreen: (publish) => api.put("/voip/screen/publish", { publish }),
-
-      publishCamera: (publish) => api.put("/voip/camera/publish", { publish }),
-    };
-  },
+    publishCamera: (publish) => api.put("/voip/camera/publish", { publish }),
+  }),
 });
 
 export type VoipStore = ReturnType<typeof useVoip>;
@@ -527,14 +458,6 @@ export const useAcl = createEntityStore<GroupRoleRights, AclKey, AclCustomAction
 
   events: {
     update: "groupRoleRightUpdated",
-  },
-
-  cascadeOn: {
-    "group:removed": (event, actions) => {
-      if (event.type === "group:removed") {
-        actions.removeBy("groupId", event.groupId);
-      }
-    },
   },
 
   custom: (getState, baseActions, api) => ({
