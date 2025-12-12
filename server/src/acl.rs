@@ -201,20 +201,19 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                 ))
                 .await;
 
-            // Role lost access to group
+            // Role lost access to group - send GroupDeleted to trigger client cascade
             if previous_rights > 0 && acl.rights == 0 {
                 tx.delete_voip_participants_by_role(acl.role_id, acl.group_id)
                     .await?;
                 tx.delete_messages_by_role(acl.role_id, acl.group_id)
                     .await?;
 
-                let hide_event = EventPayload::GroupHide {
-                    group_id: acl.group_id,
-                };
                 let _ = self
                     .notifier
                     .notify(ServerMessage::Control(
-                        hide_event,
+                        EventPayload::GroupDeleted {
+                            group_id: acl.group_id,
+                        },
                         ControlRoutingPolicy::Role {
                             role_id: acl.role_id,
                         },

@@ -1,38 +1,40 @@
-export { useUser } from "./user";
-export type { UserStore } from "./user";
+// Entity stores (using factory pattern)
+export {
+  useUser,
+  useRole,
+  useGroup,
+  useChannel,
+  useMessage,
+  useFile,
+  useVoip,
+  useAcl,
+  useSubscription,
+} from "./entities";
+export type {
+  UserStore,
+  RoleStore,
+  GroupStore,
+  ChannelStore,
+  MessageStore,
+  FileStore,
+  VoipStore,
+  AclStore,
+  SubscriptionStore,
+} from "./entities";
 
+// Factory utilities
+export { api, onCascade, emitCascade, createEntityStore } from "./factory";
+export type { BaseActions, ApiHelpers, CascadeEvent } from "./factory";
+
+// Non-entity stores (keep separate)
 export { useServer } from "./server";
 export type { ServerStore } from "./server";
-
-export { useRole } from "./role";
-export type { RoleStore } from "./role";
-
-export { useGroup } from "./group";
-export type { GroupStore } from "./group";
-
-export { useChannel } from "./channel";
-export type { ChannelStore } from "./channel";
-
-export { useMessage } from "./message";
-export type { MessageStore } from "./message";
 
 export { useContext } from "./context";
 export type { ContextStore } from "./context";
 
-export { useAcl } from "./acl";
-export type { AclStore } from "./acl";
-
-export { useSubscription } from "./subscription";
-export type { SubscriptionStore } from "./subscription";
-
 export { usePlayback, type PlaybackState } from "./playback";
 export type { PlaybackStore } from "./playback";
-
-export { useVoip } from "./voip";
-export type { VoipStore } from "./voip";
-
-export { useFile } from "./file";
-export type { FileStore } from "./file";
 
 export { useModal } from "./modal";
 export type { ModalStore } from "./modal";
@@ -43,6 +45,7 @@ export type { ConnectionStore } from "./connection";
 export { useAuth } from "./auth";
 export type { AuthStore, AuthState, AuthActions } from "./auth";
 
+// Media stores
 export { useMicrophone } from "./microphone";
 export type { MicrophoneStore } from "./microphone";
 
@@ -55,4 +58,5 @@ export type { ScreenShareStore } from "./screenShare";
 export { useOutput } from "./output";
 export type { OutputStore, AudioOutputDevice } from "./output";
 
+// Initialization
 export { initializeStores } from "./init";

@@ -98,9 +98,6 @@ pub enum EventPayload {
     #[serde(rename = "messageDeleted")]
     #[serde(rename_all = "camelCase")]
     MessageDeleted { message_id: i64 },
-    #[serde(rename = "groupHide")]
-    #[serde(rename_all = "camelCase")]
-    GroupHide { group_id: i64 },
 
     #[serde(rename = "mediaSubscription")]
     #[serde(rename_all = "camelCase")]
