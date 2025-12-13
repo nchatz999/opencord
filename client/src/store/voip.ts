@@ -1,11 +1,10 @@
 import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
-import type { VoipParticipant, VoipParticipantWithUser } from "../model";
+import type { VoipParticipant } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { fetchApi } from "../utils";
 import { useConnection } from "./connection";
-import { useUser } from "./user";
 import { usePlayback } from "./playback";
 
 interface VoipState {
@@ -14,9 +13,9 @@ interface VoipState {
 
 interface VoipActions {
   init: () => Promise<Result<void, string>>;
-  list: () => VoipParticipantWithUser[];
-  findByChannel: (channelId: number) => VoipParticipantWithUser[];
-  findById: (userId: number) => VoipParticipantWithUser | undefined;
+  list: () => VoipParticipant[];
+  findByChannel: (channelId: number) => VoipParticipant[];
+  findById: (userId: number) => VoipParticipant | undefined;
   replaceAll: (participants: VoipParticipant[]) => void;
   update: (participant: VoipParticipant) => void;
   remove: (userId: number) => void;
@@ -63,32 +62,15 @@ function createVoipStore(): VoipStore {
     },
 
     list() {
-      const [userState] = useUser();
-      return state.voipState.flatMap((participant) => {
-        const user = userState.users.find((u) => u.userId === participant.userId);
-        return user ? [{ ...participant, user }] : [];
-      });
+      return state.voipState;
     },
 
     findByChannel(channelId) {
-      const [userState] = useUser();
-      return state.voipState
-        .filter((participant) => participant.channelId === channelId)
-        .flatMap((participant) => {
-          const user = userState.users.find((u) => u.userId === participant.userId);
-          return user ? [{ ...participant, user }] : [];
-        });
+      return state.voipState.filter((participant) => participant.channelId === channelId);
     },
 
     findById(userId) {
-      const [userState] = useUser();
-      const user = userState.users.find((u) => u.userId === userId);
-      if (!user) return undefined;
-      const participant = state.voipState.find((p) => p.userId === userId);
-      if (participant) {
-        return { ...participant, user };
-      }
-      return undefined;
+      return state.voipState.find((p) => p.userId === userId);
     },
 
     replaceAll(participants) {

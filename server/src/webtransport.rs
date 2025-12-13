@@ -48,6 +48,7 @@ impl From<DomainError> for SessionError {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum ControlRoutingPolicy {
     GroupRights {
         group_id: i64,

@@ -25,7 +25,6 @@ export interface ScreenShareActions {
   getQuality: () => number;
   setConstraints: (constraints: Partial<ScreenShareConstraints>) => void;
   getConstraints: () => ScreenShareConstraints;
-  getStream: () => MediaStream | null;
   onEncodedVideoData: (callback: (chunk: EncodedVideoChunk) => void) => () => void;
   onEncodedAudioData: (callback: (chunk: EncodedAudioChunk) => void) => () => void;
   start: () => Promise<void>;
@@ -35,53 +34,132 @@ export interface ScreenShareActions {
 
 export type ScreenShareStore = [ScreenShareState, ScreenShareActions];
 
-function createScreenShareStore(): ScreenShareStore {
-  const defaultBitrate = 2500000;
+const DEFAULT_VIDEO_BITRATE = 2_500_000;
+const DEFAULT_AUDIO_BITRATE = 128_000;
+const KEYFRAME_PROBABILITY = 0.03;
 
-  const [state, setState] = createStore<ScreenShareState>({
-    isRecording: false,
-    quality: defaultBitrate,
+const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
+  width: 1920,
+  height: 1080,
+  frameRate: 60,
+  cursor: "always",
+  audio: true,
+};
+
+const DEFAULT_VIDEO_ENCODER_CONFIG = {
+  codec: "vp8",
+  width: 1920,
+  height: 1080,
+  bitrate: DEFAULT_VIDEO_BITRATE,
+  framerate: 60,
+  keyFrameIntervalCount: 30,
+};
+
+const DEFAULT_AUDIO_ENCODER_CONFIG = {
+  codec: "opus",
+  sampleRate: 48000,
+  numberOfChannels: 1,
+  bitrate: DEFAULT_AUDIO_BITRATE,
+};
+
+function encodeChunkToArray(chunk: EncodedVideoChunk | EncodedAudioChunk): number[] {
+  const buffer = new ArrayBuffer(chunk.byteLength);
+  chunk.copyTo(buffer);
+  return Array.from(new Uint8Array(buffer));
+}
+
+function buildMediaConstraints(constraints: ScreenShareConstraints): DisplayMediaStreamOptions {
+  return {
+    video: {
+      width: constraints.width,
+      height: constraints.height,
+      frameRate: constraints.frameRate,
+      cursor: constraints.cursor,
+      displaySurface: constraints.displaySurface,
+    } as MediaTrackConstraints,
+    audio: constraints.audio,
+  };
+}
+
+function createVideoEncoderInstance(
+  bitrate: number,
+  onOutput: (chunk: EncodedVideoChunk) => void
+): VideoEncoder {
+  const encoder = new VideoEncoder({
+    output: (chunk) => onOutput(chunk),
+    error: (error) => console.error("Video encoder error:", error),
   });
 
-  // Callback registries
+  encoder.configure({ ...DEFAULT_VIDEO_ENCODER_CONFIG, bitrate });
+  return encoder;
+}
+
+function createAudioEncoderInstance(
+  onOutput: (chunk: EncodedAudioChunk) => void
+): AudioEncoder {
+  const encoder = new AudioEncoder({
+    output: (chunk) => onOutput(chunk),
+    error: (error) => console.error("Audio encoder error:", error),
+  });
+
+  encoder.configure(DEFAULT_AUDIO_ENCODER_CONFIG);
+  return encoder;
+}
+
+function convertToMono(value: AudioData): AudioData {
+  const buffer = new ArrayBuffer(value.numberOfFrames * 4);
+  value.copyTo(buffer, { planeIndex: 0 });
+
+  return new AudioData({
+    format: value.format,
+    sampleRate: value.sampleRate,
+    numberOfFrames: value.numberOfFrames,
+    numberOfChannels: 1,
+    timestamp: value.timestamp,
+    data: buffer,
+  });
+}
+
+async function safelyCancelReader<T>(
+  reader: ReadableStreamDefaultReader<T> | null
+): Promise<void> {
+  if (!reader) return;
+  try {
+    await reader.cancel();
+  } catch { }
+}
+
+function closeEncoder(encoder: VideoEncoder | AudioEncoder | null): void {
+  if (encoder && encoder.state !== "closed") {
+    encoder.close();
+  }
+}
+
+function stopStreamTracks(stream: MediaStream | null): void {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+function createScreenShareStore(): ScreenShareStore {
+  const [state, setState] = createStore<ScreenShareState>({
+    isRecording: false,
+    quality: DEFAULT_VIDEO_BITRATE,
+  });
+
   const encodedVideoDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
   const encodedAudioDataCallbacks = new Set<(chunk: EncodedAudioChunk) => void>();
 
+  let constraints = { ...DEFAULT_CONSTRAINTS };
   let stream: MediaStream | null = null;
-
   let videoProcessor: MediaStreamTrackProcessor<VideoFrame> | null = null;
   let videoEncoder: VideoEncoder | null = null;
   let videoReader: ReadableStreamDefaultReader<VideoFrame> | null = null;
-
   let audioProcessor: MediaStreamTrackProcessor<AudioData> | null = null;
   let audioEncoder: AudioEncoder | null = null;
   let audioReader: ReadableStreamDefaultReader<AudioData> | null = null;
-
   let isProcessing = false;
 
-  let constraints: ScreenShareConstraints = {
-    width: 1920,
-    height: 1080,
-    frameRate: 60,
-    cursor: "always",
-    audio: true,
-  };
-
-  const videoEncoderConfig = {
-    codec: "vp8",
-    width: 1920,
-    height: 1080,
-    bitrate: defaultBitrate,
-    framerate: 60,
-    keyFrameIntervalCount: 30,
-  };
-
-  const audioEncoderConfig = {
-    codec: "opus",
-    sampleRate: 48000,
-    numberOfChannels: 1,
-    bitrate: 128000,
-  };
+  const connection = useConnection();
+  const [, authActions] = useAuth();
 
   function notifyEncodedVideoData(chunk: EncodedVideoChunk): void {
     encodedVideoDataCallbacks.forEach((cb) => cb(chunk));
@@ -91,45 +169,7 @@ function createScreenShareStore(): ScreenShareStore {
     encodedAudioDataCallbacks.forEach((cb) => cb(chunk));
   }
 
-  const setupVideoEncoder = () => {
-    const config = {
-      ...videoEncoderConfig,
-      bitrate: Math.floor(videoEncoderConfig.bitrate * state.quality),
-    };
-
-    videoEncoder = new VideoEncoder({
-      output: (chunk, _metadata) => {
-        notifyEncodedVideoData(chunk);
-      },
-      error: (error) => {
-        console.error("Video encoder error:", error);
-      },
-    });
-
-    videoEncoder.configure(config);
-  };
-
-  const setupAudioEncoder = () => {
-    audioEncoder = new AudioEncoder({
-      output: (chunk, _metadata) => {
-        notifyEncodedAudioData(chunk);
-      },
-      error: (error) => {
-        console.error("Audio encoder error:", error);
-      },
-    });
-
-    const config = {
-      codec: audioEncoderConfig.codec,
-      sampleRate: audioEncoderConfig.sampleRate,
-      numberOfChannels: audioEncoderConfig.numberOfChannels,
-      bitrate: audioEncoderConfig.bitrate,
-    };
-
-    audioEncoder.configure(config);
-  };
-
-  const processVideoStream = async () => {
+  async function processVideoStream(): Promise<void> {
     if (!videoProcessor) return;
 
     videoReader = videoProcessor.readable.getReader();
@@ -137,13 +177,11 @@ function createScreenShareStore(): ScreenShareStore {
     try {
       while (isProcessing) {
         const { done, value } = await videoReader.read();
-
         if (done) break;
-        if (value) {
-          if (videoEncoder && videoEncoder.state === "configured") {
-            const keyFrame = Math.random() < 0.03;
-            videoEncoder.encode(value, { keyFrame });
-          }
+
+        if (value && videoEncoder?.state === "configured") {
+          const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
+          videoEncoder.encode(value, { keyFrame });
           value.close();
         }
       }
@@ -152,9 +190,9 @@ function createScreenShareStore(): ScreenShareStore {
         console.error("Error processing video stream:", error);
       }
     }
-  };
+  }
 
-  const processAudioStream = async () => {
+  async function processAudioStream(): Promise<void> {
     if (!audioProcessor) return;
 
     audioReader = audioProcessor.readable.getReader();
@@ -162,29 +200,13 @@ function createScreenShareStore(): ScreenShareStore {
     try {
       while (isProcessing) {
         const { done, value } = await audioReader.read();
-
         if (done) break;
 
-        if (value) {
-          if (audioEncoder && audioEncoder.state === "configured") {
-            if (value.numberOfChannels === 2 && audioEncoderConfig.numberOfChannels === 1) {
-              const buffer = new ArrayBuffer(value.numberOfFrames * 4);
-              value.copyTo(buffer, { planeIndex: 0 });
+        if (value && audioEncoder?.state === "configured") {
+          const needsMonoConversion =
+            value.numberOfChannels === 2 && DEFAULT_AUDIO_ENCODER_CONFIG.numberOfChannels === 1;
 
-              const monoData = new AudioData({
-                format: value.format,
-                sampleRate: value.sampleRate,
-                numberOfFrames: value.numberOfFrames,
-                numberOfChannels: 1,
-                timestamp: value.timestamp,
-                data: buffer,
-              });
-
-              audioEncoder.encode(monoData);
-            } else {
-              audioEncoder.encode(value);
-            }
-          }
+          audioEncoder.encode(needsMonoConversion ? convertToMono(value) : value);
           value.close();
         }
       }
@@ -193,107 +215,89 @@ function createScreenShareStore(): ScreenShareStore {
         console.error("Error processing audio stream:", error);
       }
     }
-  };
+  }
 
-  const cleanup = async () => {
-    if (audioReader) {
-      try {
-        await audioReader.cancel();
-      } catch (e) {}
-      audioReader = null;
-    }
+  async function cleanup(): Promise<void> {
+    await safelyCancelReader(audioReader);
+    audioReader = null;
     audioProcessor = null;
 
-    if (videoReader) {
-      try {
-        await videoReader.cancel();
-      } catch (e) {}
-      videoReader = null;
-    }
+    await safelyCancelReader(videoReader);
+    videoReader = null;
     videoProcessor = null;
 
-    if (audioEncoder && audioEncoder.state !== "closed") {
-      audioEncoder.close();
-      audioEncoder = null;
-    }
-    if (videoEncoder && videoEncoder.state !== "closed") {
-      videoEncoder.close();
-      videoEncoder = null;
-    }
+    closeEncoder(audioEncoder);
+    audioEncoder = null;
 
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      stream = null;
-    }
-  };
+    closeEncoder(videoEncoder);
+    videoEncoder = null;
 
-  const connection = useConnection();
-  const [, authActions] = useAuth();
+    stopStreamTracks(stream);
+    stream = null;
+  }
+
+  function handleVideoTrackEnded(): void {
+    fetchApi("/voip/screen/publish", {
+      method: "PUT",
+      body: { publish: false },
+    });
+    actions.stop();
+  }
 
   const actions: ScreenShareActions = {
     init() {
-      actions.onEncodedVideoData((data) => {
+      this.onEncodedVideoData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
-        const buffer = new ArrayBuffer(data.byteLength);
-        data.copyTo(buffer);
-        connection.sendVoip({
+
+        const payload: VoipPayload = {
           type: "media",
           userId: user.userId,
           mediaType: "screen",
-          data: Array.from(new Uint8Array(buffer)),
+          data: encodeChunkToArray(chunk),
           timestamp: Date.now(),
-          realTimestamp: data.timestamp,
-          key: data.type,
-        } as VoipPayload);
+          realTimestamp: chunk.timestamp,
+          key: chunk.type,
+        };
+
+        connection.sendVoip(payload);
       });
 
-      actions.onEncodedAudioData((data) => {
+      this.onEncodedAudioData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
-        const buffer = new ArrayBuffer(data.byteLength);
-        data.copyTo(buffer);
-        connection.sendVoip({
+
+        const payload: VoipPayload = {
           type: "media",
           userId: user.userId,
           mediaType: "screenSound",
-          data: Array.from(new Uint8Array(buffer)),
+          data: encodeChunkToArray(chunk),
           timestamp: Date.now(),
-          realTimestamp: data.timestamp,
-          key: data.type,
-        } as VoipPayload);
+          realTimestamp: chunk.timestamp,
+          key: chunk.type,
+        };
+
+        connection.sendVoip(payload);
       });
     },
 
-    isRecording() {
-      return state.isRecording;
-    },
+    isRecording: () => state.isRecording,
+
+    getQuality: () => state.quality,
 
     setQuality(quality) {
       setState("quality", quality);
-      if (videoEncoder && videoEncoder.state === "configured") {
-        videoEncoder.configure({
-          ...videoEncoderConfig,
-          bitrate: quality,
-        });
-      }
-    },
 
-    getQuality() {
-      return state.quality;
+      if (videoEncoder?.state === "configured") {
+        videoEncoder.configure({ ...DEFAULT_VIDEO_ENCODER_CONFIG, bitrate: quality });
+      }
     },
 
     setConstraints(newConstraints) {
       constraints = { ...constraints, ...newConstraints };
     },
 
-    getConstraints() {
-      return { ...constraints };
-    },
-
-    getStream() {
-      return stream;
-    },
+    getConstraints: () => ({ ...constraints }),
 
     onEncodedVideoData(callback) {
       encodedVideoDataCallbacks.add(callback);
@@ -306,47 +310,30 @@ function createScreenShareStore(): ScreenShareStore {
     },
 
     async start() {
-      if (state.isRecording) {
-        return;
-      }
+      if (state.isRecording) return;
 
       try {
-        const mediaConstraints = {
-          video: {
-            width: constraints.width,
-            height: constraints.height,
-            frameRate: constraints.frameRate,
-            cursor: constraints.cursor,
-            displaySurface: constraints.displaySurface,
-          } as MediaTrackConstraints,
-          audio: constraints.audio,
-        };
-
-        stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-
-        stream.getVideoTracks()[0].onended = async () => {
-          await fetchApi("/voip/screen/publish", {
-            method: "PUT",
-            body: { publish: false },
-          });
-
-          actions.stop();
-        };
+        stream = await navigator.mediaDevices.getDisplayMedia(
+          buildMediaConstraints(constraints)
+        );
 
         const videoTrack = stream.getVideoTracks()[0];
+        videoTrack.onended = handleVideoTrackEnded;
+
         videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
-        setupVideoEncoder();
+        videoEncoder = createVideoEncoderInstance(state.quality, notifyEncodedVideoData);
 
         const audioTrack = stream.getAudioTracks()[0];
         if (audioTrack) {
           audioProcessor = new MediaStreamTrackProcessor({ track: audioTrack });
-          setupAudioEncoder();
+          audioEncoder = createAudioEncoderInstance(notifyEncodedAudioData);
         } else if (constraints.audio) {
           console.warn("Requested audio but no audio track was provided by getDisplayMedia.");
         }
 
         isProcessing = true;
         setState("isRecording", true);
+
         processVideoStream();
         processAudioStream();
       } catch (error) {
@@ -357,16 +344,15 @@ function createScreenShareStore(): ScreenShareStore {
     },
 
     async stop() {
-      if (!state.isRecording) {
-        return;
-      }
+      if (!state.isRecording) return;
 
       isProcessing = false;
 
-      if (videoEncoder && videoEncoder.state === "configured") {
+      if (videoEncoder?.state === "configured") {
         await videoEncoder.flush();
       }
-      if (audioEncoder && audioEncoder.state === "configured") {
+
+      if (audioEncoder?.state === "configured") {
         await audioEncoder.flush();
       }
 
@@ -375,7 +361,7 @@ function createScreenShareStore(): ScreenShareStore {
     },
 
     async destroy() {
-      await actions.stop();
+      await this.stop();
       encodedVideoDataCallbacks.clear();
       encodedAudioDataCallbacks.clear();
     },

@@ -5,7 +5,6 @@ import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { fetchApi } from "../utils";
 import { useConnection } from "./connection";
-import { useAuth } from "./auth";
 
 interface SubscriptionState {
   subscriptions: Subscription[];
@@ -14,7 +13,7 @@ interface SubscriptionState {
 interface SubscriptionActions {
   init: () => Promise<Result<void, string>>;
   list: () => Subscription[];
-  isSubscribedToMedia: (publisherId: number, mediaType: MediaType) => boolean;
+  isSubscribedToMedia: (subscriberId: number, publisherId: number, mediaType: MediaType) => boolean;
   replaceAll: (subscriptions: Subscription[]) => void;
   add: (subscription: Subscription) => void;
   remove: (userId: number, publisherId: number, mediaType: MediaType) => void;
@@ -57,15 +56,11 @@ function createSubscriptionStore(): SubscriptionStore {
       return state.subscriptions;
     },
 
-    isSubscribedToMedia(publisherId, mediaType) {
-      const [authState] = useAuth();
-      const currentUserId = authState.session?.userId;
-      if (!currentUserId) return false;
-
+    isSubscribedToMedia(subscriberId, publisherId, mediaType) {
       return (
         state.subscriptions?.some(
           (sub) =>
-            sub.userId === currentUserId &&
+            sub.userId === subscriberId &&
             sub.publisherId === publisherId &&
             sub.mediaType === mediaType
         ) || false

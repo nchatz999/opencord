@@ -2,8 +2,8 @@ import type { Component } from "solid-js";
 import { For, Show, createSignal, createMemo, onCleanup } from "solid-js";
 
 import { Camera, Monitor, Users, Video, Volume2, Eye, EyeOff } from "lucide-solid";
-import { useAuth, useVoip, useContext, useSubscription, usePlayback } from "../store/index";
-import { type VoipParticipantWithUser, MediaType } from "../model";
+import { useAuth, useVoip, useContext, useSubscription, usePlayback, useUser } from "../store/index";
+import { type VoipParticipant, MediaType } from "../model";
 import ContextMenu from "../components/ContextMenu";
 import type { ContextMenuItem } from "../components/ContextMenu";
 import Slider from "../components/Slider";
@@ -16,6 +16,7 @@ const StreamsContent: Component = () => {
   const [contextState] = useContext();
   const [, subscriptionActions] = useSubscription();
   const [, playbackActions] = usePlayback();
+  const [, userActions] = useUser();
   const currentUser = () => authActions.getUser();
   const [isFullscreen, setIsFullscreen] = createSignal(false);
 
@@ -32,24 +33,23 @@ const StreamsContent: Component = () => {
     const voipSession = voipActions.findById(currentUser().userId);
 
     if (!voipSession) {
-      return [] as VoipParticipantWithUser[];
+      return [];
     }
 
     if (voipSession.channelId) {
       return voipActions.list().filter((part) => (part.publishCamera || part.publishScreen) && part.channelId == voipSession.channelId);
     } else if (voipSession.recipientId) {
-      return voipActions.list().filter((part) => (part.publishCamera || part.publishScreen) && (part.user.userId == voipSession.recipientId || part.recipientId == voipSession.userId));
+      return voipActions.list().filter((part) => (part.publishCamera || part.publishScreen) && (part.userId == voipSession.recipientId || part.recipientId == voipSession.userId));
     }
 
-    return [] as VoipParticipantWithUser[];
+    return [];
   });
 
   const streamCount = createMemo(() =>
     getCurrentParticipants().reduce((count, p) => count + (p.publishCamera ? 1 : 0) + (p.publishScreen ? 1 : 0), 0)
   );
 
-  const getGridCols = (participants: VoipParticipantWithUser[]) => {
-
+  const getGridCols = (participants: VoipParticipant[]) => {
     const totalStreams = participants.reduce((count, p) => {
       return count + (p.publishCamera ? 1 : 0) + (p.publishScreen ? 1 : 0);
     }, 0);
@@ -62,7 +62,7 @@ const StreamsContent: Component = () => {
   };
 
   const toggleSubscription = async (publisherId: number, mediaType: MediaType) => {
-    const isCurrentlySubscribed = subscriptionActions.isSubscribedToMedia(publisherId, mediaType);
+    const isCurrentlySubscribed = subscriptionActions.isSubscribedToMedia(currentUser().userId, publisherId, mediaType);
     if (isCurrentlySubscribed) {
       await subscriptionActions.unsubscribe(publisherId, mediaType);
     } else {
@@ -151,131 +151,132 @@ const StreamsContent: Component = () => {
               class={`grid gap-4 h-full p-4 ${getGridCols(getCurrentParticipants())}`}
             >
               <For each={getCurrentParticipants()}>
-                {(participant) => (
-                  <>
-                    {}
-                    <Show when={participant.publishCamera}>
-                      <div class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
-                        <video
-                          ref={(ref) => {
-                            const cameraPlayback = playbackActions.getPlaybackState(participant.user.userId)?.cameraPlayback;
-                            if (cameraPlayback) {
-                              const mediaStream = cameraPlayback.getStream();
-                              if (mediaStream) {
-                                ref.srcObject = mediaStream;
+                {(participant) => {
+                  const user = () => userActions.findById(participant.userId);
+                  return (
+                    <>
+                      <Show when={participant.publishCamera}>
+                        <div class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
+                          <video
+                            ref={(ref) => {
+                              const cameraPlayback = playbackActions.getPlaybackState(participant.userId)?.cameraPlayback;
+                              if (cameraPlayback) {
+                                const mediaStream = cameraPlayback.getStream();
+                                if (mediaStream) {
+                                  ref.srcObject = mediaStream;
+                                }
                               }
-                            }
-                          }}
-                          autoplay
-                          playsinline
-                          muted={true}
-                          class="w-full h-full object-cover cursor-pointer"
-                          onDblClick={(e) => {
-                            const video = e.currentTarget;
-                            if (document.fullscreenElement) {
-                              document.exitFullscreen();
-                            } else {
-                              video.requestFullscreen();
-                            }
-                          }}
-                        />
+                            }}
+                            autoplay
+                            playsinline
+                            muted={true}
+                            class="w-full h-full object-cover cursor-pointer"
+                            onDblClick={(e) => {
+                              const video = e.currentTarget;
+                              if (document.fullscreenElement) {
+                                document.exitFullscreen();
+                              } else {
+                                video.requestFullscreen();
+                              }
+                            }}
+                          />
 
-                        <Show when={!isFullscreen()}>
-                          <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                            <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
-                              <Camera size={14} class="text-blue-400" />
-                              <span class="text-white text-sm font-medium truncate max-w-[120px]">
-                                {participant.user.username}
-                              </span>
+                          <Show when={!isFullscreen()}>
+                            <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                              <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
+                                <Camera size={14} class="text-blue-400" />
+                                <span class="text-white text-sm font-medium truncate max-w-[120px]">
+                                  {user()?.username ?? "Unknown"}
+                                </span>
+                              </div>
+
+                              <Button
+                                onClick={() => toggleSubscription(participant.userId, MediaType.Camera)}
+                                variant={subscriptionActions.isSubscribedToMedia(currentUser().userId, participant.userId, MediaType.Camera) ? 'primary' : 'secondary'}
+                                size="sm"
+                                class="flex items-center gap-1.5 rounded"
+                              >
+                                {subscriptionActions.isSubscribedToMedia(currentUser().userId, participant.userId, MediaType.Camera) ?
+                                  <Eye size={14} /> :
+                                  <EyeOff size={14} />
+                                }
+                                <span>
+                                  {subscriptionActions.isSubscribedToMedia(currentUser().userId, participant.userId, MediaType.Camera) ? 'Watching' : 'Paused'}
+                                </span>
+                              </Button>
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+
+                      <Show when={participant.publishScreen}>
+                        <ContextMenu
+                          items={createVolumeMenuItems(participant.userId)}
+                          class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]"
+                        >
+                          <video
+                            ref={(ref) => {
+                              const screenPlayback = playbackActions.getPlaybackState(participant.userId)?.screenPlayback;
+                              if (screenPlayback) {
+                                const mediaStream = screenPlayback.getStream();
+                                if (mediaStream) {
+                                  ref.srcObject = mediaStream;
+                                }
+                              }
+                            }}
+                            autoplay
+                            playsinline
+                            muted={true}
+                            class="w-full h-full object-cover cursor-pointer"
+                            onDblClick={(e) => {
+                              const video = e.currentTarget;
+                              if (document.fullscreenElement) {
+                                document.exitFullscreen();
+                              } else {
+                                video.requestFullscreen();
+                              }
+                            }}
+                          />
+
+                          <Show when={!isFullscreen()}>
+                            <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                              <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
+                                <Monitor size={14} class="text-blue-400" />
+                                <span class="text-white text-sm font-medium truncate max-w-[120px]">
+                                  {user()?.username ?? "Unknown"}
+                                </span>
+                                <Show when={playbackActions.getScreenAudioVolume(participant.userId) === 0}>
+                                  <Volume2 size={14} class="text-red-400" />
+                                </Show>
+                              </div>
+
+                              <Button
+                                onClick={() => toggleSubscription(participant.userId, MediaType.Screen)}
+                                variant={subscriptionActions.isSubscribedToMedia(currentUser().userId, participant.userId, MediaType.Screen) ? 'primary' : 'secondary'}
+                                size="sm"
+                                class="flex items-center gap-1.5 rounded"
+                              >
+                                {subscriptionActions.isSubscribedToMedia(currentUser().userId, participant.userId, MediaType.Screen) ?
+                                  <Eye size={14} /> :
+                                  <EyeOff size={14} />
+                                }
+                                <span>
+                                  {subscriptionActions.isSubscribedToMedia(currentUser().userId, participant.userId, MediaType.Screen) ? 'Watching' : 'Paused'}
+                                </span>
+                              </Button>
                             </div>
 
-                            <Button
-                              onClick={() => toggleSubscription(participant.user.userId, MediaType.Camera)}
-                              variant={subscriptionActions.isSubscribedToMedia(participant.user.userId, MediaType.Camera) ? 'primary' : 'secondary'}
-                              size="sm"
-                              class="flex items-center gap-1.5 rounded"
-                            >
-                              {subscriptionActions.isSubscribedToMedia(participant.user.userId, MediaType.Camera) ?
-                                <Eye size={14} /> :
-                                <EyeOff size={14} />
-                              }
-                              <span>
-                                {subscriptionActions.isSubscribedToMedia(participant.user.userId, MediaType.Camera) ? 'Watching' : 'Paused'}
-                              </span>
-                            </Button>
-                          </div>
-                        </Show>
-                      </div>
-                    </Show>
-
-                    <Show when={participant.publishScreen}>
-                      <ContextMenu
-                        items={createVolumeMenuItems(participant.user.userId)}
-                        class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]"
-                      >
-                        <video
-                          ref={(ref) => {
-                            const screenPlayback = playbackActions.getPlaybackState(participant.user.userId)?.screenPlayback;
-                            if (screenPlayback) {
-                              const mediaStream = screenPlayback.getStream();
-                              if (mediaStream) {
-                                ref.srcObject = mediaStream;
-                              }
-                            }
-                          }}
-                          autoplay
-                          playsinline
-                          muted={true}
-                          class="w-full h-full object-cover cursor-pointer"
-                          onDblClick={(e) => {
-                            const video = e.currentTarget;
-                            if (document.fullscreenElement) {
-                              document.exitFullscreen();
-                            } else {
-                              video.requestFullscreen();
-                            }
-                          }}
-                        />
-
-
-                        <Show when={!isFullscreen()}>
-                          <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                            <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
-                              <Monitor size={14} class="text-blue-400" />
-                              <span class="text-white text-sm font-medium truncate max-w-[120px]">
-                                {participant.user.username}
-                              </span>
-                              <Show when={playbackActions.getScreenAudioVolume(participant.user.userId) === 0}>
-                                <Volume2 size={14} class="text-red-400" />
-                              </Show>
+                            <div class="absolute top-2 right-2">
+                              <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
+                                {playbackActions.getPlaybackState(participant.userId)?.screenPlayback?.getFPS()() || 0} FPS
+                              </div>
                             </div>
-
-                            <Button
-                              onClick={() => toggleSubscription(participant.user.userId, MediaType.Screen)}
-                              variant={subscriptionActions.isSubscribedToMedia(participant.user.userId, MediaType.Screen) ? 'primary' : 'secondary'}
-                              size="sm"
-                              class="flex items-center gap-1.5 rounded"
-                            >
-                              {subscriptionActions.isSubscribedToMedia(participant.user.userId, MediaType.Screen) ?
-                                <Eye size={14} /> :
-                                <EyeOff size={14} />
-                              }
-                              <span>
-                                {subscriptionActions.isSubscribedToMedia(participant.user.userId, MediaType.Screen) ? 'Watching' : 'Paused'}
-                              </span>
-                            </Button>
-                          </div>
-
-                          <div class="absolute top-2 right-2">
-                            <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
-                              {playbackActions.getPlaybackState(participant.user.userId)?.screenPlayback?.getFPS()() || 0} FPS
-                            </div>
-                          </div>
-                        </Show>
-                      </ContextMenu>
-                    </Show>
-                  </>
-                )}
+                          </Show>
+                        </ContextMenu>
+                      </Show>
+                    </>
+                  );
+                }}
               </For>
             </div>
           </div>

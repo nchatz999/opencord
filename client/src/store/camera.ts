@@ -31,7 +31,6 @@ export interface CameraActions {
   setQuality: (quality: number) => void;
   getQuality: () => number;
   setConstraints: (constraints: Partial<CameraConstraints>) => void;
-  getStream: () => MediaStream | null;
   onEncodedData: (callback: (chunk: EncodedVideoChunk) => void) => () => void;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -40,57 +39,97 @@ export interface CameraActions {
 
 export type CameraStore = [CameraState, CameraActions];
 
-function createCameraStore(): CameraStore {
-  const defaultBitrate = 1500000;
+const DEFAULT_BITRATE = 1_500_000;
+const KEYFRAME_PROBABILITY = 0.03;
 
-  const [state, setState] = createStore<CameraState>({
-    isRecording: false,
-    quality: defaultBitrate,
+const DEFAULT_CONSTRAINTS: CameraConstraints = {
+  width: 1280,
+  height: 720,
+  frameRate: 30,
+  facingMode: "user",
+  aspectRatio: 16 / 9,
+};
+
+const DEFAULT_ENCODER_CONFIG: VideoEncoderConfig = {
+  codec: "vp8",
+  width: 1280,
+  height: 720,
+  bitrate: DEFAULT_BITRATE,
+  framerate: 30,
+};
+
+function buildMediaConstraints(constraints: CameraConstraints): MediaStreamConstraints {
+  return {
+    video: {
+      width: { ideal: constraints.width },
+      height: { ideal: constraints.height },
+      frameRate: { ideal: constraints.frameRate },
+      facingMode: constraints.facingMode,
+      aspectRatio: constraints.aspectRatio,
+    },
+  };
+}
+
+function encodeChunkToArray(chunk: EncodedVideoChunk): number[] {
+  const buffer = new ArrayBuffer(chunk.byteLength);
+  chunk.copyTo(buffer);
+  return Array.from(new Uint8Array(buffer));
+}
+
+function createEncoderInstance(
+  bitrate: number,
+  onOutput: (chunk: EncodedVideoChunk) => void
+): VideoEncoder {
+  const encoder = new VideoEncoder({
+    output: (chunk) => onOutput(chunk),
+    error: (error) => console.error("Camera encoder error:", error),
   });
 
-  // Callback registry
-  const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
+  encoder.configure({ ...DEFAULT_ENCODER_CONFIG, bitrate });
+  return encoder;
+}
 
+async function safelyCancelReader(
+  reader: ReadableStreamDefaultReader<VideoFrame> | null
+): Promise<void> {
+  if (!reader) return;
+  try {
+    await reader.cancel();
+  } catch { }
+}
+
+function closeEncoder(encoder: VideoEncoder | null): void {
+  if (encoder && encoder.state !== "closed") {
+    encoder.close();
+  }
+}
+
+function stopStreamTracks(stream: MediaStream | null): void {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+function createCameraStore(): CameraStore {
+  const [state, setState] = createStore<CameraState>({
+    isRecording: false,
+    quality: DEFAULT_BITRATE,
+  });
+
+  const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
+  let constraints = { ...DEFAULT_CONSTRAINTS };
   let stream: MediaStream | null = null;
   let processor: MediaStreamTrackProcessor<VideoFrame> | null = null;
   let encoder: VideoEncoder | null = null;
   let reader: ReadableStreamDefaultReader<VideoFrame> | null = null;
   let isProcessing = false;
 
-  let constraints: CameraConstraints = {
-    width: 1280,
-    height: 720,
-    frameRate: 30,
-    facingMode: "user",
-    aspectRatio: 16 / 9,
-  };
-
-  const encoderConfig = {
-    codec: "vp8",
-    width: 1280,
-    height: 720,
-    bitrate: defaultBitrate,
-    framerate: 30,
-  };
+  const connection = useConnection();
+  const [, authActions] = useAuth();
 
   function notifyEncodedData(chunk: EncodedVideoChunk): void {
     encodedDataCallbacks.forEach((cb) => cb(chunk));
   }
 
-  const setupEncoder = () => {
-    encoder = new VideoEncoder({
-      output: (chunk, _metadata) => {
-        notifyEncodedData(chunk);
-      },
-      error: (error) => {
-        console.error("Camera encoder error:", error);
-      },
-    });
-
-    encoder.configure({ ...encoderConfig, bitrate: state.quality });
-  };
-
-  const processVideoStream = async () => {
+  async function processVideoStream(): Promise<void> {
     if (!processor) return;
 
     reader = processor.readable.getReader();
@@ -98,14 +137,11 @@ function createCameraStore(): CameraStore {
     try {
       while (isProcessing) {
         const { done, value } = await reader.read();
-
         if (done) break;
 
-        if (value) {
-          if (encoder && encoder.state === "configured") {
-            const keyFrame = Math.random() < 0.03;
-            encoder.encode(value, { keyFrame });
-          }
+        if (value && encoder?.state === "configured") {
+          const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
+          encoder.encode(value, { keyFrame });
           value.close();
         }
       }
@@ -114,77 +150,63 @@ function createCameraStore(): CameraStore {
         console.error("Error processing camera stream:", error);
       }
     }
-  };
+  }
 
-  const cleanup = async () => {
-    if (reader) {
-      try {
-        await reader.cancel();
-      } catch (e) {}
-      reader = null;
-    }
+  async function cleanup(): Promise<void> {
+    await safelyCancelReader(reader);
+    reader = null;
 
-    if (encoder) {
-      if (encoder.state !== "closed") {
-        encoder.close();
-      }
-      encoder = null;
-    }
+    closeEncoder(encoder);
+    encoder = null;
 
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      stream = null;
-    }
+    stopStreamTracks(stream);
+    stream = null;
 
     processor = null;
-  };
+  }
 
-  const connection = useConnection();
-  const [, authActions] = useAuth();
+  function handleTrackEnded(): void {
+    fetchApi("/voip/camera/publish", {
+      method: "PUT",
+      body: { publish: false },
+    });
+    actions.stop();
+  }
 
   const actions: CameraActions = {
     init() {
-      actions.onEncodedData((data) => {
+      this.onEncodedData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
-        const buffer = new ArrayBuffer(data.byteLength);
-        data.copyTo(buffer);
-        connection.sendVoip({
+
+        const payload: VoipPayload = {
           type: "media",
           userId: user.userId,
           mediaType: "camera",
-          data: Array.from(new Uint8Array(buffer)),
+          data: encodeChunkToArray(chunk),
           timestamp: Date.now(),
-          realTimestamp: data.timestamp,
-          key: data.type,
-        } as VoipPayload);
+          realTimestamp: chunk.timestamp,
+          key: chunk.type,
+        };
+
+        connection.sendVoip(payload);
       });
     },
 
-    isRecording() {
-      return state.isRecording;
-    },
+    isRecording: () => state.isRecording,
+
+    getQuality: () => state.quality,
 
     setQuality(quality) {
       setState("quality", quality);
-      if (encoder && encoder.state === "configured") {
-        encoder.configure({
-          ...encoderConfig,
-          bitrate: quality,
-        });
-      }
-    },
 
-    getQuality() {
-      return state.quality;
+      if (encoder?.state === "configured") {
+        encoder.configure({ ...DEFAULT_ENCODER_CONFIG, bitrate: quality });
+      }
     },
 
     setConstraints(newConstraints) {
       constraints = { ...constraints, ...newConstraints };
-    },
-
-    getStream() {
-      return stream;
     },
 
     onEncodedData(callback) {
@@ -199,34 +221,18 @@ function createCameraStore(): CameraStore {
       }
 
       try {
-        const mediaConstraints: MediaStreamConstraints = {
-          video: {
-            width: { ideal: constraints.width },
-            height: { ideal: constraints.height },
-            frameRate: { ideal: constraints.frameRate },
-            facingMode: constraints.facingMode,
-            aspectRatio: constraints.aspectRatio,
-          },
-        };
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildMediaConstraints(constraints)
+        );
 
-        stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
         const videoTrack = stream.getVideoTracks()[0];
-
-        videoTrack.onended = async () => {
-          await fetchApi("/voip/camera/publish", {
-            method: "PUT",
-            body: { publish: false },
-          });
-          actions.stop();
-        };
+        videoTrack.onended = handleTrackEnded;
 
         processor = new MediaStreamTrackProcessor({ track: videoTrack });
-
-        setupEncoder();
+        encoder = createEncoderInstance(state.quality, notifyEncodedData);
 
         isProcessing = true;
         processVideoStream();
-
         setState("isRecording", true);
       } catch (error) {
         console.error("Error starting camera:", error);
@@ -236,13 +242,11 @@ function createCameraStore(): CameraStore {
     },
 
     async stop() {
-      if (!state.isRecording) {
-        return;
-      }
+      if (!state.isRecording) return;
 
       isProcessing = false;
 
-      if (encoder && encoder.state === "configured") {
+      if (encoder?.state === "configured") {
         await encoder.flush();
       }
 
@@ -251,7 +255,7 @@ function createCameraStore(): CameraStore {
     },
 
     async destroy() {
-      await actions.stop();
+      await this.stop();
       encodedDataCallbacks.clear();
     },
   };

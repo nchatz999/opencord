@@ -141,21 +141,6 @@ export type VoipDataMessage =
 
 
 //composites
-export interface VoipParticipantWithUser {
-  user: User;
-  channelId: number | null;
-  recipientId: number | null;
-  localDeafen: boolean;
-  localMute: boolean;
-  publishScreen: boolean;
-  publishCamera: boolean;
-  createdAt: string;
-  playback?: AudioPlayback
-  cameraPlayback?: VideoPlayback,
-  screenPlayback?: VideoPlayback,
-  screenSoundPlayback?: AudioPlayback
-}
-
 export interface MessageWithFiles {
   message: Message;
   files: File[];
