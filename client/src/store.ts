@@ -4,7 +4,7 @@ import { useMicrophone } from './store/microphone'
 import { useCamera } from './store/camera'
 import { useScreenShare } from './store/screenShare'
 import { useOutput } from './store/output'
-import { getServerUrlOrDefault } from './contexts/ServerConfig'
+import { getServerUrlOrDefault } from './lib/ServerConfig'
 
 export function getWebTransportUrl(): string {
   const serverUrl = getServerUrlOrDefault();

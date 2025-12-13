@@ -30,7 +30,7 @@ import Select from "../components/Select";
 import Slider from "../components/Slider";
 import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
-import { loadSession } from "../contexts/Session";
+import { loadSession } from "../lib/Session";
 import { UserStatusType, type Session } from "../model";
 import { useToaster } from "../components/Toaster";
 

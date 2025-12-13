@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { Result } from 'opencord-utils'
 import { err, ok } from 'opencord-utils'
-import { getServerUrlOrDefault } from './contexts/ServerConfig'
+import { getServerUrlOrDefault } from './lib/ServerConfig'
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }

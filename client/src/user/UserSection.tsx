@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, Settings, Circle } from 'lucide-solid'
-import { useAuth, useVoip, useModal, useMicrophone, useOutput, useUser } from '../store/index'
+import { useAuth, useVoip, useModal, useMicrophone, useOutput } from '../store/index'
 import { UserStatusType } from '../model'
 
 const UserSection: Component = () => {
@@ -10,7 +10,7 @@ const UserSection: Component = () => {
   const [, modalActions] = useModal()
   const [, microphoneActions] = useMicrophone()
   const [, outputActions] = useOutput()
-  const user = () => authActions.getUser()
+  const currentUser = () => authActions.getUser()
   const getStatusColor = (status: UserStatusType) => {
     switch (status) {
       case UserStatusType.Online:
@@ -29,18 +29,18 @@ const UserSection: Component = () => {
   const handleMuteToggle = async () => {
     const newMuted = !microphoneActions.getMuted()
     microphoneActions.setMuted(newMuted)
-    if (!voipActions.findById(user().userId)) return
+    if (!voipActions.findById(currentUser().userId)) return
     await voipActions.setMuted(newMuted)
   }
 
   const handleDeafenToggle = async () => {
     const newDeafened = !outputActions.getDeafened()
     outputActions.setDeafened(newDeafened)
-    if (!voipActions.findById(user().userId)) return
+    if (!voipActions.findById(currentUser().userId)) return
     await voipActions.setDeafened(newDeafened)
   }
 
-  const handleUserSettings = () => {
+  const handleUserSettings = async () => {
     modalActions.open({ type: 'userSettings' })
   }
 
@@ -49,22 +49,22 @@ const UserSection: Component = () => {
       <div class="flex items-center gap-2 flex-1 min-w-0">
         <div class="relative">
           <img
-            src={`/user/${user().avatarFileId}/avatar`}
-            alt={user().username}
+            src={`/user/${currentUser().avatarFileId}/avatar`}
+            alt={currentUser().username}
             class="w-8 h-8 rounded-full object-cover"
           />
         </div>
 
         <div class="flex-1 min-w-0">
           <div class="text-sm text-foreground font-medium truncate">
-            {user().username}
+            {currentUser().username}
           </div>
           <div class="flex items-center gap-1 text-xs text-muted-foreground truncate">
             <Circle
               size={8}
-              class={`${getStatusColor(user().status)} fill-current`}
+              class={`${getStatusColor(currentUser().status)} fill-current`}
             />
-            <span>{user().status}</span>
+            <span>{currentUser().status}</span>
           </div>
         </div>
       </div>

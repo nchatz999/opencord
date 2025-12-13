@@ -4,7 +4,7 @@ import { useToaster } from "../components/Toaster";
 import { Input } from "../components/Input";
 import Checkbox from "../components/CheckBox";
 import Button from "../components/Button";
-import { getServerUrlOrDefault } from "../contexts/ServerConfig";
+import { getServerUrlOrDefault } from "../lib/ServerConfig";
 import { useAuth } from "../store/auth";
 import { useApp } from "../store/app";
 

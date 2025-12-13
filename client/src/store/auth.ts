@@ -2,9 +2,9 @@ import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { loadSession, saveSession, clearSession } from "../contexts/Session";
+import { loadSession, saveSession, clearSession } from "../lib/Session";
 import { fetchApi } from "../utils";
-import { setServerUrl } from "../contexts/ServerConfig";
+import { setServerUrl } from "../lib/ServerConfig";
 import type { User, Session, Invite } from "../model";
 import { useUser } from "./user";
 

@@ -1,6 +1,6 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { createVADNode } from "../contexts/Vad";
+import { createVADNode } from "../lib/Vad";
 import { useConnection, type VoipPayload } from "./connection";
 import { useAuth } from "./auth";
 import { useVoip } from "./voip";

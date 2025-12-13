@@ -1,5 +1,5 @@
-import type { AudioPlayback } from "./contexts/AudioPlayback";
-import type { VideoPlayback } from "./contexts/VideoPlayback";
+import type { AudioPlayback } from "./lib/AudioPlayback";
+import type { VideoPlayback } from "./lib/VideoPlayback";
 
 export const RIGHTS = {
   Ack: 1,

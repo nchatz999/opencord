@@ -1,7 +1,7 @@
 import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { AudioPlayback, createSharedAudioContext } from "../contexts/AudioPlayback";
-import { VideoPlayback } from "../contexts/VideoPlayback";
+import { AudioPlayback, createSharedAudioContext } from "../lib/AudioPlayback";
+import { VideoPlayback } from "../lib/VideoPlayback";
 
 export interface PlaybackState {
   playback: AudioPlayback;
