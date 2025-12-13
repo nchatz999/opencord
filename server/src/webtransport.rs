@@ -68,8 +68,8 @@ pub enum ControlRoutingPolicy {
 }
 
 pub enum VoipRoutingPolicy {
-    Channel(i64, Option<i64>),
-    Recipient(i64, Option<i64>),
+    Channel(i64),
+    Recipient(i64),
 }
 
 #[derive(Debug, Clone)]
@@ -519,6 +519,7 @@ impl<L: LogManager> SubscriberSession<L> {
             payload: ControlPayload::Error { reason },
         }) {
             self.connection.send_ordered(serialized_event.into()).await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
 
@@ -589,8 +590,7 @@ impl<L: LogManager> SubscriberSession<L> {
                 .route_to_channel(payload, channel_id, user_session.user_id)
                 .await;
         } else if let Some(recipient_id) = voip_session.recipient_id {
-            self.route_to_recipient(payload, recipient_id, user_session.user_id)
-                .await;
+            self.route_to_recipient(payload, recipient_id).await;
         }
 
         Ok(())
@@ -665,14 +665,9 @@ impl<L: LogManager> SubscriberSession<L> {
             .await
         {
             Ok(Some(right)) if right > 2 => {
-                let except = if matches!(payload, VoipPayload::Media { .. }) {
-                    Some(sender_id)
-                } else {
-                    None
-                };
                 self.send_to_server(ServerMessage::Voip(
                     payload,
-                    VoipRoutingPolicy::Channel(channel_id, except),
+                    VoipRoutingPolicy::Channel(channel_id),
                 ))
                 .await;
                 Ok(())
@@ -681,21 +676,10 @@ impl<L: LogManager> SubscriberSession<L> {
         }
     }
 
-    async fn route_to_recipient(
-        &mut self,
-        payload: VoipPayload,
-        recipient_id: i64,
-        sender_id: i64,
-    ) {
-        let except = if matches!(payload, VoipPayload::Media { .. }) {
-            Some(sender_id)
-        } else {
-            None
-        };
-
+    async fn route_to_recipient(&mut self, payload: VoipPayload, recipient_id: i64) {
         self.send_to_server(ServerMessage::Voip(
             payload,
-            VoipRoutingPolicy::Recipient(recipient_id, except),
+            VoipRoutingPolicy::Recipient(recipient_id),
         ))
         .await;
     }
@@ -818,7 +802,10 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         policy: VoipRoutingPolicy,
     ) -> Result<(), ServerError> {
         match &payload {
-            VoipPayload::Speech { .. } => self.handle_speech(payload, policy).await,
+            VoipPayload::Speech { user_id, .. } => {
+                self.handle_speech(payload.clone(), policy, *user_id as i64)
+                    .await
+            }
             VoipPayload::Media {
                 user_id,
                 media_type: VoipDataType::Voice,
@@ -842,12 +829,33 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         &self,
         payload: VoipPayload,
         policy: VoipRoutingPolicy,
+        sender_id: i64,
     ) -> Result<(), ServerError> {
-        let policy_no_except = match policy {
-            VoipRoutingPolicy::Channel(id, _) => VoipRoutingPolicy::Channel(id, None),
-            VoipRoutingPolicy::Recipient(id, _) => VoipRoutingPolicy::Recipient(id, None),
-        };
-        self.route_voip(payload, policy_no_except).await
+        for subscriber in &self.observers {
+            let can_receive = match &policy {
+                VoipRoutingPolicy::Channel(channel_id) => {
+                    if let Some(rights) = self
+                        .service
+                        .get_user_rights_in_channel(subscriber.user_id(), *channel_id)
+                        .await?
+                    {
+                        rights >= 1
+                    } else {
+                        false
+                    }
+                }
+                VoipRoutingPolicy::Recipient(target_user_id) => {
+                    subscriber.user_id() == *target_user_id || subscriber.user_id() == sender_id
+                }
+            };
+
+            if can_receive {
+                subscriber
+                    .send(SubscriberMessage::Voip(payload.clone()))
+                    .await;
+            }
+        }
+        Ok(())
     }
 
     async fn handle_voice(
@@ -856,13 +864,35 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         policy: VoipRoutingPolicy,
         sender_id: i64,
     ) -> Result<(), ServerError> {
-        let policy_with_except = match policy {
-            VoipRoutingPolicy::Channel(id, _) => VoipRoutingPolicy::Channel(id, Some(sender_id)),
-            VoipRoutingPolicy::Recipient(id, _) => {
-                VoipRoutingPolicy::Recipient(id, Some(sender_id))
+        for subscriber in &self.observers {
+            if let Some(participant) = self
+                .service
+                .get_voip_participant(subscriber.user_id())
+                .await?
+            {
+                let can_receive = match (&policy, participant.channel_id, participant.recipient_id)
+                {
+                    (VoipRoutingPolicy::Channel(id), Some(channel_id), None)
+                        if *id == channel_id && subscriber.user_id() != sender_id =>
+                    {
+                        true
+                    }
+                    (VoipRoutingPolicy::Recipient(target_user_id), None, Some(_recipient_id))
+                        if subscriber.user_id() == *target_user_id =>
+                    {
+                        true
+                    }
+                    (_, _, _) => false,
+                };
+
+                if can_receive {
+                    subscriber
+                        .send(SubscriberMessage::Voip(payload.clone()))
+                        .await;
+                }
             }
-        };
-        self.route_voip(payload, policy_with_except).await
+        }
+        Ok(())
     }
 
     async fn handle_media(
@@ -974,56 +1004,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         return Ok(());
     }
 
-    async fn route_voip(
-        &self,
-        event: VoipPayload,
-        policy: VoipRoutingPolicy,
-    ) -> Result<(), ServerError> {
-        for subscriber in &self.observers {
-            if let Some(participant) = self
-                .service
-                .get_voip_participant(subscriber.user_id())
-                .await?
-            {
-                let can_receive = match (&policy, participant.channel_id, participant.recipient_id)
-                {
-                    (VoipRoutingPolicy::Channel(id, Some(except_id)), Some(channel_id), None)
-                        if *id == channel_id && subscriber.user_id() != *except_id =>
-                    {
-                        true
-                    }
-                    (VoipRoutingPolicy::Channel(id, None), Some(channel_id), None)
-                        if *id == channel_id =>
-                    {
-                        true
-                    }
-                    (
-                        VoipRoutingPolicy::Recipient(target_user_id, Some(except_id)),
-                        None,
-                        Some(_recipient_id),
-                    ) if subscriber.user_id() == *target_user_id
-                        && subscriber.user_id() != *except_id =>
-                    {
-                        true
-                    }
-                    (
-                        VoipRoutingPolicy::Recipient(target_user_id, None),
-                        None,
-                        Some(_recipient_id),
-                    ) if subscriber.user_id() == *target_user_id => true,
-
-                    (_, _, _) => false,
-                };
-                if can_receive {
-                    subscriber
-                        .send(SubscriberMessage::Voip(event.clone()))
-                        .await;
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub async fn run(mut self) -> Result<(), ServerError> {
         let mut server = Server::bind(
             "[::]:4443",
@@ -1112,6 +1092,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             tokio::select! {
                 Some(msg) = session.server_rx.recv() => {
                     if let Err(e) = session.handle_server_message(msg).await{
+                        session.send_error(format!("{:?}",e)).await;
                         break;
                     }
 
@@ -1124,18 +1105,20 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                                 break;
                             }
                         }
-                        None =>{
-                            if let Some(ref user_session) = session.may_session{
-                               let _ = session
-                                   .observer_tx
-                                   .send(ServerMessage::Command(CommandPayload::Timeout(user_session.user_id, session.identifier.clone())))
-                                   .await;
-                            }
-                            break;
-                        },
+                        None => break,
                     }
                 }
             }
+        }
+
+        if let Some(ref user_session) = session.may_session {
+            let _ = session
+                .observer_tx
+                .send(ServerMessage::Command(CommandPayload::Timeout(
+                    user_session.user_id,
+                    session.identifier.clone(),
+                )))
+                .await;
         }
     }
 }

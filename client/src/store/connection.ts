@@ -3,6 +3,17 @@ import { RTCPProtocol } from "opencord-transport";
 import { decode, encode } from "@msgpack/msgpack";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
+import type {
+  Channel,
+  Group,
+  Role,
+  User,
+  VoipParticipant,
+  GroupRoleRights,
+  Subscription,
+  File,
+  ServerConfig,
+} from "../model";
 
 function hexToUint8Array(hexString: string): Uint8Array {
   const cleanHex = hexString.replace(/[^0-9A-Fa-f]/g, '');
@@ -32,16 +43,52 @@ export type ControlPayload =
   | { type: "close"; reason?: string }
   | { type: "error"; reason: string };
 
-export interface VoipPayload {
-  type: string;
-  userId: number;
-  [key: string]: unknown;
-}
+// VoipPayload matches server's VoipPayload enum
+export type VoipPayload =
+  | {
+      type: "speech";
+      userId: number;
+      isSpeaking: boolean;
+    }
+  | {
+      type: "media";
+      userId: number;
+      mediaType: "voice" | "camera" | "screen" | "screenSound";
+      data: number[];
+      timestamp: number;
+      realTimestamp: number;
+      key: "key" | "delta";
+    };
 
-export interface EventPayload {
-  type: string;
-  [key: string]: unknown;
-}
+// EventPayload matches server's EventPayload enum
+export type EventPayload =
+  | { type: "channelUpdated"; channel: Channel }
+  | { type: "channelDeleted"; channelId: number }
+  | { type: "groupUpdated"; group: Group }
+  | { type: "groupDeleted"; groupId: number }
+  | { type: "roleUpdated"; role: Role }
+  | { type: "roleDeleted"; roleId: number }
+  | { type: "userUpdated"; user: User }
+  | { type: "userDeleted"; userId: number }
+  | { type: "serverUpdated"; server: ServerConfig }
+  | { type: "groupRoleRightUpdated"; right: GroupRoleRights }
+  | { type: "voipParticipantUpdated"; user: VoipParticipant }
+  | { type: "voipParticipantDeleted"; userId: number }
+  | {
+      type: "messageCreated";
+      messageId: number;
+      senderId: number;
+      messageType: string;
+      messageText: string;
+      replyToMessageId: number | null;
+      timestamp: string;
+      files: File[];
+    }
+  | { type: "messageUpdated"; messageId: number; messageText: string }
+  | { type: "messageDeleted"; messageId: number }
+  | { type: "groupHide"; groupId: number }
+  | { type: "mediaSubscription"; subscription: Subscription }
+  | { type: "mediaUnsubscription"; subscription: Subscription };
 
 type ConnectionMessage =
   | { type: "voip"; payload: VoipPayload }

@@ -184,7 +184,7 @@ const StreamsContent: Component = () => {
                           <Show when={!isFullscreen()}>
                             <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                               <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
-                                <Camera size={14} class="text-blue-400" />
+                                <Camera size={14} class="text-link" />
                                 <span class="text-white text-sm font-medium truncate max-w-[120px]">
                                   {user()?.username ?? "Unknown"}
                                 </span>
@@ -241,12 +241,12 @@ const StreamsContent: Component = () => {
                           <Show when={!isFullscreen()}>
                             <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                               <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
-                                <Monitor size={14} class="text-blue-400" />
+                                <Monitor size={14} class="text-link" />
                                 <span class="text-white text-sm font-medium truncate max-w-[120px]">
                                   {user()?.username ?? "Unknown"}
                                 </span>
                                 <Show when={playbackActions.getScreenAudioVolume(participant.userId) === 0}>
-                                  <Volume2 size={14} class="text-red-400" />
+                                  <Volume2 size={14} class="text-destructive" />
                                 </Show>
                               </div>
 

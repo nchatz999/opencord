@@ -1,8 +1,8 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { fetchApi } from "../utils";
 import { useConnection, type VoipPayload } from "./connection";
 import { useAuth } from "./auth";
+import { useVoip } from "./voip";
 
 export interface ScreenShareConstraints {
   width?: number;
@@ -160,6 +160,7 @@ function createScreenShareStore(): ScreenShareStore {
 
   const connection = useConnection();
   const [, authActions] = useAuth();
+  const [, voipActions] = useVoip();
 
   function notifyEncodedVideoData(chunk: EncodedVideoChunk): void {
     encodedVideoDataCallbacks.forEach((cb) => cb(chunk));
@@ -236,11 +237,8 @@ function createScreenShareStore(): ScreenShareStore {
     stream = null;
   }
 
-  function handleVideoTrackEnded(): void {
-    fetchApi("/voip/screen/publish", {
-      method: "PUT",
-      body: { publish: false },
-    });
+  async function handleVideoTrackEnded() {
+    await voipActions.publishScreen(false)
     actions.stop();
   }
 
@@ -249,6 +247,9 @@ function createScreenShareStore(): ScreenShareStore {
       this.onEncodedVideoData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
+
+        const session = voipActions.findById(user.userId);
+        if (!session) return;
 
         const payload: VoipPayload = {
           type: "media",
@@ -266,6 +267,9 @@ function createScreenShareStore(): ScreenShareStore {
       this.onEncodedAudioData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
+
+        const session = voipActions.findById(user.userId);
+        if (!session) return;
 
         const payload: VoipPayload = {
           type: "media",

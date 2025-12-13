@@ -24,8 +24,6 @@ export const ChannelEntry: Component<{
     }
 
     if (channel.channelType === ChannelType.VoIP) {
-      await microphoneActions.start();
-      await playbackActions.resume();
       const result = await voipActions.joinChannel(
         channel.channelId,
         microphoneActions.getMuted(),
@@ -35,6 +33,8 @@ export const ChannelEntry: Component<{
         addToast(`Failed to join channel: ${result.error}`, "error");
         return;
       }
+      await microphoneActions.start();
+      await playbackActions.resume();
     }
   };
 

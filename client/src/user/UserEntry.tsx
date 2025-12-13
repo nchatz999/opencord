@@ -88,7 +88,7 @@ export const UserEntry: Component<{ user: User; }> = (
         <div class="flex items-center gap-1">
           <p class="text-sm text-foreground truncate">{props.user.username}</p>
           {isUserCallingMe() && (
-            <Phone size={12} class="text-status-online flex-shrink-0" />
+            <Phone size={12} class="text-success flex-shrink-0" />
           )}
         </div>
         <p class="text-xs text-muted-foreground truncate">{statusText()}</p>

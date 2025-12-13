@@ -327,7 +327,7 @@ const ServerSettingsModal: Component = () => {
               value={searchTerm()}
               onChange={setSearchTerm}
               placeholder="Search users..."
-              icon={<Search class="w-4 h-4 text-gray-400" />}
+              icon={<Search class="w-4 h-4 text-muted-foreground" />}
             />
             <Table>
               <TableHead>
@@ -396,7 +396,7 @@ const ServerSettingsModal: Component = () => {
             label="Allow Open Registration"
           />
           <Show when={isRegistrationOpen()}>
-            <div class="bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 p-4 rounded-lg">
+            <div class="bg-warning/20 border border-warning/30 text-warning p-4 rounded-lg">
               <p class="text-sm">
                 <strong>Warning:</strong> Open registration may lead to unwanted users joining
                 your server. Consider using invite links or manual approvals for
@@ -448,7 +448,7 @@ const ServerSettingsModal: Component = () => {
                   />
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-gray-300 mb-1">
+                  <label class="block text-sm font-medium text-secondary-text mb-1">
                     Role
                   </label>
                   <Select
@@ -520,14 +520,14 @@ const ServerSettingsModal: Component = () => {
                           </TableCell>
                           <TableCell class="text-center">
                             <span class={`px-2 py-1 rounded text-xs font-medium ${invite.availableRegistrations > 0
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-red-500/20 text-red-400'
+                              ? 'bg-success/20 text-success'
+                              : 'bg-destructive/20 text-destructive'
                               }`}>
                               {invite.availableRegistrations}
                             </span>
                           </TableCell>
                           <TableCell class="text-center">
-                            <span class="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                            <span class="px-2 py-1 rounded text-xs font-medium bg-link/20 text-link">
                               {roleActions.findById(invite.roleId)?.roleName || 'Unknown'}
                             </span>
                           </TableCell>
@@ -639,7 +639,7 @@ const ServerSettingsModal: Component = () => {
                               {formatLogDate(log.date)}
                             </TableCell>
                             <TableCell>
-                              <span class="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                              <span class="px-2 py-1 rounded text-xs font-medium bg-link/20 text-link">
                                 {log.category}
                               </span>
                             </TableCell>

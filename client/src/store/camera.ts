@@ -1,8 +1,8 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { fetchApi } from "../utils";
 import { useConnection, type VoipPayload } from "./connection";
 import { useAuth } from "./auth";
+import { useVoip } from "./voip";
 
 export interface CameraConstraints {
   width?: number;
@@ -124,6 +124,7 @@ function createCameraStore(): CameraStore {
 
   const connection = useConnection();
   const [, authActions] = useAuth();
+  const [, voipActions] = useVoip();
 
   function notifyEncodedData(chunk: EncodedVideoChunk): void {
     encodedDataCallbacks.forEach((cb) => cb(chunk));
@@ -165,11 +166,8 @@ function createCameraStore(): CameraStore {
     processor = null;
   }
 
-  function handleTrackEnded(): void {
-    fetchApi("/voip/camera/publish", {
-      method: "PUT",
-      body: { publish: false },
-    });
+  async function handleTrackEnded() {
+    await voipActions.publishCamera(false)
     actions.stop();
   }
 
@@ -178,6 +176,9 @@ function createCameraStore(): CameraStore {
       this.onEncodedData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
+
+        const session = voipActions.findById(user.userId);
+        if (!session) return;
 
         const payload: VoipPayload = {
           type: "media",

@@ -522,7 +522,7 @@ const UserSettingsModal: Component = () => {
                               Session #{session.sessionId}
                             </span>
                             <Show when={isCurrentSession(session.sessionToken)}>
-                              <span class="px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400">
+                              <span class="px-2 py-1 rounded text-xs font-medium bg-success/20 text-success">
                                 Current
                               </span>
                             </Show>
@@ -546,7 +546,7 @@ const UserSettingsModal: Component = () => {
                           <button
                             onClick={() => terminateSession(session.sessionToken)}
                             disabled={isCurrentSession(session.sessionToken)}
-                            class="p-2 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="p-2 hover:bg-destructive/20 text-destructive hover:text-destructive rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title={isCurrentSession(session.sessionToken) ? "Cannot terminate current session" : "Terminate session"}
                           >
                             <Trash2 class="w-4 h-4" />

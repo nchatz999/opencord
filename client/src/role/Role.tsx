@@ -9,7 +9,7 @@ interface Props {
 const Role: Component<Props> = (props) => {
   return (
     <div
-      class="flex flex-col gap-2 hover:bg-gray-700 pl-4 py-2"
+      class="flex flex-col gap-2 hover:bg-muted pl-4 py-2"
       onClick={() => {
         props.onClick();
       }}

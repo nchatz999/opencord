@@ -67,16 +67,16 @@ const PrivateCallStatusPanel: Component = () => {
 
           <div class="flex items-center gap-0.5">
             <Show when={info().currentUserVoip?.localMute}>
-              <MicOff size={12} class="text-red-400" />
+              <MicOff size={12} class="text-destructive" />
             </Show>
             <Show when={info().currentUserVoip?.localDeafen}>
-              <Headphones size={12} class="text-red-400" />
+              <Headphones size={12} class="text-destructive" />
             </Show>
             <Show when={info().currentUserVoip?.publishCamera || info().otherUserVoip?.publishCamera}>
-              <Video size={12} class="text-green-400" />
+              <Video size={12} class="text-action-positive" />
             </Show>
             <Show when={info().currentUserVoip?.publishScreen || info().otherUserVoip?.publishScreen}>
-              <Monitor size={12} class="text-green-400" />
+              <Monitor size={12} class="text-action-positive" />
             </Show>
           </div>
         </div>

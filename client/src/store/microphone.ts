@@ -3,6 +3,7 @@ import { createRoot } from "solid-js";
 import { createVADNode } from "../contexts/Vad";
 import { useConnection, type VoipPayload } from "./connection";
 import { useAuth } from "./auth";
+import { useVoip } from "./voip";
 
 export interface MicrophoneConstraints {
   echoCancellation?: boolean;
@@ -178,6 +179,7 @@ function createMicrophoneStore(): MicrophoneStore {
 
   const connection = useConnection();
   const [, authActions] = useAuth();
+  const [, voipActions] = useVoip();
 
   function notifyEncodedData(chunk: EncodedAudioChunk): void {
     encodedDataCallbacks.forEach((cb) => cb(chunk));
@@ -246,6 +248,9 @@ function createMicrophoneStore(): MicrophoneStore {
       this.onEncodedData((chunk) => {
         const user = authActions.getUser();
         if (!user) return;
+
+        const session = voipActions.findById(user.userId);
+        if (!session) return;
 
         const payload: VoipPayload = {
           type: "media",

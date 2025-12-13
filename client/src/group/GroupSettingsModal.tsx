@@ -3,7 +3,7 @@ import { createSignal, createMemo, For } from 'solid-js'
 import { Hash, Volume2, X } from 'lucide-solid'
 import { RIGHTS, type Group } from '../model'
 import { useToaster } from '../components/Toaster'
-import { useAuth, useAcl, useGroup, useModal, useRole } from '../store/index'
+import { useAuth, useAcl, useGroup, useModal, useRole, useChannel } from '../store/index'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/Table'
 import Checkbox from '../components/CheckBox'
 import { Tabs } from '../components/Tabs'
@@ -19,6 +19,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const [, authActions] = useAuth()
   const [, aclActions] = useAcl()
   const [, groupActions] = useGroup()
+  const [, channelActions] = useChannel()
   const [, modalActions] = useModal()
   const [, roleActions] = useRole()
   const user = () => authActions.getUser()
@@ -45,7 +46,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
         <div class="flex flex-col h-96 mt-6">
           <div class="flex-grow overflow-y-auto mb-4 pr-2 custom-scrollbar">
             <ul class="space-y-2">
-              <For each={groupActions.getChannels(props.group.groupId)}>
+              <For each={channelActions.findByGroup(props.group.groupId)}>
                 {(channel) => (
                   <li class="flex items-center justify-between bg-card p-2 rounded">
                     <div class="flex items-center">

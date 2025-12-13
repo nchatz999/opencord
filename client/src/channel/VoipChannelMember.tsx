@@ -112,7 +112,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
         <ContextMenu items={contextMenuItems()}>
           <div class="flex items-center gap-2 px-2 py-1 text-muted-foreground hover:bg-muted rounded transition-all">
             <div class="relative shrink-0">
-              <div class={`rounded-full p-0.5 transition-all duration-200 ${isSpeaking() ? 'bg-green-500 shadow-lg shadow-green-500/50' : ''}`}>
+              <div class={`rounded-full p-0.5 transition-all duration-200 ${isSpeaking() ? 'bg-success shadow-lg shadow-success/50' : ''}`}>
                 <img
                   src={`/user/${u().avatarFileId}/avatar`}
                   alt={u().username}
@@ -126,35 +126,35 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
 
               <div class="flex items-center gap-1 shrink-0">
                 <Show when={props.participant.localMute}>
-                  <div class="p-0.5 bg-gray-600 rounded-full" title="User is muted">
-                    <MicOff size={8} class="text-white" />
+                  <div class="p-0.5 bg-secondary rounded-full" title="User is muted">
+                    <MicOff size={8} class="text-primary-foreground" />
                   </div>
                 </Show>
 
                 <Show when={props.participant.localDeafen}>
                   <div
-                    class="p-0.5 bg-gray-600 rounded-full"
+                    class="p-0.5 bg-secondary rounded-full"
                     title="User is deafened"
                   >
-                    <VolumeX size={8} class="text-white" />
+                    <VolumeX size={8} class="text-primary-foreground" />
                   </div>
                 </Show>
 
                 <Show when={aclActions.getChannelRights(props.channelId, u().roleId) <= 2}>
-                  <div class="p-0.5 bg-red-800 rounded-full" title="Server muted">
-                    <MicOff size={8} class="text-white" />
+                  <div class="p-0.5 bg-action-negative rounded-full" title="Server muted">
+                    <MicOff size={8} class="text-primary-foreground" />
                   </div>
                 </Show>
 
                 <Show when={props.participant.publishScreen}>
-                  <div class="p-0.5 bg-blue-600 rounded-full" title="Sharing screen">
-                    <Monitor size={8} class="text-white" />
+                  <div class="p-0.5 bg-link rounded-full" title="Sharing screen">
+                    <Monitor size={8} class="text-primary-foreground" />
                   </div>
                 </Show>
 
                 <Show when={props.participant.publishCamera}>
-                  <div class="p-0.5 bg-green-600 rounded-full" title="Camera on">
-                    <Video size={8} class="text-white" />
+                  <div class="p-0.5 bg-action-positive rounded-full" title="Camera on">
+                    <Video size={8} class="text-primary-foreground" />
                   </div>
                 </Show>
               </div>

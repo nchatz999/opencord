@@ -101,7 +101,7 @@ const VoiceVideoControls: Component = () => {
             variant='ghost'
             onClick={() => handleScreenShare(voip().publishScreen)}
             class={`p-2 rounded transition-colors ${voip().publishScreen
-              ? 'bg-green-600 hover:bg-green-700 text-white'
+              ? 'bg-action-positive hover:bg-action-positive-hover text-primary-foreground'
               : 'bg-muted hover:bg-accent text-foreground'
               }`}
             title={voip().publishScreen ? 'Stop Screen Share' : 'Share Screen'}
@@ -118,7 +118,7 @@ const VoiceVideoControls: Component = () => {
           <button
             onClick={() => handleCamera(voip().publishCamera)}
             class={`p-2 rounded transition-colors ${voip().publishCamera
-              ? 'bg-green-600 hover:bg-green-700 text-white'
+              ? 'bg-action-positive hover:bg-action-positive-hover text-primary-foreground'
               : 'bg-muted hover:bg-accent text-foreground'
               }`}
             title={voip().publishCamera ? 'Turn Off Camera' : 'Turn On Camera'}
@@ -133,7 +133,7 @@ const VoiceVideoControls: Component = () => {
       <Show when={currentVoip()}>
         <button
           onClick={handleLeaveCall}
-          class="p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+          class="p-2 bg-destructive hover:bg-destructive-hover text-destructive-foreground rounded transition-colors"
           title="Leave Voice Channel"
         >
           <PhoneOff size={16} />

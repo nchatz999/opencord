@@ -73,7 +73,7 @@ const UserSection: Component = () => {
         <button
           onClick={handleMuteToggle}
           class={`p-2 rounded transition-colors ${microphoneActions.getMuted()
-            ? 'bg-red-600 hover:bg-red-700 text-white'
+            ? 'bg-destructive hover:bg-destructive-hover text-destructive-foreground'
             : 'bg-muted hover:bg-accent text-foreground'
             }`}
           title={microphoneActions.getMuted() ? 'Unmute' : 'Mute'}
@@ -86,7 +86,7 @@ const UserSection: Component = () => {
         <button
           onClick={handleDeafenToggle}
           class={`p-2 rounded transition-colors ${outputActions.getDeafened()
-            ? 'bg-red-600 hover:bg-red-700 text-white'
+            ? 'bg-destructive hover:bg-destructive-hover text-destructive-foreground'
             : 'bg-muted hover:bg-accent text-foreground'
             }`}
           title={outputActions.getDeafened() ? 'Undeafen' : 'Deafen'}
