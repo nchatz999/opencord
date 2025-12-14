@@ -16,26 +16,26 @@ import MessageComponent from "./Message";
 const MESSAGES_LIMIT = 50;
 const SCROLL_THRESHOLD = 5;
 const BOTTOM_THRESHOLD = 100;
+const SCROLL_SETTLE_DELAY = 50;
+
+const toContextId = (c: { type: string; id: number }) => `${c.type}-${c.id}`;
 
 const waitForImages = (container: HTMLElement): Promise<void> => {
-  const images = container.querySelectorAll('img');
-  const promises = Array.from(images).map((img) => {
-    if (img.complete) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      img.addEventListener('load', () => resolve(), { once: true });
-      img.addEventListener('error', () => resolve(), { once: true });
-    });
-  });
-  return Promise.all(promises).then(() => { });
+  const pending = Array.from(container.querySelectorAll("img"))
+    .filter((img) => !img.complete)
+    .map((img) => new Promise<void>((resolve) => {
+      img.addEventListener("load", () => resolve(), { once: true });
+      img.addEventListener("error", () => resolve(), { once: true });
+    }));
+  return Promise.all(pending).then(() => { });
 };
 
-const waitForRender = (): Promise<void> => {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve());
-    });
+const waitForRender = (): Promise<void> =>
+  new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
-};
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ChatContent: Component = () => {
   const [, channelActions] = useChannel();
@@ -43,68 +43,48 @@ const ChatContent: Component = () => {
   const [, messageActions] = useMessage();
   const [, userActions] = useUser();
   const [contextState, contextActions] = useContext();
+  const { addToast } = useToaster();
 
-  let messagesContainerRef: HTMLDivElement | undefined;
+  let containerRef: HTMLDivElement | undefined;
 
   const [isLoadingMore, setIsLoadingMore] = createSignal(false);
-  const [isAwaitingInitialLoad, setIsAwaitingInitialLoad] = createSignal(false);
-
-  const { addToast } = useToaster();
+  const [stableContextId, setStableContextId] = createSignal<string | null>(null);
 
   const ctx = createMemo(() => contextState.context);
 
-  const messages = () => {
+  const messages = createMemo(() => {
     const context = ctx();
     if (!context) return [];
     return context.type === "dm"
       ? messageActions.findByRecipient(context.id)
       : messageActions.findByChannel(context.id);
-  };
+  });
 
   const latestMessageId = createMemo(() => {
     const msgs = messages();
     return msgs.length > 0 ? msgs[msgs.length - 1].id : null;
   });
 
-  const isNearBottom = (): boolean => {
-    if (!messagesContainerRef) return true;
-    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef;
-    return scrollHeight - scrollTop - clientHeight < BOTTOM_THRESHOLD;
-  };
-
-  const scrollToBottom = () => {
-    requestAnimationFrame(() => {
-      if (messagesContainerRef) {
-        messagesContainerRef.scrollTop = messagesContainerRef.scrollHeight;
-      }
-    });
-  };
-
-  const scrollToBottomIfNeeded = async (forceScroll = false) => {
-    if (!messagesContainerRef) return;
-    if (!forceScroll && !isNearBottom()) return;
-    await waitForImages(messagesContainerRef);
-    scrollToBottom();
-  };
+  const contextKey = createMemo(() => {
+    const c = ctx();
+    return c ? { type: c.type, id: c.id } : null;
+  });
 
   const loadMoreMessages = async () => {
     const context = ctx();
-    const msgs = messages();
-    if (!context || isLoadingMore()) return;
-    setIsLoadingMore(true);
-    const container = messagesContainerRef!;
-    const previousScrollHeight = container.scrollHeight;
-    const firstMessage = msgs[0];
+    if (!context || isLoadingMore() || !containerRef) return;
 
-    const createdAt = firstMessage
-      ? firstMessage.createdAt
-      : new Date().toISOString();
+    setIsLoadingMore(true);
+
+    const msgs = messages();
+    const cursor = msgs[0]?.createdAt ?? new Date().toISOString();
+    const prevHeight = containerRef.scrollHeight;
 
     const result = await messageActions.fetchMessages(
       context.type,
       context.id,
       MESSAGES_LIMIT,
-      createdAt
+      cursor
     );
 
     if (result.isErr()) {
@@ -113,99 +93,79 @@ const ChatContent: Component = () => {
       return;
     }
 
-    await fileActions.fetchFiles(context.type, context.id, MESSAGES_LIMIT, createdAt);
+    await fileActions.fetchFiles(context.type, context.id, MESSAGES_LIMIT, cursor);
 
     requestAnimationFrame(() => {
-      const scrollHeightDiff = container.scrollHeight - previousScrollHeight;
-      container.scrollTop += scrollHeightDiff;
+      if (containerRef) {
+        containerRef.scrollTop += containerRef.scrollHeight - prevHeight;
+      }
     });
 
     setIsLoadingMore(false);
   };
 
-  const saveScrollPosition = () => {
-    const context = ctx();
-    if (!context || !messagesContainerRef || isAwaitingInitialLoad()) return;
-    contextActions.setScrollPosition(context, messagesContainerRef.scrollTop);
-  };
-
   const handleScroll = () => {
-    const container = messagesContainerRef;
-    if (!container || isAwaitingInitialLoad()) return;
+    const context = ctx();
+    if (!context || !containerRef) return;
 
-    saveScrollPosition();
+    if (stableContextId() === toContextId(context)) {
+      contextActions.setScrollPosition(context, containerRef.scrollTop);
+    }
 
-    if (container.scrollTop < SCROLL_THRESHOLD) {
+    if (containerRef.scrollTop < SCROLL_THRESHOLD) {
       loadMoreMessages();
     }
   };
 
-  createEffect(on(
-    () => ({ type: ctx()?.type, id: ctx()?.id }),
-    async (newCtx) => {
-      if (!newCtx?.id) return;
+  createEffect(on(contextKey, async (context) => {
+    if (!context) return;
 
-      const context = { type: newCtx.type!, id: newCtx.id };
-      const isStillCurrent = () => ctx()?.type === context.type && ctx()?.id === context.id;
+    const contextId = toContextId(context);
+    setStableContextId(null);
 
-      setIsAwaitingInitialLoad(true);
-
-      if (messages().length === 0) {
-        await loadMoreMessages();
-      }
-
-      if (!isStillCurrent()) {
-        setIsAwaitingInitialLoad(false);
-        return;
-      }
-
-      await waitForRender();
-
-      if (!isStillCurrent()) {
-        setIsAwaitingInitialLoad(false);
-        return;
-      }
-
-      if (messagesContainerRef) {
-        await waitForImages(messagesContainerRef);
-      }
-
-      if (!messagesContainerRef || !isStillCurrent()) {
-        setIsAwaitingInitialLoad(false);
-        return;
-      }
-
-      const savedPosition = contextActions.getScrollPosition(context);
-      const hasVisited = contextActions.hasVisited(context);
-
-      if (savedPosition !== undefined && hasVisited) {
-        messagesContainerRef.scrollTop = savedPosition;
-        void messagesContainerRef.offsetHeight;
-        contextActions.setScrollPosition(context, savedPosition);
-      } else {
-        messagesContainerRef.scrollTop = messagesContainerRef.scrollHeight;
-        void messagesContainerRef.offsetHeight;
-        contextActions.setScrollPosition(context, messagesContainerRef.scrollTop);
-        contextActions.markVisited(context);
-      }
-
-      setIsAwaitingInitialLoad(false);
-    },
-    { defer: true }
-  ));
-
-  createEffect(on(
-    latestMessageId,
-    (newId, prevId) => {
-      if (newId !== prevId && !isAwaitingInitialLoad()) {
-        scrollToBottomIfNeeded();
-      }
+    if (messages().length === 0) {
+      await loadMoreMessages();
     }
-  ));
+
+    await waitForRender();
+    if (containerRef) await waitForImages(containerRef);
+    if (!containerRef) return;
+
+    const savedPosition = contextActions.getScrollPosition(context);
+
+    if (contextActions.hasVisited(context) && savedPosition !== undefined) {
+      containerRef.scrollTop = savedPosition;
+    } else {
+      containerRef.scrollTop = containerRef.scrollHeight;
+      contextActions.markVisited(context);
+    }
+
+    const targetPosition = containerRef.scrollTop;
+    contextActions.setScrollPosition(context, targetPosition);
+
+    await delay(SCROLL_SETTLE_DELAY);
+
+    if (containerRef) {
+      containerRef.scrollTop = targetPosition;
+      setStableContextId(contextId);
+    }
+  }, { defer: true }));
+
+  createEffect(on(latestMessageId, async (newId, prevId) => {
+    if (newId === prevId || stableContextId() === null || !containerRef) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = containerRef;
+    if (scrollHeight - scrollTop - clientHeight >= BOTTOM_THRESHOLD) return;
+
+    await waitForImages(containerRef);
+    requestAnimationFrame(() => {
+      if (containerRef) containerRef.scrollTop = containerRef.scrollHeight;
+    });
+  }));
 
   return (
     <div
-      ref={messagesContainerRef}
+      ref={containerRef}
       class="flex-1 flex flex-col overflow-auto px-4 py-2 space-y-2 min-h-0"
       onScroll={handleScroll}
     >
