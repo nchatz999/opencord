@@ -13,7 +13,6 @@ import { useChannel, useFile, useMessage, useUser, useContext } from "../store/i
 import { useToaster } from "../components/Toaster";
 import MessageComponent from "./Message";
 
-
 const MESSAGES_LIMIT = 50;
 const SCROLL_THRESHOLD = 5;
 const BOTTOM_THRESHOLD = 100;
@@ -30,17 +29,25 @@ const waitForImages = (container: HTMLElement): Promise<void> => {
   return Promise.all(promises).then(() => { });
 };
 
+const waitForRender = (): Promise<void> => {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+};
+
 const ChatContent: Component = () => {
   const [, channelActions] = useChannel();
   const [, fileActions] = useFile();
-  const [messageState, messageActions] = useMessage();
+  const [, messageActions] = useMessage();
   const [, userActions] = useUser();
-  const [contextState] = useContext();
+  const [contextState, contextActions] = useContext();
 
-  let messagesEndRef: HTMLDivElement | undefined;
   let messagesContainerRef: HTMLDivElement | undefined;
 
   const [isLoadingMore, setIsLoadingMore] = createSignal(false);
+  const [isAwaitingInitialLoad, setIsAwaitingInitialLoad] = createSignal(false);
 
   const { addToast } = useToaster();
 
@@ -116,33 +123,85 @@ const ChatContent: Component = () => {
     setIsLoadingMore(false);
   };
 
+  const saveScrollPosition = () => {
+    const context = ctx();
+    if (!context || !messagesContainerRef || isAwaitingInitialLoad()) return;
+    contextActions.setScrollPosition(context, messagesContainerRef.scrollTop);
+  };
 
   const handleScroll = () => {
     const container = messagesContainerRef;
-    if (!container) return;
+    if (!container || isAwaitingInitialLoad()) return;
 
+    saveScrollPosition();
 
     if (container.scrollTop < SCROLL_THRESHOLD) {
       loadMoreMessages();
     }
   };
 
-  createEffect(on(ctx, async () => {
-    if (messages().length == 0) {
-      await loadMoreMessages();
-    }
-    scrollToBottomIfNeeded(true);
-  }));
+  createEffect(on(
+    () => ({ type: ctx()?.type, id: ctx()?.id }),
+    async (newCtx) => {
+      if (!newCtx?.id) return;
+
+      const context = { type: newCtx.type!, id: newCtx.id };
+      const isStillCurrent = () => ctx()?.type === context.type && ctx()?.id === context.id;
+
+      setIsAwaitingInitialLoad(true);
+
+      if (messages().length === 0) {
+        await loadMoreMessages();
+      }
+
+      if (!isStillCurrent()) {
+        setIsAwaitingInitialLoad(false);
+        return;
+      }
+
+      await waitForRender();
+
+      if (!isStillCurrent()) {
+        setIsAwaitingInitialLoad(false);
+        return;
+      }
+
+      if (messagesContainerRef) {
+        await waitForImages(messagesContainerRef);
+      }
+
+      if (!messagesContainerRef || !isStillCurrent()) {
+        setIsAwaitingInitialLoad(false);
+        return;
+      }
+
+      const savedPosition = contextActions.getScrollPosition(context);
+      const hasVisited = contextActions.hasVisited(context);
+
+      if (savedPosition !== undefined && hasVisited) {
+        messagesContainerRef.scrollTop = savedPosition;
+        void messagesContainerRef.offsetHeight;
+        contextActions.setScrollPosition(context, savedPosition);
+      } else {
+        messagesContainerRef.scrollTop = messagesContainerRef.scrollHeight;
+        void messagesContainerRef.offsetHeight;
+        contextActions.setScrollPosition(context, messagesContainerRef.scrollTop);
+        contextActions.markVisited(context);
+      }
+
+      setIsAwaitingInitialLoad(false);
+    },
+    { defer: true }
+  ));
 
   createEffect(on(
     latestMessageId,
     (newId, prevId) => {
-      if (newId !== prevId) {
+      if (newId !== prevId && !isAwaitingInitialLoad()) {
         scrollToBottomIfNeeded();
       }
     }
   ));
-
 
   return (
     <div
@@ -150,7 +209,6 @@ const ChatContent: Component = () => {
       class="flex-1 flex flex-col overflow-auto px-4 py-2 space-y-2 min-h-0"
       onScroll={handleScroll}
     >
-
       <Show when={ctx()}>
         {(context) => (
           <Switch>
@@ -177,7 +235,6 @@ const ChatContent: Component = () => {
                 <For each={messages()}>
                   {(message) => <MessageComponent message={message} type="direct" />}
                 </For>
-                <div ref={messagesEndRef} />
               </Show>
             </Match>
 
@@ -204,7 +261,6 @@ const ChatContent: Component = () => {
                 <For each={messages()}>
                   {(message) => <MessageComponent message={message} type="channel" />}
                 </For>
-                <div ref={messagesEndRef} />
               </Show>
             </Match>
           </Switch>
