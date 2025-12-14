@@ -16,11 +16,10 @@ import MessageComponent from "./Message";
 const MESSAGES_LIMIT = 50;
 const SCROLL_THRESHOLD = 5;
 const BOTTOM_THRESHOLD = 100;
-const SCROLL_SETTLE_DELAY = 50;
 
 const toContextId = (c: { type: string; id: number }) => `${c.type}-${c.id}`;
 
-const waitForImages = (container: HTMLElement): Promise<void> => {
+const waitForImages = async (container: HTMLElement) => {
   const pending = Array.from(container.querySelectorAll("img"))
     .filter((img) => !img.complete)
     .map((img) => new Promise<void>((resolve) => {
@@ -34,8 +33,6 @@ const waitForRender = (): Promise<void> =>
   new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
-
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ChatContent: Component = () => {
   const [, channelActions] = useChannel();
@@ -142,8 +139,6 @@ const ChatContent: Component = () => {
 
     const targetPosition = containerRef.scrollTop;
     contextActions.setScrollPosition(context, targetPosition);
-
-    await delay(SCROLL_SETTLE_DELAY);
 
     if (containerRef) {
       containerRef.scrollTop = targetPosition;
