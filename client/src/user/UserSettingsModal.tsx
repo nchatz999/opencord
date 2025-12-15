@@ -51,7 +51,7 @@ const UserSettingsModal: Component = () => {
   const [_avatarPreview, setAvatarPreview] = createSignal<string | null>(null);
   let fileInputRef: HTMLInputElement | undefined;
 
-  const [outputVolume, setOutputVolume] = createSignal("50");
+  const [outputVolume, setOutputVolume] = createSignal(50);
 
   const [currentPassword, setCurrentPassword] = createSignal("");
   const [newPassword, setNewPassword] = createSignal("");
@@ -347,12 +347,11 @@ const UserSettingsModal: Component = () => {
                 </label>
                 <div class="flex items-center space-x-2">
                   <Headphones class="w-4 h-4" />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
+                  <Slider
+                    min={0}
+                    max={200}
                     value={outputVolume()}
-                    onInput={(e) => setOutputVolume(e.currentTarget.value)}
+                    onChange={(value) => setOutputVolume(value)}
                     class="w-full"
                   />
                 </div>
