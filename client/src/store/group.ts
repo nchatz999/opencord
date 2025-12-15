@@ -90,7 +90,6 @@ function createGroupStore(): GroupStore {
     },
 
     remove(id) {
-      // Cascade: remove channels first (which cascades to messages and voip)
       channelActions.removeByGroup(id);
 
       setState(

@@ -140,7 +140,6 @@ export type VoipDataMessage =
   }
 
 
-//composites
 export interface MessageWithFiles {
   message: Message;
   files: File[];

@@ -21,8 +21,7 @@ import {
   Calendar,
   Settings,
 } from "lucide-solid";
-import { connection } from "../store";
-import { useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice } from "../store/index";
+import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice } from "../store/index";
 import { useApp } from "../store/app";
 import { Input } from "../components/Input";
 import Button from "../components/Button";

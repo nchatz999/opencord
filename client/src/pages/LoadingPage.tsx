@@ -1,7 +1,6 @@
 import { type Component, onMount } from "solid-js";
-import { useAuth, useConnection, initializeStores } from "../store/index";
+import { useAuth, useConnection, initializeStores, getWebTransportUrl } from "../store/index";
 import { useApp } from "../store/app";
-import { getWebTransportUrl } from "../store";
 import { useToaster } from "../components/Toaster";
 import logo from "../assets/opencord.webp";
 

@@ -43,7 +43,6 @@ export type ControlPayload =
   | { type: "close"; reason?: string }
   | { type: "error"; reason: string };
 
-// VoipPayload matches server's VoipPayload enum
 export type VoipPayload =
   | {
       type: "speech";
@@ -60,7 +59,6 @@ export type VoipPayload =
       key: "key" | "delta";
     };
 
-// EventPayload matches server's EventPayload enum
 export type EventPayload =
   | { type: "channelUpdated"; channel: Channel }
   | { type: "channelDeleted"; channelId: number }
@@ -101,7 +99,6 @@ export interface ConnectionActions {
   sendVoip: (payload: VoipPayload) => void;
   sendControl: (payload: ControlPayload) => void;
 
-  // Event subscriptions - return unsubscribe function
   onVoipData: (callback: (data: VoipPayload) => void) => () => void;
   onServerEvent: (callback: (event: EventPayload) => void) => () => void;
   onConnectionClosed: (callback: () => void) => () => void;
@@ -113,19 +110,16 @@ interface TransportConfig {
 }
 
 function createConnectionStore(config?: TransportConfig): ConnectionActions {
-  // Callback registries
   const voipDataCallbacks = new Set<(data: VoipPayload) => void>();
   const serverEventCallbacks = new Set<(event: EventPayload) => void>();
   const closedCallbacks = new Set<() => void>();
   const errorCallbacks = new Set<(reason: string) => void>();
 
-  // Pending connection promise
   let pendingConnection: {
     resolve: (success: boolean) => void;
     reject: (error: Error) => void;
   } | null = null;
 
-  // RTCPProtocol instance
   const protocol = new RTCPProtocol(
     (data: ArrayBuffer) => {
       const message = decode(data) as ConnectionMessage;
@@ -180,7 +174,6 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     }
   }
 
-  // Notification helpers
   function notifyVoipData(data: VoipPayload): void {
     voipDataCallbacks.forEach((cb) => cb(data));
   }
@@ -260,7 +253,6 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
       protocol.sendSafe(encode(payload));
     },
 
-    // Event subscriptions - return unsubscribe function
     onVoipData(callback: (data: VoipPayload) => void): () => void {
       voipDataCallbacks.add(callback);
       return () => voipDataCallbacks.delete(callback);
@@ -285,7 +277,6 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
   return actions;
 }
 
-// Singleton instance
 let instance: ConnectionActions | null = null;
 
 export function useConnection(): ConnectionActions {

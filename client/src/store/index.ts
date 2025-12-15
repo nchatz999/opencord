@@ -55,4 +55,4 @@ export type { ScreenShareStore } from "./screenShare";
 export { useOutput } from "./output";
 export type { OutputStore, AudioOutputDevice } from "./output";
 
-export { initializeStores } from "./init";
+export { initializeStores, getWebTransportUrl, connection, resetStore } from "./init";

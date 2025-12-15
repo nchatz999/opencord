@@ -105,7 +105,6 @@ function createChannelStore(): ChannelStore {
     },
 
     remove(id) {
-      // Cascade: remove related data first
       messageActions.removeByChannel(id);
       voipActions.removeByChannel(id);
 
