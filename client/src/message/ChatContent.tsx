@@ -146,8 +146,9 @@ const ChatContent: Component = () => {
     }
   }, { defer: true }));
 
-  createEffect(on(latestMessageId, async (newId, prevId) => {
-    if (newId === prevId || stableContextId() === null || !containerRef) return;
+
+  createEffect(on(latestMessageId, async () => {
+    if (!stableContextId() || !containerRef) return;
 
     const { scrollTop, scrollHeight, clientHeight } = containerRef;
     if (scrollHeight - scrollTop - clientHeight >= BOTTOM_THRESHOLD) return;
@@ -156,7 +157,7 @@ const ChatContent: Component = () => {
     requestAnimationFrame(() => {
       if (containerRef) containerRef.scrollTop = containerRef.scrollHeight;
     });
-  }));
+  }, { defer: true }));
 
   return (
     <div

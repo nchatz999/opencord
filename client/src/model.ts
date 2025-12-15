@@ -150,7 +150,7 @@ export interface Session {
   sessionId: number;
   sessionToken: string;
   createdAt: string;
-  expiresAt?: string;
+  expiresAt: string;
 }
 
 export interface RegisterResponse {

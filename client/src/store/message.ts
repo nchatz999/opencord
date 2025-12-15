@@ -233,7 +233,6 @@ function createMessageStore(): MessageStore {
       for (const message of result.value) {
         actions.insert(message);
       }
-      console.log("kalestika")
 
       return ok(result.value);
     },

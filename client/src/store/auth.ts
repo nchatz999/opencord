@@ -2,16 +2,40 @@ import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { loadSession, saveSession, clearSession } from "../lib/Session";
 import { fetchApi } from "../utils";
 import { setServerUrl } from "../lib/ServerConfig";
-import type { User, Session, Invite } from "../model";
+import type { User, Session } from "../model";
 import { useUser } from "./user";
+import { useConnection } from "./connection";
+import { useApp } from "./app";
 
 interface AuthSession {
   userId: number;
   sessionToken: string;
 }
+
+const saveSession = (token: string, id: number) => {
+  document.cookie = `session_token=${token}; path=/; SameSite=Lax`;
+  document.cookie = `user_id=${id}; path=/; SameSite=Lax`;
+};
+
+const loadSession = (): Result<AuthSession, Error> => {
+  let userId: number | undefined;
+  let sessionToken: string | undefined;
+  const cookies = document.cookie.split(";");
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split("=");
+    if (name === "session_token") sessionToken = value;
+    if (name === "user_id") userId = parseInt(value);
+  }
+  if (userId && sessionToken) return ok({ sessionToken, userId });
+  return err(new Error("No session"));
+};
+
+const clearSession = () => {
+  document.cookie = `session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  document.cookie = `user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+};
 
 export interface AuthState {
   session: AuthSession | null;
@@ -24,7 +48,6 @@ export interface AuthActions {
   login: (username: string, password: string, serverUrl?: string) => Promise<Result<void, string>>;
   register: (username: string, password: string, inviteCode: string, serverUrl?: string) => Promise<Result<void, string>>;
   logout: () => Promise<Result<void, string>>;
-  loadFromCookies: () => boolean;
   getSessions: () => Promise<Result<Session[], string>>;
   terminateSession: (sessionToken: string) => Promise<Result<void, string>>;
 }
@@ -34,6 +57,7 @@ export type AuthStore = [AuthState, AuthActions];
 function createAuthStore(): AuthStore {
   const session = loadSession();
   const initialSession = session.isOk() ? session.value : null;
+  const [, userActions] = useUser();
 
   const [state, setState] = createStore<AuthState>({
     session: initialSession,
@@ -43,7 +67,6 @@ function createAuthStore(): AuthStore {
   const actions: AuthActions = {
     getUser() {
       if (!state.session) throw new Error("Not authenticated");
-      const [, userActions] = useUser();
       const user = userActions.findById(state.session.userId);
       if (!user) throw new Error("User not found");
       return user;
@@ -133,15 +156,6 @@ function createAuthStore(): AuthStore {
       return ok(undefined);
     },
 
-    loadFromCookies() {
-      const session = loadSession();
-      if (session.isOk()) {
-        setState("session", session.value);
-        return true;
-      }
-      return false;
-    },
-
     async getSessions() {
       const result = await fetchApi<Session[]>("/auth/sessions", {
         method: "GET",
@@ -165,6 +179,15 @@ function createAuthStore(): AuthStore {
       return ok(undefined);
     },
   };
+
+  const connection = useConnection();
+  const [, appActions] = useApp();
+
+  connection.onConnectionClosed(() => {
+    clearSession();
+    setState("session", null);
+    appActions.setView("unauthenticated");
+  });
 
   return [state, actions];
 }

@@ -5,6 +5,7 @@ import { useCamera } from './store/camera'
 import { useScreenShare } from './store/screenShare'
 import { useOutput } from './store/output'
 import { getServerUrlOrDefault } from './lib/ServerConfig'
+import { useApp } from './store/app'
 
 export function getWebTransportUrl(): string {
   const serverUrl = getServerUrlOrDefault();
@@ -14,6 +15,7 @@ export function getWebTransportUrl(): string {
 
 const connection = useConnection();
 const [, playbackActions] = usePlayback();
+const [, appActions] = useApp()
 
 connection.onVoipData((frame: VoipPayload) => {
   if (frame.type === "media") {
@@ -65,12 +67,9 @@ connection.onVoipData((frame: VoipPayload) => {
 });
 
 connection.onConnectionError((reason) => {
-  console.error("Connection error:", reason);
+  appActions.setView("error", reason)
 });
 
-connection.onConnectionClosed(() => {
-  console.log("Connection closed");
-});
 
 export { connection };
 

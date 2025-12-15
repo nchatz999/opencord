@@ -30,7 +30,6 @@ import Select from "../components/Select";
 import Slider from "../components/Slider";
 import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
-import { loadSession } from "../lib/Session";
 import { UserStatusType, type Session } from "../model";
 import { useToaster } from "../components/Toaster";
 
@@ -40,10 +39,10 @@ const UserSettingsModal: Component = () => {
   const [, modalActions] = useModal();
   const [, playbackActions] = usePlayback();
   const [, userActions] = useUser();
-  const [microphoneState, microphoneActions] = useMicrophone();
-  const [cameraState, cameraActions] = useCamera();
-  const [screenShareState, screenShareActions] = useScreenShare();
-  const [outputState, outputActions] = useOutput();
+  const [, microphoneActions] = useMicrophone();
+  const [, cameraActions] = useCamera();
+  const [, screenShareActions] = useScreenShare();
+  const [, outputActions] = useOutput();
   const user = () => authActions.getUser();
 
 
@@ -113,9 +112,7 @@ const UserSettingsModal: Component = () => {
   };
 
   const isCurrentSession = (sessionToken: string) => {
-    const currentSession = loadSession();
-    if (currentSession.isErr()) return false;
-    return currentSession.value.sessionToken === sessionToken;
+    return authActions.getSession().sessionToken === sessionToken;
   };
 
 
