@@ -129,7 +129,7 @@ function createChannelStore(): ChannelStore {
     async create(groupId, name, type) {
       const result = await fetchApi<{ channelId: number }>("/channel", {
         method: "POST",
-        body: { groupId, channelName: name, channelType: type },
+        body: { groupId, name, type },
       });
       if (result.isErr()) {
         return err(result.error.reason);
@@ -137,10 +137,10 @@ function createChannelStore(): ChannelStore {
       return ok(result.value.channelId);
     },
 
-    async updateChannel(channelId, name, type) {
+    async updateChannel(channelId, name, _type) {
       const result = await fetchApi(`/channel/${channelId}`, {
         method: "PUT",
-        body: { channelName: name, channelType: type },
+        body: { name },
       });
       if (result.isErr()) {
         return err(result.error.reason);
