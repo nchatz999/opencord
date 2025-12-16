@@ -3,6 +3,17 @@ import { twMerge } from 'tailwind-merge'
 import type { Result } from 'opencord-utils'
 import { err, ok } from 'opencord-utils'
 import { getServerUrlOrDefault } from './lib/ServerConfig'
+import { UserStatusType } from './model'
+
+export function getStatusColor(status: UserStatusType, type: "bg" | "text" = "text") {
+  const colors = {
+    [UserStatusType.Online]: "status-online",
+    [UserStatusType.Away]: "status-away",
+    [UserStatusType.DoNotDisturb]: "status-dnd",
+    [UserStatusType.Offline]: "status-offline",
+  };
+  return `${type}-${colors[status] ?? "status-offline"}`;
+}
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }

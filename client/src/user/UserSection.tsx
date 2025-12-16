@@ -2,7 +2,7 @@ import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, Settings, Circle } from 'lucide-solid'
 import { useAuth, useVoip, useModal, useMicrophone, useOutput } from '../store/index'
-import { UserStatusType } from '../model'
+import { getStatusColor } from '../utils'
 
 const UserSection: Component = () => {
   const [, authActions] = useAuth()
@@ -11,20 +11,6 @@ const UserSection: Component = () => {
   const [, microphoneActions] = useMicrophone()
   const [, outputActions] = useOutput()
   const currentUser = () => authActions.getUser()
-  const getStatusColor = (status: UserStatusType) => {
-    switch (status) {
-      case UserStatusType.Online:
-        return 'text-status-online'
-      case UserStatusType.Away:
-        return 'text-status-away'
-      case UserStatusType.DoNotDisturb:
-        return 'text-status-dnd'
-      case UserStatusType.Offline:
-        return 'text-status-offline'
-      default:
-        return 'text-status-offline'
-    }
-  }
 
   const handleMuteToggle = async () => {
     const newMuted = !microphoneActions.getMuted()

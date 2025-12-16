@@ -15,8 +15,9 @@ interface AuthSession {
 }
 
 const saveSession = (token: string, id: number) => {
-  document.cookie = `session_token=${token}; path=/; SameSite=Lax`;
-  document.cookie = `user_id=${id}; path=/; SameSite=Lax`;
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `session_token=${token}; path=/; SameSite=Strict${secure}`;
+  document.cookie = `user_id=${id}; path=/; SameSite=Strict${secure}`;
 };
 
 const loadSession = (): Result<AuthSession, Error> => {

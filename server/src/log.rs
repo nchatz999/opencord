@@ -150,13 +150,10 @@ impl From<DomainError> for ApiError {
             DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::LogError(e) => {
                 tracing::error!("Log error: {}", e);
-
-                println!("{:?}", e);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
-                println!("{:?}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
         }

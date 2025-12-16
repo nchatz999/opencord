@@ -2,6 +2,7 @@ import type { Component } from "solid-js";
 import { Show } from "solid-js";
 import { Hash } from "lucide-solid";
 import { useChannel, useGroup, useUser } from "../store/index";
+import { getStatusColor } from "../utils";
 
 
 const ChatHeader: Component<{
@@ -30,7 +31,7 @@ const ChatHeader: Component<{
                     class="w-10 h-10 rounded-full object-cover border-2 border-background"
                   />
                   <div
-                    class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${userActions.getUserColorStatusById(user().userId)}`}
+                    class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${getStatusColor(user().status, "bg")}`}
                   />
                 </div>
 

@@ -184,7 +184,6 @@ const ServerSettingsModal: Component = () => {
     setLogsLoading(true);
     const result = await fetchApi<LogEntry[]>("/log", {
       method: "GET",
-      query: logCategoryFilter() ? { category: logCategoryFilter() } : undefined,
     });
 
     if (result.isErr()) {
@@ -221,10 +220,12 @@ const ServerSettingsModal: Component = () => {
 
   const filteredLogs = createMemo(() => {
     const search = logSearchTerm().toLowerCase();
-    return logs().filter((log) =>
-      log.log.toLowerCase().includes(search) ||
-      log.category.toLowerCase().includes(search)
-    );
+    const category = logCategoryFilter();
+    return logs().filter((log) => {
+      if (category && log.category !== category) return false;
+      if (search && !log.log.toLowerCase().includes(search) && !log.category.toLowerCase().includes(search)) return false;
+      return true;
+    });
   });
 
   const logCategories = createMemo(() => {
@@ -582,10 +583,7 @@ const ServerSettingsModal: Component = () => {
                 <div class="min-w-[150px]">
                   <Select
                     value={logCategoryFilter()}
-                    onChange={(val) => {
-                      setLogCategoryFilter(val as string);
-                      loadLogs();
-                    }}
+                    onChange={(val) => setLogCategoryFilter(val as string)}
                     options={[
                       { value: '', label: 'All Categories' },
                       ...logCategories().map((cat) => ({ value: cat, label: cat })),

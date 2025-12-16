@@ -31,6 +31,7 @@ import { Tabs } from "../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../components/Table";
 import { UserStatusType, type Session } from "../model";
 import { useToaster } from "../components/Toaster";
+import { getStatusColor } from "../utils";
 
 const UserSettingsModal: Component = () => {
   const [, authActions] = useAuth();
@@ -67,11 +68,6 @@ const UserSettingsModal: Component = () => {
     { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-status-dnd' },
     { value: UserStatusType.Offline, label: 'Offline', color: 'text-status-offline' },
   ];
-
-  const getStatusColor = (status: UserStatusType) => {
-    const option = statusOptions.find(opt => opt.value === status);
-    return option?.color || 'text-status-offline';
-  };
 
   const handleStatusChange = async (newStatus: UserStatusType) => {
     const result = await userActions.updateStatus(user().userId, newStatus);
