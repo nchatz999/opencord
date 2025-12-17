@@ -19,7 +19,7 @@ interface GroupActions {
   add: (group: Group) => void;
   update: (group: Group) => void;
   remove: (id: number) => void;
-  create: (name: string) => Promise<Result<number, string>>;
+  create: (name: string) => Promise<Result<{ groupId: number }, string>>;
   delete: (groupId: number) => Promise<Result<void, string>>;
 }
 
@@ -111,7 +111,7 @@ function createGroupStore(): GroupStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
-      return ok(result.value.groupId);
+      return ok(result.value);
     },
 
     async delete(groupId) {
