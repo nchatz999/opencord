@@ -193,7 +193,11 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
   const actions: ConnectionActions = {
     async connect(url: string, token: string): Promise<Result<void, string>> {
       try {
-        await protocol.connect(url, config?.certificateHash);
+        if (config?.certificateHash) {
+          await protocol.connect(url, config.certificateHash);
+        } else {
+          await protocol.connect(url);
+        }
       } catch (e) {
         const errorMsg = e instanceof Error ? e.message : "Connection failed";
         return err(errorMsg);
