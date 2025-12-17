@@ -38,8 +38,8 @@ chmod 600 "$CERT_DIR/$DOMAIN.key"
 # Update .env file
 ENV_FILE=".env"
 if [ -f "$ENV_FILE" ]; then
-    sed -i "s|^CERT_PATH=.*|CERT_PATH=certs/$DOMAIN.crt|" "$ENV_FILE"
-    sed -i "s|^KEY_PATH=.*|KEY_PATH=certs/$DOMAIN.key|" "$ENV_FILE"
+    sed -i "s|^CERT_PATH=.*|CERT_PATH=../certs/$DOMAIN.crt|" "$ENV_FILE"
+    sed -i "s|^KEY_PATH=.*|KEY_PATH=../certs/$DOMAIN.key|" "$ENV_FILE"
     # Remove hash - not needed for trusted certificates
     sed -i "/^VITE_CERT_HASH=/d" "$ENV_FILE"
     echo "Updated .env with certificate paths"
