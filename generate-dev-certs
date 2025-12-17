@@ -15,16 +15,17 @@ openssl req -x509 -sha256 -nodes -days 10 -key "$CERT_DIR/localhost.key" -out "$
 CERT_HASH=$(openssl x509 -in "$CERT_DIR/localhost.crt" -outform der | openssl dgst -sha256 -binary | xxd -p -c 256)
 echo "$CERT_HASH" > "$CERT_DIR/localhost.hex"
 
-# Update VITE_CERT_HASH in .env file
+# Update .env file
 ENV_FILE=".env"
 if [ -f "$ENV_FILE" ]; then
+    sed -i "s|^CERT_PATH=.*|CERT_PATH=../certs/localhost.crt|" "$ENV_FILE"
+    sed -i "s|^KEY_PATH=.*|KEY_PATH=../certs/localhost.key|" "$ENV_FILE"
     if grep -q "^VITE_CERT_HASH=" "$ENV_FILE"; then
         sed -i "s/^VITE_CERT_HASH=.*/VITE_CERT_HASH=$CERT_HASH/" "$ENV_FILE"
-        echo "Updated VITE_CERT_HASH in $ENV_FILE"
     else
         echo "VITE_CERT_HASH=$CERT_HASH" >> "$ENV_FILE"
-        echo "Added VITE_CERT_HASH to $ENV_FILE"
     fi
+    echo "Updated .env with certificate paths and hash"
 else
     echo "Warning: $ENV_FILE not found, skipping .env update"
 fi
