@@ -22,6 +22,7 @@ import {
   Settings,
 } from "lucide-solid";
 import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice } from "../store/index";
+import { getPresetOptions, type QualityPreset } from "../model";
 import { useApp } from "../store/app";
 import { Input } from "../components/Input";
 import Button from "../components/Button";
@@ -406,59 +407,68 @@ const UserSettingsModal: Component = () => {
           <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-4 flex items-center">
               <Settings class="w-4 h-4 mr-2" />
-              Bitrate Settings
+              Video Settings
             </h3>
 
             <div class="space-y-6">
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
-                  Camera Quality: {cameraActions.getQuality()} bps
+                  Camera Resolution
+                </label>
+                <Select
+                  options={getPresetOptions()}
+                  value={cameraActions.getPreset()}
+                  onChange={(value) => cameraActions.setPreset(value as QualityPreset)}
+                  class="w-full"
+                />
+              </div>
+
+              <div>
+                <label class="block mb-2 text-sm font-medium text-foreground">
+                  Screen Share Resolution
+                </label>
+                <Select
+                  options={getPresetOptions()}
+                  value={screenShareActions.getPreset()}
+                  onChange={(value) => screenShareActions.setPreset(value as QualityPreset)}
+                  class="w-full"
+                />
+              </div>
+
+              <div>
+                <label class="block mb-2 text-sm font-medium text-foreground">
+                  Camera Bitrate: {cameraActions.getQuality()} bps
                 </label>
                 <Slider
                   value={cameraActions.getQuality()}
                   min={500000}
                   max={8000000}
-                  onChange={(value) => {
-                    cameraActions.setQuality(value);
-                  }}
+                  onChange={(value) => cameraActions.setQuality(value)}
                 />
-                <p class="text-xs text-secondary-text mt-1">
-                  Adjusts video quality for camera stream
-                </p>
               </div>
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
-                  Screen Share Quality: {screenShareActions.getQuality()} bps
+                  Screen Share Bitrate: {screenShareActions.getQuality()} bps
                 </label>
                 <Slider
                   value={screenShareActions.getQuality()}
                   min={500000}
                   max={8000000}
-                  onChange={(value) => {
-                    screenShareActions.setQuality(value);
-                  }}
+                  onChange={(value) => screenShareActions.setQuality(value)}
                 />
-                <p class="text-xs text-secondary-text mt-1">
-                  Adjusts video quality for screen sharing
-                </p>
               </div>
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
-                  Audio Quality: {microphoneActions.getQuality()} bps
+                  Audio Bitrate: {microphoneActions.getQuality()} bps
                 </label>
                 <Slider
                   value={microphoneActions.getQuality()}
                   min={64000}
                   max={320000}
-                  onChange={(value) => {
-                    microphoneActions.setQuality(value);
-                  }}
+                  onChange={(value) => microphoneActions.setQuality(value)}
                 />
-                <p class="text-xs text-secondary-text mt-1">
-                  Adjusts audio bitrate for microphone
-                </p>
               </div>
             </div>
           </div>

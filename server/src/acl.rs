@@ -222,7 +222,6 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                     .await;
             }
 
-            // Role gained access to group - send individual events
             if previous_rights == 0 && acl.rights > 0 {
                 let group = tx.find_group(acl.group_id).await?;
                 let channels = tx.find_channels_by_group(acl.group_id).await?;
@@ -231,7 +230,6 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                     role_id: acl.role_id,
                 };
 
-                // 1. Send group first
                 let _ = self
                     .notifier
                     .notify(ServerMessage::Control(
@@ -245,7 +243,6 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                     ))
                     .await;
 
-                // 2. Send ACL right (so client knows permissions before channels arrive)
                 let _ = self
                     .notifier
                     .notify(ServerMessage::Control(
@@ -260,7 +257,6 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                     ))
                     .await;
 
-                // 3. Send each channel
                 for channel in channels {
                     let _ = self
                         .notifier
@@ -271,7 +267,6 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                         .await;
                 }
 
-                // 4. Send each voip participant
                 for participant in voip_participants {
                     let _ = self
                         .notifier
@@ -286,10 +281,16 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
 
         self.repository.commit(tx).await?;
 
-        let _ = self.logger.log_entry(
-            format!("Group role rights updated: user_id={}, session_id={}", user_id, session_id),
-            "acl".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Group role rights updated: user_id={}, session_id={}",
+                    user_id, session_id
+                ),
+                "acl".to_string(),
+            )
+            .await;
 
         Ok(())
     }

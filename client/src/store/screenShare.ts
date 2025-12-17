@@ -3,6 +3,7 @@ import { createRoot } from "solid-js";
 import { useConnection, type VoipPayload } from "./connection";
 import { useAuth } from "./auth";
 import { useVoip } from "./voip";
+import { type QualityPreset, QUALITY_PRESETS, DEFAULT_PRESET } from "../model";
 
 export interface ScreenShareConstraints {
   width?: number;
@@ -16,6 +17,7 @@ export interface ScreenShareConstraints {
 interface ScreenShareState {
   isRecording: boolean;
   quality: number;
+  preset: QualityPreset;
 }
 
 export interface ScreenShareActions {
@@ -25,6 +27,8 @@ export interface ScreenShareActions {
   getQuality: () => number;
   setConstraints: (constraints: Partial<ScreenShareConstraints>) => void;
   getConstraints: () => ScreenShareConstraints;
+  getPreset: () => QualityPreset;
+  setPreset: (preset: QualityPreset) => void;
   onEncodedVideoData: (callback: (chunk: EncodedVideoChunk) => void) => () => void;
   onEncodedAudioData: (callback: (chunk: EncodedAudioChunk) => void) => () => void;
   start: () => Promise<void>;
@@ -39,8 +43,8 @@ const DEFAULT_AUDIO_BITRATE = 128_000;
 const KEYFRAME_PROBABILITY = 0.03;
 
 const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
-  width: 1920,
-  height: 1080,
+  width: QUALITY_PRESETS[DEFAULT_PRESET].width,
+  height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   frameRate: 60,
   cursor: "always",
   audio: true,
@@ -48,8 +52,8 @@ const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
 
 const DEFAULT_VIDEO_ENCODER_CONFIG = {
   codec: "vp8",
-  width: 1920,
-  height: 1080,
+  width: QUALITY_PRESETS[DEFAULT_PRESET].width,
+  height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_VIDEO_BITRATE,
   framerate: 60,
   keyFrameIntervalCount: 30,
@@ -143,6 +147,7 @@ function createScreenShareStore(): ScreenShareStore {
   const [state, setState] = createStore<ScreenShareState>({
     isRecording: false,
     quality: DEFAULT_VIDEO_BITRATE,
+    preset: DEFAULT_PRESET,
   });
 
   const encodedVideoDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
@@ -302,6 +307,25 @@ function createScreenShareStore(): ScreenShareStore {
     },
 
     getConstraints: () => ({ ...constraints }),
+
+    getPreset: () => state.preset,
+
+    setPreset(preset: QualityPreset) {
+      const config = QUALITY_PRESETS[preset];
+      setState("preset", preset);
+      this.setConstraints({
+        width: config.width,
+        height: config.height,
+      });
+      if (videoEncoder?.state === "configured") {
+        videoEncoder.configure({
+          ...DEFAULT_VIDEO_ENCODER_CONFIG,
+          width: config.width,
+          height: config.height,
+          bitrate: state.quality,
+        });
+      }
+    },
 
     onEncodedVideoData(callback) {
       encodedVideoDataCallbacks.add(callback);

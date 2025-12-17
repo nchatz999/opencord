@@ -3,6 +3,7 @@ import { createRoot } from "solid-js";
 import { useConnection, type VoipPayload } from "./connection";
 import { useAuth } from "./auth";
 import { useVoip } from "./voip";
+import { type QualityPreset, QUALITY_PRESETS, DEFAULT_PRESET } from "../model";
 
 export interface CameraConstraints {
   width?: number;
@@ -23,6 +24,7 @@ export interface VideoEncoderConfig {
 interface CameraState {
   isRecording: boolean;
   quality: number;
+  preset: QualityPreset;
 }
 
 export interface CameraActions {
@@ -31,6 +33,8 @@ export interface CameraActions {
   setQuality: (quality: number) => void;
   getQuality: () => number;
   setConstraints: (constraints: Partial<CameraConstraints>) => void;
+  getPreset: () => QualityPreset;
+  setPreset: (preset: QualityPreset) => void;
   onEncodedData: (callback: (chunk: EncodedVideoChunk) => void) => () => void;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -43,8 +47,8 @@ const DEFAULT_BITRATE = 1_500_000;
 const KEYFRAME_PROBABILITY = 0.03;
 
 const DEFAULT_CONSTRAINTS: CameraConstraints = {
-  width: 1280,
-  height: 720,
+  width: QUALITY_PRESETS[DEFAULT_PRESET].width,
+  height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   frameRate: 30,
   facingMode: "user",
   aspectRatio: 16 / 9,
@@ -52,8 +56,8 @@ const DEFAULT_CONSTRAINTS: CameraConstraints = {
 
 const DEFAULT_ENCODER_CONFIG: VideoEncoderConfig = {
   codec: "vp8",
-  width: 1280,
-  height: 720,
+  width: QUALITY_PRESETS[DEFAULT_PRESET].width,
+  height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_BITRATE,
   framerate: 30,
 };
@@ -112,6 +116,7 @@ function createCameraStore(): CameraStore {
   const [state, setState] = createStore<CameraState>({
     isRecording: false,
     quality: DEFAULT_BITRATE,
+    preset: DEFAULT_PRESET,
   });
 
   const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
@@ -208,6 +213,25 @@ function createCameraStore(): CameraStore {
 
     setConstraints(newConstraints) {
       constraints = { ...constraints, ...newConstraints };
+    },
+
+    getPreset: () => state.preset,
+
+    setPreset(preset: QualityPreset) {
+      const config = QUALITY_PRESETS[preset];
+      setState("preset", preset);
+      this.setConstraints({
+        width: config.width,
+        height: config.height,
+      });
+      if (encoder?.state === "configured") {
+        encoder.configure({
+          ...DEFAULT_ENCODER_CONFIG,
+          width: config.width,
+          height: config.height,
+          bitrate: state.quality,
+        });
+      }
     },
 
     onEncodedData(callback) {

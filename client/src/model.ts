@@ -161,3 +161,43 @@ export interface ServerConfig {
   serverName: string;
   avatarFileId: number | null;
 }
+
+export type QualityPreset = "720p" | "1080p" | "1440p" | "4k";
+
+export interface PresetConfig {
+  label: string;
+  width: number;
+  height: number;
+}
+
+export const QUALITY_PRESETS: Record<QualityPreset, PresetConfig> = {
+  "720p": {
+    label: "720p (HD)",
+    width: 1280,
+    height: 720,
+  },
+  "1080p": {
+    label: "1080p (Full HD)",
+    width: 1920,
+    height: 1080,
+  },
+  "1440p": {
+    label: "1440p (QHD)",
+    width: 2560,
+    height: 1440,
+  },
+  "4k": {
+    label: "4K (Ultra HD)",
+    width: 3840,
+    height: 2160,
+  },
+};
+
+export const DEFAULT_PRESET: QualityPreset = "1080p";
+
+export function getPresetOptions() {
+  return Object.entries(QUALITY_PRESETS).map(([value, config]) => ({
+    value,
+    label: config.label,
+  }));
+}
