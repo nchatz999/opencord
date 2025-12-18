@@ -23,7 +23,6 @@ const CreateChannelModal: Component = () => {
   const [, roleActions] = useRole()
   const [, channelActions] = useChannel()
 
-  const [isCreating, setIsCreating] = createSignal(false)
   const [name, setName] = createSignal('')
   const [group, setGroup] = createSignal<number>(1)
   const [type, setType] = createSignal<ChannelType>(ChannelType.Text)
@@ -115,7 +114,6 @@ const CreateChannelModal: Component = () => {
   const handleCreate = async () => {
     if (!name().trim()) return
 
-    setIsCreating(true)
     if (!group()) {
       addToast('No group selected', 'error')
       return
@@ -155,11 +153,11 @@ const CreateChannelModal: Component = () => {
             Cancel
           </Button>
           <Button
-            disabled={isCreating() || !name().trim()}
+            disabled={!name().trim()}
             onClick={handleCreate}
             variant="primary"
           >
-            {isCreating() ? 'Creating...' : 'Create Channel'}
+            Create Channel
           </Button>
         </div>
       </div>
