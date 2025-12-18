@@ -559,9 +559,8 @@ impl<L: LogManager> SubscriberSession<L> {
                 if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                     return self.handle_voip_message(voip_msg).await;
                 }
-                Err(SessionError::BadRequest(
-                    "Invalid VoIP message format".to_string(),
-                ))
+                println!("Invalid VoIP message format, ignoring packet");
+                Ok(())
             }
             Message::Ordered(bytes) => {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {

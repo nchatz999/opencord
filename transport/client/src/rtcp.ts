@@ -189,36 +189,45 @@ export class RTCPProtocol {
 
   public async send(data: Uint8Array) {
     if (this.closed || !this.outWriter) return;
-    try {
-      const mtu = this.mtu - 200;
-      let currentTime = BigInt(Date.now());
-      let fecGroup: RTPPacket[] = [];
-      const frameId = this.outFrame++;
-      for (let i = 0; i < data.length; i += mtu) {
-        const chunk = data.slice(i, i + mtu);
-        const last = i + mtu >= data.length;
-        let packet: RTPPacket = {
-          type: PacketType.RTP,
-          sequenceNumber: this.outSeq++,
-          timestamp: currentTime,
-          frameId,
-          fragmentNumber: Math.floor(i / mtu),
-          totalFragments: Math.ceil(data.length / mtu),
-          markerBit: last,
-          data: chunk,
-        };
-        this.sendPackets.set(packet.sequenceNumber, packet);
+
+    const mtu = this.mtu - 200;
+    let currentTime = BigInt(Date.now());
+    let fecGroup: RTPPacket[] = [];
+    const frameId = this.outFrame++;
+
+    for (let i = 0; i < data.length; i += mtu) {
+      const chunk = data.slice(i, i + mtu);
+      const last = i + mtu >= data.length;
+      let packet: RTPPacket = {
+        type: PacketType.RTP,
+        sequenceNumber: this.outSeq++,
+        timestamp: currentTime,
+        frameId,
+        fragmentNumber: Math.floor(i / mtu),
+        totalFragments: Math.ceil(data.length / mtu),
+        markerBit: last,
+        data: chunk,
+      };
+      this.sendPackets.set(packet.sequenceNumber, packet);
+
+      try {
         await this.outWriter.write(PacketSerializer.serialize(packet));
-        fecGroup.push(packet);
-        if (fecGroup.length == 4) {
-          const fecPacket = FECEncoder.generateFECPacket(fecGroup);
-          await this.outWriter.write(PacketSerializer.serialize(fecPacket));
-          fecGroup = [];
-        }
+      } catch (e) {
+        console.log("send RTP error:", e);
+        return;
       }
-    } catch (e) {
-      this.onDisconnect(e instanceof Error ? e.message : String(e));
-      await this.disconnect()
+
+      fecGroup.push(packet);
+      if (fecGroup.length == 4) {
+        const fecPacket = FECEncoder.generateFECPacket(fecGroup);
+        try {
+          await this.outWriter.write(PacketSerializer.serialize(fecPacket));
+        } catch (e) {
+          console.log("send FEC error:", e);
+          return;
+        }
+        fecGroup = [];
+      }
     }
   }
 
