@@ -562,7 +562,9 @@ impl<L: LogManager> SubscriberSession<L> {
                     }
                     Err(e) => {
                         println!("Invalid VoIP message format: {:?}", e);
-                        println!("Raw bytes (first 100): {:?}", &bytes[..std::cmp::min(100, bytes.len())]);
+                        println!("Total bytes: {}", bytes.len());
+                        println!("Raw bytes (first 200): {:?}", &bytes[..std::cmp::min(200, bytes.len())]);
+                        println!("Raw bytes (last 50): {:?}", &bytes[bytes.len().saturating_sub(50)..]);
                         Ok(())
                     }
                 }

@@ -32,9 +32,9 @@ export class PacketSerializer {
       case PacketType.FEC: {
         const protectedSequencesCount = packet.protectedSequences.length;
         const fecDataLength = packet.fecData.length;
-        // Header: type(1) + ts(8) + count(1) = 10
+        // Header: type(1) + ts(8) + count(1) + sequences(count*8) + lengths(count*2) + fecData
         buffer = new ArrayBuffer(
-          10 + protectedSequencesCount * 8 + fecDataLength
+          10 + protectedSequencesCount * 8 + protectedSequencesCount * 2 + fecDataLength
         );
         view = new DataView(buffer);
         view.setUint8(offset, packet.type);
@@ -46,6 +46,10 @@ export class PacketSerializer {
         for (const seq of packet.protectedSequences) {
           view.setBigUint64(offset, seq);
           offset += 8;
+        }
+        for (const len of packet.protectedLengths) {
+          view.setUint16(offset, len);
+          offset += 2;
         }
         new Uint8Array(buffer, offset).set(packet.fecData);
         break;
@@ -132,13 +136,20 @@ export class PacketSerializer {
         offset += 8;
         const protectedSequencesCount = view.getUint8(offset);
         offset += 1;
-        if (buffer.byteLength < 10 + protectedSequencesCount * 8) {
+        // sequences (8 bytes each) + lengths (2 bytes each)
+        const metadataSize = protectedSequencesCount * 8 + protectedSequencesCount * 2;
+        if (buffer.byteLength < 10 + metadataSize) {
           return null;
         }
         const protectedSequences: bigint[] = [];
         for (let i = 0; i < protectedSequencesCount; i++) {
           protectedSequences.push(view.getBigUint64(offset));
           offset += 8;
+        }
+        const protectedLengths: number[] = [];
+        for (let i = 0; i < protectedSequencesCount; i++) {
+          protectedLengths.push(view.getUint16(offset));
+          offset += 2;
         }
         const fecData = new Uint8Array(
           buffer.buffer,
@@ -148,6 +159,7 @@ export class PacketSerializer {
           type,
           timestamp,
           protectedSequences,
+          protectedLengths,
           fecData,
         };
         return packet;
@@ -191,7 +203,10 @@ export class FECEncoder {
     const maxLength = Math.max(...packets.map((p) => p.data.length));
 
     const xorResult = new Uint8Array(maxLength);
+    const protectedLengths: number[] = [];
+
     for (const packet of packets) {
+      protectedLengths.push(packet.data.length);
       if (packet.data) {
         for (let i = 0; i < packet.data.length; i++) {
           xorResult[i] ^= packet.data[i];
@@ -203,6 +218,7 @@ export class FECEncoder {
       type: PacketType.FEC,
       timestamp: packets[packets.length - 1].timestamp,
       protectedSequences: packets.map((p) => p.sequenceNumber),
+      protectedLengths,
       fecData: xorResult,
     };
   }
@@ -214,12 +230,23 @@ export class FECEncoder {
     if (availablePackets.length < fecPacket.protectedSequences.length - 1) {
       return null;
     }
-    const missingSequence = fecPacket.protectedSequences.find(
-      (seq) => !availablePackets.some((p) => p.sequenceNumber === seq)
-    );
-    if (missingSequence === undefined) {
+
+    // Find the missing sequence and its index
+    let missingIndex = -1;
+    let missingSequence: bigint | undefined;
+    for (let i = 0; i < fecPacket.protectedSequences.length; i++) {
+      const seq = fecPacket.protectedSequences[i];
+      if (!availablePackets.some((p) => p.sequenceNumber === seq)) {
+        missingIndex = i;
+        missingSequence = seq;
+        break;
+      }
+    }
+
+    if (missingSequence === undefined || missingIndex === -1) {
       return null;
     }
+
     const templatePacket = availablePackets[0];
 
     const xorResult = new Uint8Array(fecPacket.fecData);
@@ -230,6 +257,10 @@ export class FECEncoder {
         xorResult[i] ^= packet.data[i];
       }
     }
+
+    // Trim to original packet length
+    const originalLength = fecPacket.protectedLengths[missingIndex] ?? xorResult.length;
+    const trimmedData = xorResult.slice(0, originalLength);
 
     const fragmentOffset = Number(
       templatePacket.sequenceNumber - missingSequence
@@ -245,7 +276,7 @@ export class FECEncoder {
       fragmentNumber: recoveredFragmentNumber,
       totalFragments: templatePacket.totalFragments,
       markerBit: recoveredFragmentNumber === templatePacket.totalFragments - 1,
-      data: xorResult,
+      data: trimmedData,
     };
   }
 }

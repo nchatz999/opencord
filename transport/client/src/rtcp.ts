@@ -35,6 +35,7 @@ export interface FecPacket extends BasePacket {
   type: PacketType.FEC;
   timestamp: bigint;
   protectedSequences: bigint[];
+  protectedLengths: number[];
   fecData: Uint8Array;
 }
 
@@ -325,7 +326,7 @@ export class RTCPProtocol {
   }
 
   public handleFEC(packet: FecPacket) {
-    const availablePackets = Object.values(this.receivedPackets).filter((p) =>
+    const availablePackets = Array.from(this.receivedPackets.values()).filter((p) =>
       packet.protectedSequences.includes(p.sequenceNumber)
     );
     const recoveredPacket = FECEncoder.recoverPacket(packet, availablePackets);

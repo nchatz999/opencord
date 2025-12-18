@@ -33,6 +33,7 @@ pub struct NackBody {
 pub struct FecBody {
     pub timestamp: u64,
     pub protected_sequences: Vec<u64>,
+    pub protected_lengths: Vec<u16>,
     pub fec_data: Vec<u8>,
 }
 
@@ -156,6 +157,9 @@ impl PacketSerializer {
                 for seq in &body.protected_sequences {
                     buffer.extend_from_slice(&seq.to_be_bytes());
                 }
+                for len in &body.protected_lengths {
+                    buffer.extend_from_slice(&len.to_be_bytes());
+                }
                 buffer.extend_from_slice(&body.fec_data);
             }
             Packet::Nack(body) => {
@@ -259,7 +263,9 @@ impl PacketSerializer {
                 let protected_sequences_count = buffer[offset] as usize;
                 offset += 1;
 
-                if buffer.len() < 10 + protected_sequences_count * 8 {
+                // sequences (8 bytes each) + lengths (2 bytes each)
+                let metadata_size = protected_sequences_count * 8 + protected_sequences_count * 2;
+                if buffer.len() < 10 + metadata_size {
                     return None;
                 }
 
@@ -278,11 +284,18 @@ impl PacketSerializer {
                     offset += 8;
                 }
 
+                let mut protected_lengths = Vec::with_capacity(protected_sequences_count);
+                for _ in 0..protected_sequences_count {
+                    protected_lengths.push(u16::from_be_bytes([buffer[offset], buffer[offset + 1]]));
+                    offset += 2;
+                }
+
                 let fec_data = buffer[offset..].to_vec();
 
                 Some(Packet::Fec(FecBody {
                     timestamp,
                     protected_sequences,
+                    protected_lengths,
                     fec_data,
                 }))
             }
@@ -349,9 +362,11 @@ impl FecEncoder {
 
         let mut fec_data = vec![0u8; max_len];
         let mut protected_sequences = Vec::with_capacity(packets.len());
+        let mut protected_lengths = Vec::with_capacity(packets.len());
 
         for packet in packets {
             protected_sequences.push(packet.sequence_number);
+            protected_lengths.push(packet.data.len() as u16);
             for (i, &byte) in packet.data.iter().enumerate() {
                 fec_data[i] ^= byte;
             }
@@ -362,6 +377,7 @@ impl FecEncoder {
         Some(FecBody {
             timestamp,
             protected_sequences,
+            protected_lengths,
             fec_data,
         })
     }
@@ -376,14 +392,13 @@ impl FecEncoder {
             None => return None,
         };
 
-        let missing_sequence_number = match fec_packet
+        // Find the missing sequence number and its index in the FEC packet
+        let (missing_index, missing_sequence_number) = fec_packet
             .protected_sequences
             .iter()
-            .find(|&&seq| !available_packets.iter().any(|p| p.sequence_number == seq))
-        {
-            Some(&seq) => seq,
-            None => return None,
-        };
+            .enumerate()
+            .find(|(_, &seq)| !available_packets.iter().any(|p| p.sequence_number == seq))
+            .map(|(i, &seq)| (i, seq))?;
 
         let mut recovered_data = fec_packet.fec_data.clone();
         for packet in available_packets {
@@ -393,6 +408,14 @@ impl FecEncoder {
                 }
             }
         }
+
+        // Trim recovered data to the original packet length
+        let original_length = fec_packet
+            .protected_lengths
+            .get(missing_index)
+            .copied()
+            .unwrap_or(recovered_data.len() as u16) as usize;
+        recovered_data.truncate(original_length);
 
         let seq_diff = missing_sequence_number.wrapping_sub(ref_packet.sequence_number);
         let fragment_number = ref_packet.fragment_number.wrapping_add(seq_diff as u16);
