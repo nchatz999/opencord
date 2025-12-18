@@ -262,7 +262,7 @@ function createScreenShareStore(): ScreenShareStore {
           mediaType: "screen",
           data: encodeChunkToArray(chunk),
           timestamp: Date.now(),
-          realTimestamp: chunk.timestamp,
+          realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,
         };
 
@@ -282,7 +282,7 @@ function createScreenShareStore(): ScreenShareStore {
           mediaType: "screenSound",
           data: encodeChunkToArray(chunk),
           timestamp: Date.now(),
-          realTimestamp: chunk.timestamp,
+          realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,
         };
 
