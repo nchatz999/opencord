@@ -51,7 +51,6 @@ export interface RTPPacket extends BasePacket {
 
 export type Packet = PingPacket | PongPacket | NackPacket | FecPacket | RTPPacket;
 
-
 export class FrameBuffer {
   public frameId: bigint;
   public expectedFragments: number;
@@ -218,7 +217,7 @@ export class RTCPProtocol {
         }
       }
     } catch (e) {
-      this.onDisconnect("Send failed");
+      this.onDisconnect(e instanceof Error ? e.message : String(e));
       await this.disconnect()
     }
   }
@@ -232,7 +231,7 @@ export class RTCPProtocol {
       await writer.write(data)
       await writer.close()
     } catch (e) {
-      this.onDisconnect("Send failed");
+      this.onDisconnect(e instanceof Error ? e.message : String(e));
       await this.disconnect()
     }
   }
@@ -433,7 +432,7 @@ export class RTCPProtocol {
         this.handleSafeDataStream(stream);
       }
     } catch (e) {
-      this.onDisconnect("Connection lost");
+      this.onDisconnect(e instanceof Error ? e.message : String(e));
       await this.disconnect()
     }
   }
@@ -460,7 +459,7 @@ export class RTCPProtocol {
 
       this.onSafeDataComplete(completeMessage);
     } catch (e) {
-      this.onDisconnect("Connection lost");
+      this.onDisconnect(e instanceof Error ? e.message : String(e));
       await this.disconnect()
     }
   }
@@ -545,11 +544,11 @@ export class RTCPProtocol {
       }
 
       if (this.onDisconnect && closeCode && reason) {
-        this.onDisconnect("Connection closed");
+        this.onDisconnect(reason);
         await this.disconnect()
       }
     } catch (e) {
-      this.onDisconnect("Connection lost");
+      this.onDisconnect(e instanceof Error ? e.message : String(e));
       await this.disconnect()
     }
   }
