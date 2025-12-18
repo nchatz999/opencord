@@ -258,7 +258,7 @@ function createMicrophoneStore(): MicrophoneStore {
           mediaType: "voice",
           data: encodeChunkToArray(chunk),
           timestamp: Date.now(),
-          realTimestamp: chunk.timestamp,
+          realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,
         };
 

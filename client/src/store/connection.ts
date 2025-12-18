@@ -129,8 +129,8 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
       const message = decode(data) as ConnectionMessage;
       handleConnectionMessage(message);
     },
-    () => {
-      notifyError("Connection to server lost");
+    (error: string) => {
+      notifyError(error);
     }
   );
 

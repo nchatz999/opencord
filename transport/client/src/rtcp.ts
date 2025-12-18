@@ -130,12 +130,12 @@ export class RTCPProtocol {
   private cleanerIntervalId: number | null = null;
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
-  onDisconnect: () => void;
+  onDisconnect: (error: string) => void;
 
   constructor(
     onFrameConplete: (data: Uint8Array) => void,
     onSafeDataComplete: (data: Uint8Array) => void,
-    onDisconnect: (() => void),
+    onDisconnect: (error: string) => void,
   ) {
     this.outSeq = 0n;
     this.inSeq = 0n;
@@ -218,7 +218,7 @@ export class RTCPProtocol {
         }
       }
     } catch (e) {
-      this.onDisconnect();
+      this.onDisconnect("Send failed");
       await this.disconnect()
     }
   }
@@ -232,7 +232,7 @@ export class RTCPProtocol {
       await writer.write(data)
       await writer.close()
     } catch (e) {
-      this.onDisconnect();
+      this.onDisconnect("Send failed");
       await this.disconnect()
     }
   }
@@ -393,7 +393,7 @@ export class RTCPProtocol {
   public runPingInterval(interval: number) {
     this.pingIntervalId = window.setInterval(async () => {
       if (this.missedPongs >= 5) {
-        this.onDisconnect();
+        this.onDisconnect("Connection timed out");
         await this.disconnect()
         return;
       }
@@ -433,7 +433,7 @@ export class RTCPProtocol {
         this.handleSafeDataStream(stream);
       }
     } catch (e) {
-      this.onDisconnect();
+      this.onDisconnect("Connection lost");
       await this.disconnect()
     }
   }
@@ -460,7 +460,7 @@ export class RTCPProtocol {
 
       this.onSafeDataComplete(completeMessage);
     } catch (e) {
-      this.onDisconnect();
+      this.onDisconnect("Connection lost");
       await this.disconnect()
     }
   }
@@ -545,11 +545,11 @@ export class RTCPProtocol {
       }
 
       if (this.onDisconnect && closeCode && reason) {
-        this.onDisconnect();
+        this.onDisconnect("Connection closed");
         await this.disconnect()
       }
     } catch (e) {
-      this.onDisconnect();
+      this.onDisconnect("Connection lost");
       await this.disconnect()
     }
   }
