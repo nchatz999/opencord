@@ -556,11 +556,16 @@ impl<L: LogManager> SubscriberSession<L> {
     async fn handle_connection_message(&mut self, msg: Message) -> Result<(), SessionError> {
         match msg {
             Message::Unordered(bytes) => {
-                if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
-                    return self.handle_voip_message(voip_msg).await;
+                match rmp_serde::from_slice::<VoipPayload>(&bytes) {
+                    Ok(voip_msg) => {
+                        return self.handle_voip_message(voip_msg).await;
+                    }
+                    Err(e) => {
+                        println!("Invalid VoIP message format: {:?}", e);
+                        println!("Raw bytes (first 100): {:?}", &bytes[..std::cmp::min(100, bytes.len())]);
+                        Ok(())
+                    }
                 }
-                println!("Invalid VoIP message format, ignoring packet");
-                Ok(())
             }
             Message::Ordered(bytes) => {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
