@@ -72,10 +72,10 @@ const DEFAULT_ENCODER_CONFIG: EncoderConfig = {
   bitrate: DEFAULT_QUALITY,
 };
 
-function encodeChunkToArray(chunk: EncodedAudioChunk): number[] {
+function encodeChunkToUint8Array(chunk: EncodedAudioChunk): Uint8Array {
   const buffer = new ArrayBuffer(chunk.byteLength);
   chunk.copyTo(buffer);
-  return Array.from(new Uint8Array(buffer));
+  return new Uint8Array(buffer);
 }
 
 function buildMediaConstraints(
@@ -256,7 +256,7 @@ function createMicrophoneStore(): MicrophoneStore {
           type: "media",
           userId: user.userId,
           mediaType: "voice",
-          data: encodeChunkToArray(chunk),
+          data: encodeChunkToUint8Array(chunk),
           timestamp: Date.now(),
           realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,

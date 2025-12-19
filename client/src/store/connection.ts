@@ -53,7 +53,7 @@ export type VoipPayload =
       type: "media";
       userId: number;
       mediaType: "voice" | "camera" | "screen" | "screenSound";
-      data: number[];
+      data: Uint8Array;
       timestamp: number;
       realTimestamp: number;
       key: "key" | "delta";

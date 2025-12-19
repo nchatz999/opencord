@@ -66,10 +66,10 @@ const DEFAULT_AUDIO_ENCODER_CONFIG = {
   bitrate: DEFAULT_AUDIO_BITRATE,
 };
 
-function encodeChunkToArray(chunk: EncodedVideoChunk | EncodedAudioChunk): number[] {
+function encodeChunkToUint8Array(chunk: EncodedVideoChunk | EncodedAudioChunk): Uint8Array {
   const buffer = new ArrayBuffer(chunk.byteLength);
   chunk.copyTo(buffer);
-  return Array.from(new Uint8Array(buffer));
+  return new Uint8Array(buffer);
 }
 
 function buildMediaConstraints(constraints: ScreenShareConstraints): DisplayMediaStreamOptions {
@@ -260,7 +260,7 @@ function createScreenShareStore(): ScreenShareStore {
           type: "media",
           userId: user.userId,
           mediaType: "screen",
-          data: encodeChunkToArray(chunk),
+          data: encodeChunkToUint8Array(chunk),
           timestamp: Date.now(),
           realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,
@@ -280,7 +280,7 @@ function createScreenShareStore(): ScreenShareStore {
           type: "media",
           userId: user.userId,
           mediaType: "screenSound",
-          data: encodeChunkToArray(chunk),
+          data: encodeChunkToUint8Array(chunk),
           timestamp: Date.now(),
           realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,
