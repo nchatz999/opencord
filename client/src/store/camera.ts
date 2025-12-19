@@ -178,7 +178,7 @@ function createCameraStore(): CameraStore {
 
   const actions: CameraActions = {
     init() {
-      this.onEncodedData((chunk) => {
+      this.onEncodedData(async (chunk) => {
         const user = authActions.getUser();
         if (!user) return;
 
@@ -195,7 +195,7 @@ function createCameraStore(): CameraStore {
           key: chunk.type,
         };
 
-        connection.sendVoip(payload);
+        await connection.sendVoip(payload);
       });
     },
 
