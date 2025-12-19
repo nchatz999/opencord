@@ -249,7 +249,7 @@ function createScreenShareStore(): ScreenShareStore {
 
   const actions: ScreenShareActions = {
     init() {
-      this.onEncodedVideoData((chunk) => {
+      this.onEncodedVideoData(async (chunk) => {
         const user = authActions.getUser();
         if (!user) return;
 
@@ -266,10 +266,10 @@ function createScreenShareStore(): ScreenShareStore {
           key: chunk.type,
         };
 
-        connection.sendVoip(payload);
+        await connection.sendVoip(payload);
       });
 
-      this.onEncodedAudioData((chunk) => {
+      this.onEncodedAudioData(async (chunk) => {
         const user = authActions.getUser();
         if (!user) return;
 
@@ -286,7 +286,7 @@ function createScreenShareStore(): ScreenShareStore {
           key: chunk.type,
         };
 
-        connection.sendVoip(payload);
+        await connection.sendVoip(payload);
       });
     },
 

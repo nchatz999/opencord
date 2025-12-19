@@ -245,7 +245,7 @@ function createMicrophoneStore(): MicrophoneStore {
 
   const actions: MicrophoneActions = {
     init() {
-      this.onEncodedData((chunk) => {
+      this.onEncodedData(async (chunk) => {
         const user = authActions.getUser();
         if (!user) return;
 
@@ -262,10 +262,10 @@ function createMicrophoneStore(): MicrophoneStore {
           key: chunk.type,
         };
 
-        connection.sendVoip(payload);
+        await connection.sendVoip(payload);
       });
 
-      this.onSpeech((isSpeaking) => {
+      this.onSpeech(async (isSpeaking) => {
         const user = authActions.getUser();
         if (!user) return;
 
@@ -275,7 +275,7 @@ function createMicrophoneStore(): MicrophoneStore {
           isSpeaking,
         };
 
-        connection.sendVoip(payload);
+        await connection.sendVoip(payload);
       });
     },
 
