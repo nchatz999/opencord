@@ -96,7 +96,7 @@ type ConnectionMessage =
 export interface ConnectionActions {
   connect: (url: string, token: string) => Promise<Result<void, string>>;
   disconnect: () => Promise<void>;
-  sendVoip: (payload: VoipPayload) => void;
+  sendVoip: (payload: VoipPayload) => Promise<void>;
   sendControl: (payload: ControlPayload) => void;
 
   onVoipData: (callback: (data: VoipPayload) => void) => () => void;
@@ -249,8 +249,8 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
       await protocol.disconnect();
     },
 
-    sendVoip(payload: VoipPayload): void {
-      protocol.send(encode(payload));
+    async sendVoip(payload: VoipPayload): Promise<void> {
+      await protocol.send(encode(payload));
     },
 
     sendControl(payload: ControlPayload): void {
