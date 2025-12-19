@@ -108,7 +108,7 @@ export class RTCPProtocol {
   inSeq: bigint;
   retransmission: Map<
     bigint,
-    { packet: NackPacket; count: number; timer: number }
+    { packet: NackPacket; count: number; timer: number; createdAt: number }
   >;
   sendPackets: Map<bigint, RTPPacket>;
   receivedPackets: Map<bigint, RTPPacket>;
@@ -287,12 +287,17 @@ export class RTCPProtocol {
   public scheduleRetransmission(nack: NackPacket) {
     if (!this.writer) return;
 
+    const MAX_RETRANSMISSIONS = 5;
     let packet = this.retransmission.get(nack.missingSequence);
     if (!packet) {
-      packet = { packet: nack, count: 0, timer: Date.now() };
+      packet = { packet: nack, count: 0, timer: 0, createdAt: Date.now() };
       this.retransmission.set(nack.missingSequence, packet);
     }
     packet.count++;
+    if (packet.count > MAX_RETRANSMISSIONS) {
+      this.cancelRetransmission(nack.missingSequence);
+      return;
+    }
     let time = packet.count == 1 ? 20 : this.rto;
     packet.timer = window.setTimeout(async () => {
       if (this.writer) {
@@ -520,7 +525,13 @@ export class RTCPProtocol {
         Array.from(this.buffers).filter(([_, value]) => now - Number(value.createdAt) < 5000)
       );
 
-      this.pings = Array.from(this.pings).filter((ping) => now - Number(ping.timestamp) < 5000)
+      this.pings = Array.from(this.pings).filter((ping) => now - Number(ping.timestamp) < 5000);
+
+      for (const [seq, entry] of this.retransmission) {
+        if (now - entry.createdAt > 5000) {
+          this.cancelRetransmission(seq);
+        }
+      }
     }, 50)
   }
 

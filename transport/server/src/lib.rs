@@ -187,6 +187,7 @@ const CLEANUP_INTERVAL: Duration = Duration::from_millis(100);
 struct InFlightPacket {
     pub packet: packet::NackBody,
     pub sent_at: Instant,
+    pub created_at: u64,
     pub retransmissions: u32,
 }
 
@@ -367,6 +368,7 @@ impl ConnectionRunner {
                     self.send_pings.retain(|_key,value| now - value.timestamp < 5000 );
                     self.send_packets.retain(|_key,value| now - value.timestamp < 5000 );
                     self.received_rackets.retain(|_key,value| now - value.timestamp < 5000 );
+                    self.nacks.retain(|nack| now - nack.created_at < 5000 );
                 },
 
                 Some(command) = self.session_command_receiver.recv() => {
@@ -436,6 +438,10 @@ impl ConnectionRunner {
                     self.received_rackets.insert(body.sequence_number, body);
 
                     if sec > self.in_seq {
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64;
                         for i in self.in_seq..sec {
                             let dur = Instant::now();
                             let nack = packet::NackBody {
@@ -444,6 +450,7 @@ impl ConnectionRunner {
                             self.nacks.push(InFlightPacket {
                                 packet: nack,
                                 sent_at: dur,
+                                created_at: now,
                                 retransmissions: 0,
                             });
                         }
