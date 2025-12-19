@@ -115,7 +115,8 @@ export class PacketSerializer {
         offset += 2;
         const markerBit = view.getUint8(offset) === 1;
         offset += 1;
-        const data = new Uint8Array(buffer.buffer, buffer.byteOffset + offset);
+        // Copy the data to avoid buffer reuse issues and ensure correct length
+        const data = buffer.slice(offset);
         const packet: RTPPacket = {
           type,
           sequenceNumber,
@@ -151,10 +152,8 @@ export class PacketSerializer {
           protectedLengths.push(view.getUint16(offset));
           offset += 2;
         }
-        const fecData = new Uint8Array(
-          buffer.buffer,
-          buffer.byteOffset + offset
-        );
+        // Copy the FEC data to avoid buffer reuse issues and ensure correct length
+        const fecData = buffer.slice(offset);
         const packet: FecPacket = {
           type,
           timestamp,
@@ -183,7 +182,8 @@ export class PacketSerializer {
         }
         const timestamp = view.getBigUint64(offset);
         offset += 8;
-        const data = new Uint8Array(buffer.buffer, buffer.byteOffset + offset);
+        // Copy the data to avoid buffer reuse issues and ensure correct length
+        const data = buffer.slice(offset);
         const packet: PingPacket | PongPacket = {
           type,
           timestamp,

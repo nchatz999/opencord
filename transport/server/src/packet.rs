@@ -99,11 +99,11 @@ impl FrameBuffer {
             return Err("Packet does not belong to this frame");
         }
         if packet.total_fragments != self.expected_fragments {
-            println!(
-                "{:?}  sfas {:?}",
-                packet.total_fragments, self.expected_fragments
-            );
             return Err("Inconsistent fragment count");
+        }
+        // Validate fragment number is within valid range
+        if packet.fragment_number >= self.expected_fragments {
+            return Err("Fragment number out of range");
         }
         self.packets.insert(packet.fragment_number, packet);
         Ok(())
@@ -383,7 +383,9 @@ impl FecEncoder {
     }
 
     pub fn recover_packet(fec_packet: &FecBody, available_packets: &[RtpBody]) -> Option<RtpBody> {
-        if available_packets.len() != 3 {
+        // Need exactly (group_size - 1) packets to recover the missing one
+        let required_packets = fec_packet.protected_sequences.len().saturating_sub(1);
+        if available_packets.len() != required_packets {
             return None;
         }
 

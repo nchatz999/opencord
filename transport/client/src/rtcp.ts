@@ -65,8 +65,14 @@ export class FrameBuffer {
     this.createdAt = Date.now();
   }
 
-  public addPacket(packet: RTPPacket): void {
+  public addPacket(packet: RTPPacket): boolean {
+    // Validate fragment number is within valid range
+    if (packet.fragmentNumber >= this.expectedFragments) {
+      console.warn(`Fragment number ${packet.fragmentNumber} out of range (expected < ${this.expectedFragments})`);
+      return false;
+    }
     this.packets.set(packet.fragmentNumber, packet);
+    return true;
   }
 
   public isComplete(): boolean {

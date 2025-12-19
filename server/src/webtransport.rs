@@ -562,10 +562,64 @@ impl<L: LogManager> SubscriberSession<L> {
                         return self.handle_voip_message(voip_msg).await;
                     }
                     Err(e) => {
-                        println!("Invalid VoIP message format: {:?}", e);
+                        println!("=== VoIP Deserialization Error ===");
+                        println!("Error: {:?}", e);
                         println!("Total bytes: {}", bytes.len());
-                        println!("Raw bytes (first 200): {:?}", &bytes[..std::cmp::min(200, bytes.len())]);
-                        println!("Raw bytes (last 50): {:?}", &bytes[bytes.len().saturating_sub(50)..]);
+
+                        // Parse and log MessagePack structure
+                        if !bytes.is_empty() {
+                            let first_byte = bytes[0];
+                            println!("First byte: 0x{:02X}", first_byte);
+
+                            // Detect map type
+                            if first_byte >= 0x80 && first_byte <= 0x8F {
+                                let num_pairs = (first_byte & 0x0F) as usize;
+                                println!("Structure: fixmap with {} key-value pairs", num_pairs);
+                            } else if first_byte == 0xDE {
+                                if bytes.len() >= 3 {
+                                    let num_pairs = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
+                                    println!("Structure: map16 with {} key-value pairs", num_pairs);
+                                }
+                            } else if first_byte == 0xDF {
+                                if bytes.len() >= 5 {
+                                    let num_pairs = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
+                                    println!("Structure: map32 with {} key-value pairs", num_pairs);
+                                }
+                            }
+
+                            // Look for binary markers in the first 500 bytes
+                            let search_len = std::cmp::min(500, bytes.len());
+                            for i in 0..search_len {
+                                match bytes[i] {
+                                    0xC4 if i + 1 < bytes.len() => {
+                                        let len = bytes[i + 1] as usize;
+                                        println!("Found bin8 at offset {}: declared length {}", i, len);
+                                    }
+                                    0xC5 if i + 2 < bytes.len() => {
+                                        let len = u16::from_be_bytes([bytes[i + 1], bytes[i + 2]]) as usize;
+                                        let remaining = bytes.len() - (i + 3);
+                                        println!("Found bin16 at offset {}: declared length {}, remaining bytes after header: {}", i, len, remaining);
+                                    }
+                                    0xC6 if i + 4 < bytes.len() => {
+                                        let len = u32::from_be_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]) as usize;
+                                        let remaining = bytes.len() - (i + 5);
+                                        println!("Found bin32 at offset {}: declared length {}, remaining bytes after header: {}", i, len, remaining);
+                                    }
+                                    0xDC if i + 2 < bytes.len() => {
+                                        let len = u16::from_be_bytes([bytes[i + 1], bytes[i + 2]]) as usize;
+                                        println!("Found array16 at offset {}: length {}", i, len);
+                                    }
+                                    0xDD if i + 4 < bytes.len() => {
+                                        let len = u32::from_be_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]) as usize;
+                                        println!("Found array32 at offset {}: length {}", i, len);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        println!("Raw bytes (first 100): {:?}", &bytes[..std::cmp::min(100, bytes.len())]);
+                        println!("=================================");
                         Ok(())
                     }
                 }
