@@ -262,11 +262,15 @@ export class FECEncoder {
     const originalLength = fecPacket.protectedLengths[missingIndex] ?? xorResult.length;
     const trimmedData = xorResult.slice(0, originalLength);
 
-    const fragmentOffset = Number(
-      templatePacket.sequenceNumber - missingSequence
+    // Find templatePacket's position in the FEC group
+    const refIndex = fecPacket.protectedSequences.findIndex(
+      (seq) => seq === templatePacket.sequenceNumber
     );
-    const recoveredFragmentNumber =
-      templatePacket.fragmentNumber - fragmentOffset;
+
+    // Calculate fragment offset using positions in the FEC group, not sequence differences
+    // This correctly handles non-consecutive sequence numbers from concurrent sends
+    const fragmentOffset = missingIndex - refIndex;
+    const recoveredFragmentNumber = templatePacket.fragmentNumber + fragmentOffset;
 
     return {
       type: templatePacket.type,

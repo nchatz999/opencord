@@ -417,8 +417,16 @@ impl FecEncoder {
             .unwrap_or(recovered_data.len() as u16) as usize;
         recovered_data.truncate(original_length);
 
-        let seq_diff = missing_sequence_number.wrapping_sub(ref_packet.sequence_number);
-        let fragment_number = ref_packet.fragment_number.wrapping_add(seq_diff as u16);
+        // Find ref_packet's position in the FEC group
+        let ref_index = fec_packet
+            .protected_sequences
+            .iter()
+            .position(|&seq| seq == ref_packet.sequence_number)?;
+
+        // Calculate fragment offset using positions in the FEC group, not sequence differences
+        // This correctly handles non-consecutive sequence numbers from concurrent sends
+        let fragment_offset = missing_index as i32 - ref_index as i32;
+        let fragment_number = (ref_packet.fragment_number as i32 + fragment_offset) as u16;
         let total_fragments = ref_packet.total_fragments;
         let marker_bit = total_fragments > 0 && fragment_number == total_fragments - 1;
 
