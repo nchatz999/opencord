@@ -143,6 +143,7 @@ pub enum VoipPayload {
     Media {
         user_id: u64,
         media_type: VoipDataType,
+        #[serde(with = "serde_bytes")]
         data: Vec<u8>,
         timestamp: u64,
         real_timestamp: u64,

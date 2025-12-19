@@ -74,10 +74,10 @@ function buildMediaConstraints(constraints: CameraConstraints): MediaStreamConst
   };
 }
 
-function encodeChunkToArray(chunk: EncodedVideoChunk): number[] {
+function encodeChunkToUint8Array(chunk: EncodedVideoChunk): Uint8Array {
   const buffer = new ArrayBuffer(chunk.byteLength);
   chunk.copyTo(buffer);
-  return Array.from(new Uint8Array(buffer));
+  return new Uint8Array(buffer);
 }
 
 function createEncoderInstance(
@@ -189,7 +189,7 @@ function createCameraStore(): CameraStore {
           type: "media",
           userId: user.userId,
           mediaType: "camera",
-          data: encodeChunkToArray(chunk),
+          data: encodeChunkToUint8Array(chunk),
           timestamp: Date.now(),
           realTimestamp: Math.trunc(chunk.timestamp),
           key: chunk.type,
