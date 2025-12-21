@@ -1,0 +1,20 @@
+{
+  "name": "opencord",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "workspaces": [
+    "utils",
+    "transport/client",
+    "client"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspace=client"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

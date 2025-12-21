@@ -1,0 +1,12 @@
+localhost {
+    # API backend
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:3000
+    }
+    
+    # Frontend
+    handle {
+        reverse_proxy localhost:5173
+    }
+}

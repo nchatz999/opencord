@@ -1,0 +1,36 @@
+{
+  "name": "opencord-utils",
+  "version": "0.1.0",
+  "description": "Opencord utilities",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm,cjs --dts"
+  },
+  "keywords": [
+    "result",
+    "monad",
+    "error-handling",
+    "typescript"
+  ],
+  "author": "nchatz999@gmail.com",
+  "license": "AGPL-3.0-only",
+  "devDependencies": {
+    "tsdown": "^0.16.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/webworker": "^0.0.43"
+  }
+}

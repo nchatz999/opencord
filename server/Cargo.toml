@@ -1,0 +1,58 @@
+[package]
+name = "opencord-server"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8.7", features = ["ws","macros","multipart"] }
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+serde_json = "1"
+sqlx = { version = "0.8.6", features = [ "runtime-tokio-rustls", "postgres", "macros", "time" ] }
+futures = "0.3.31"
+chrono = "0.4.39"
+bcrypt = "0.17.1"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.0", features = ["v4", "fast-rng"] }
+time = { version = "0.3.41", features = ["serde"] }
+dotenv = "0.15.0"
+thiserror = "2.0.11"
+tower-http = { version = "0.6.1", features = ["cors", "fs"] }
+http = "1.2.0"
+futures-util = "0.3.31"
+utoipa = { version = "5", features = ["axum_extras","time"] }
+utoipa-swagger-ui =  { version = "9.0.0", features = ["axum"] }
+utoipa-axum = "0.2.0"
+async-trait = "0.1.88"
+regex = "1.10"
+rand = "0.8"
+lazy_static = "1.4"
+mime_guess = "2.0"
+tokio-util = { version = "0.7", features = ["io"] }
+sha2 = "0.10"
+
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+tower = { version = "0.5", features = ["util"] }
+hyper = { version = "1.0", features = ["full"] }
+rcgen = "0.13.2"
+base64 = "0.22.1"
+rustls-pemfile = "2.2.0"
+opencord-transport-server = { path = "../transport/server/" }
+url = "2.5.4"
+totp-rs = "5.7.0"
+base32 = "0.5.1"
+rmp-serde = "1.3.0"
+urlencoding = "2.1.3"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+
+[dev-dependencies]

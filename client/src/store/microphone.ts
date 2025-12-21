@@ -1,0 +1,378 @@
+import { createStore } from "solid-js/store";
+import { createRoot } from "solid-js";
+import { createVADNode } from "../lib/Vad";
+
+export interface MicrophoneConstraints {
+  echoCancellation?: boolean;
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
+  sampleRate?: number;
+  channelCount?: number;
+}
+
+export interface EncoderConfig {
+  codec?: string;
+  sampleRate?: number;
+  numberOfChannels?: number;
+  bitrate?: number;
+}
+
+interface MicrophoneState {
+  volume: number;
+  deviceId: string;
+  isRecording: boolean;
+  muted: boolean;
+  availableInputs: MediaDeviceInfo[];
+  quality: number;
+}
+
+export interface MicrophoneActions {
+  init: () => void;
+  listDevices: () => MediaDeviceInfo[];
+  setDevice: (deviceId: string) => Promise<void>;
+  getDevice: () => string;
+  setVolume: (volume: number) => void;
+  getVolume: () => number;
+  setQuality: (quality: number) => void;
+  getQuality: () => number;
+  setMuted: (muted: boolean) => void;
+  getMuted: () => boolean;
+  isRecording: () => boolean;
+  setConstraints: (constraints: Partial<MicrophoneConstraints>) => void;
+  getConstraints: () => MicrophoneConstraints;
+  onEncodedData: (callback: (chunk: EncodedAudioChunk) => void) => () => void;
+  onSpeech: (callback: (isSpeech: boolean) => void) => () => void;
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+  destroy: () => Promise<void>;
+}
+
+export type MicrophoneStore = [MicrophoneState, MicrophoneActions];
+
+const DEFAULT_QUALITY = 128_000;
+const DEFAULT_VOLUME = 100;
+const MAX_VOLUME = 200;
+const MIN_VOLUME = 0;
+
+const DEFAULT_CONSTRAINTS: MicrophoneConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  sampleRate: 48000,
+  channelCount: 1,
+};
+
+const DEFAULT_ENCODER_CONFIG: EncoderConfig = {
+  codec: "opus",
+  sampleRate: 48000,
+  numberOfChannels: 1,
+  bitrate: DEFAULT_QUALITY,
+};
+
+function buildMediaConstraints(
+  deviceId: string,
+  constraints: MicrophoneConstraints
+): MediaStreamConstraints {
+  return {
+    audio: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      echoCancellation: constraints.echoCancellation,
+      noiseSuppression: constraints.noiseSuppression,
+      autoGainControl: constraints.autoGainControl,
+      sampleRate: constraints.sampleRate,
+      channelCount: constraints.channelCount,
+    },
+  };
+}
+
+function createEncoderInstance(
+  bitrate: number,
+  onOutput: (chunk: EncodedAudioChunk) => void
+): AudioEncoder {
+  const encoder = new AudioEncoder({
+    output: (chunk) => onOutput(chunk),
+    error: (error) => console.error("Encoder error:", error),
+  });
+
+  encoder.configure({ ...DEFAULT_ENCODER_CONFIG, bitrate } as AudioEncoderConfig);
+  return encoder;
+}
+
+function convertToMono(value: AudioData): AudioData {
+  const buffer = new ArrayBuffer(value.numberOfFrames * 4);
+  value.copyTo(buffer, { planeIndex: 0 });
+
+  return new AudioData({
+    format: value.format,
+    sampleRate: value.sampleRate,
+    numberOfFrames: value.numberOfFrames,
+    numberOfChannels: 1,
+    timestamp: value.timestamp,
+    data: buffer,
+  });
+}
+
+async function safelyCancelReader(
+  reader: ReadableStreamDefaultReader<AudioData> | null
+): Promise<void> {
+  if (!reader) return;
+  try {
+    await reader.cancel();
+  } catch { }
+}
+
+function closeEncoder(encoder: AudioEncoder | null): void {
+  if (encoder && encoder.state !== "closed") {
+    encoder.close();
+  }
+}
+
+function stopStreamTracks(stream: MediaStream | null): void {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+async function closeAudioContext(context: AudioContext | null): Promise<void> {
+  if (context) {
+    await context.close();
+  }
+}
+
+async function fetchAudioInputDevices(): Promise<MediaDeviceInfo[]> {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((device) => device.kind === "audioinput");
+}
+
+function clampVolume(volume: number): number {
+  return Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, volume));
+}
+
+function createMicrophoneStore(): MicrophoneStore {
+  const [state, setState] = createStore<MicrophoneState>({
+    volume: DEFAULT_VOLUME,
+    deviceId: "",
+    isRecording: false,
+    muted: false,
+    availableInputs: [],
+    quality: DEFAULT_QUALITY,
+  });
+
+  const encodedDataCallbacks = new Set<(chunk: EncodedAudioChunk) => void>();
+  const speechCallbacks = new Set<(isSpeech: boolean) => void>();
+
+  let constraints = { ...DEFAULT_CONSTRAINTS };
+  let stream: MediaStream | null = null;
+  let audioContext: AudioContext | null = null;
+  let gainNode: GainNode | null = null;
+  let processor: MediaStreamTrackProcessor<AudioData> | null = null;
+  let encoder: AudioEncoder | null = null;
+  let reader: ReadableStreamDefaultReader<AudioData> | null = null;
+  let isProcessing = false;
+
+
+  function notifyEncodedData(chunk: EncodedAudioChunk): void {
+    encodedDataCallbacks.forEach((cb) => cb(chunk));
+  }
+
+  function notifySpeech(isSpeech: boolean): void {
+    speechCallbacks.forEach((cb) => cb(isSpeech));
+  }
+
+  async function updateAvailableDevices(): Promise<void> {
+    try {
+      const audioInputs = await fetchAudioInputDevices();
+      setState("availableInputs", audioInputs);
+    } catch (error) {
+      console.error("Error updating available devices:", error);
+    }
+  }
+
+  async function processAudioStream(): Promise<void> {
+    if (!processor) return;
+
+    reader = processor.readable.getReader();
+
+    try {
+      while (isProcessing) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        if (value && encoder?.state === "configured") {
+          const needsMonoConversion =
+            value.numberOfChannels === 2 && DEFAULT_ENCODER_CONFIG.numberOfChannels === 1;
+
+          encoder.encode(needsMonoConversion ? convertToMono(value) : value);
+          value.close();
+        }
+      }
+    } catch (error) {
+      if (isProcessing) {
+        console.error("Error processing audio stream:", error);
+      }
+    }
+  }
+
+  async function cleanup(): Promise<void> {
+    await safelyCancelReader(reader);
+    reader = null;
+
+    closeEncoder(encoder);
+    encoder = null;
+
+    stopStreamTracks(stream);
+    stream = null;
+
+    await closeAudioContext(audioContext);
+    audioContext = null;
+
+    gainNode = null;
+    processor = null;
+  }
+
+  updateAvailableDevices();
+  navigator.mediaDevices.addEventListener("devicechange", updateAvailableDevices);
+
+  const actions: MicrophoneActions = {
+    init() { },
+
+    listDevices: () => state.availableInputs,
+
+    async setDevice(deviceId) {
+      setState("deviceId", deviceId);
+
+      if (state.isRecording) {
+        await this.stop();
+        await this.start();
+      }
+    },
+
+    getDevice: () => state.deviceId,
+
+    setVolume(volume) {
+      const clampedVolume = clampVolume(volume);
+      setState("volume", clampedVolume);
+
+      if (gainNode) {
+        gainNode.gain.value = clampedVolume / 100;
+      }
+    },
+
+    getVolume: () => state.volume,
+
+    setQuality(quality) {
+      setState("quality", quality);
+
+      if (encoder?.state === "configured") {
+        encoder.configure({ ...DEFAULT_ENCODER_CONFIG, bitrate: quality } as AudioEncoderConfig);
+      }
+    },
+
+    getQuality: () => state.quality,
+
+    setMuted: (muted) => setState("muted", muted),
+
+    getMuted: () => state.muted,
+
+    isRecording: () => state.isRecording,
+
+    setConstraints(newConstraints) {
+      constraints = { ...constraints, ...newConstraints };
+    },
+
+    getConstraints: () => ({ ...constraints }),
+
+    onEncodedData(callback) {
+      encodedDataCallbacks.add(callback);
+      return () => encodedDataCallbacks.delete(callback);
+    },
+
+    onSpeech(callback) {
+      speechCallbacks.add(callback);
+      return () => speechCallbacks.delete(callback);
+    },
+
+    async start() {
+      if (state.isRecording) {
+        console.warn("Already recording");
+        return;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildMediaConstraints(state.deviceId, constraints)
+        );
+
+        audioContext = new AudioContext({ sampleRate: constraints.sampleRate });
+
+        const vad = await createVADNode(audioContext, "sensitive");
+        const source = audioContext.createMediaStreamSource(stream);
+        const destination = audioContext.createMediaStreamDestination();
+
+        source.connect(vad.getInput());
+
+        gainNode = audioContext.createGain();
+        gainNode.gain.value = state.volume / 100;
+
+        vad.connect(gainNode);
+        gainNode.connect(destination);
+
+        vad.addEventListener("speechstart", () => {
+          if (!state.muted) notifySpeech(true);
+        });
+
+        vad.addEventListener("speechend", () => {
+          notifySpeech(false);
+        });
+
+        const audioTrack = destination.stream.getAudioTracks()[0];
+        audioTrack.onended = () => this.stop();
+
+        processor = new MediaStreamTrackProcessor({ track: audioTrack });
+        encoder = createEncoderInstance(state.quality, (chunk) => {
+          if (!state.muted) notifyEncodedData(chunk);
+        });
+
+        isProcessing = true;
+        processAudioStream();
+
+        await updateAvailableDevices();
+        setState("isRecording", true);
+      } catch (error) {
+        console.error("Error starting microphone:", error);
+        await cleanup();
+        throw error;
+      }
+    },
+
+    async stop() {
+      if (!state.isRecording) return;
+
+      isProcessing = false;
+
+      if (encoder?.state === "configured") {
+        await encoder.flush();
+      }
+
+      await cleanup();
+      setState("isRecording", false);
+    },
+
+    async destroy() {
+      await this.stop();
+      encodedDataCallbacks.clear();
+      speechCallbacks.clear();
+    },
+  };
+
+  return [state, actions];
+}
+
+let instance: MicrophoneStore | null = null;
+
+export function useMicrophone(): MicrophoneStore {
+  if (!instance) {
+    createRoot(() => {
+      instance = createMicrophoneStore();
+    });
+  }
+  return instance!;
+}
