@@ -24,17 +24,22 @@ const CreateChannelModal: Component = () => {
   const [, channelActions] = useChannel()
 
   const [name, setName] = createSignal('')
-  const [group, setGroup] = createSignal<number>(1)
+  const [group, setGroup] = createSignal<number | null>(null)
   const [type, setType] = createSignal<ChannelType>(ChannelType.Text)
 
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>({})
 
   createEffect(() => {
+    const groupId = group()
+    if (groupId === null) {
+      setRoleRights({})
+      return
+    }
     setRoleRights(Object.fromEntries(
       roleActions.list()
         .filter((role) => role.roleId > 2)
         .map((role) => [role.roleId,
-        aclActions.getGroupRights(group(), role.roleId) || 0,
+        aclActions.getGroupRights(groupId, role.roleId) || 0,
         ])
     ))
   })
@@ -114,12 +119,13 @@ const CreateChannelModal: Component = () => {
   const handleCreate = async () => {
     if (!name().trim()) return
 
-    if (!group()) {
+    const groupId = group()
+    if (!groupId) {
       addToast('No group selected', 'error')
       return
     }
 
-    const createResult = await channelActions.create(group(), name().trim(), type())
+    const createResult = await channelActions.create(groupId, name().trim(), type())
 
     if (createResult.isErr()) {
       addToast(`Failed to create channel: ${createResult.error}`, 'error')
@@ -153,7 +159,7 @@ const CreateChannelModal: Component = () => {
             Cancel
           </Button>
           <Button
-            disabled={!name().trim()}
+            disabled={!name().trim() || group() === null}
             onClick={handleCreate}
             variant="primary"
           >

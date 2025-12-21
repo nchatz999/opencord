@@ -77,15 +77,7 @@ pub trait ChannelRepository: Send + Sync + Clone {
 
     async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
 
-    async fn find_by_id(&self, channel_id: i64) -> Result<Option<Channel>, DatabaseError>;
-
     async fn list_by_user_role(&self, user_id: i64) -> Result<Vec<Channel>, DatabaseError>;
-
-    async fn find_user_channel_rights(
-        &self,
-        channel_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError>;
 }
 
 use crate::auth::Session;
@@ -108,24 +100,6 @@ impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, 
             notifier,
             logger,
         }
-    }
-
-    async fn verify_user_permission(
-        &self,
-        channel_id: i64,
-        user_id: i64,
-        minimum_rights_level: i64,
-    ) -> Result<bool, DomainError> {
-        let rights = self
-            .repository
-            .find_user_channel_rights(channel_id, user_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!(
-                "Channel {} not found",
-                channel_id
-            )))?;
-
-        Ok(rights >= minimum_rights_level)
     }
 
     pub async fn create_channel(
@@ -198,28 +172,8 @@ impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, 
         Ok(channel)
     }
 
-    pub async fn get_channel(&self, channel_id: i64, user_id: i64) -> Result<Channel, DomainError> {
-        if !self.verify_user_permission(channel_id, user_id, 1).await? {
-            return Err(DomainError::PermissionDenied(
-                "No access to channel".to_string(),
-            ));
-        }
-
-        let channel_data =
-            self.repository
-                .find_by_id(channel_id)
-                .await?
-                .ok_or(DomainError::BadRequest(format!(
-                    "Channel {} not found",
-                    channel_id
-                )))?;
-
-        Ok(channel_data)
-    }
-
     pub async fn list_user_channels(&self, user_id: i64) -> Result<Vec<Channel>, DomainError> {
         let channels = self.repository.list_by_user_role(user_id).await?;
-
         Ok(channels)
     }
 
@@ -284,10 +238,16 @@ impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, 
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("Channel name updated: user_id={}, session_id={}, channel_id={}", user_id, session_id, channel_id),
-            "channel".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Channel name updated: user_id={}, session_id={}, channel_id={}",
+                    user_id, session_id, channel_id
+                ),
+                "channel".to_string(),
+            )
+            .await;
 
         Ok(())
     }
@@ -396,10 +356,16 @@ impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, 
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("Channel deleted: user_id={}, session_id={}, channel_id={}", user_id, session_id, channel_id),
-            "channel".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Channel deleted: user_id={}, session_id={}, channel_id={}",
+                    user_id, session_id, channel_id
+                ),
+                "channel".to_string(),
+            )
+            .await;
 
         Ok(Some(deleted))
     }
@@ -524,29 +490,6 @@ impl ChannelRepository for Postgre {
         Ok(())
     }
 
-    async fn find_by_id(&self, channel_id: i64) -> Result<Option<Channel>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Channel,
-            r#"SELECT 
-                channel_id, 
-                channel_name, 
-                group_id, 
-                channel_type as "channel_type: ChannelType"
-            FROM channels 
-            WHERE channel_id = $1"#,
-            channel_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(result.map(|sql_channel| Channel {
-            channel_id: sql_channel.channel_id,
-            channel_name: sql_channel.channel_name,
-            group_id: sql_channel.group_id,
-            channel_type: ChannelType::from(sql_channel.channel_type),
-        }))
-    }
-
     async fn list_by_user_role(&self, user_id: i64) -> Result<Vec<Channel>, DatabaseError> {
         let results = sqlx::query_as!(
             Channel,
@@ -565,25 +508,6 @@ impl ChannelRepository for Postgre {
         .await?;
 
         Ok(results)
-    }
-
-    async fn find_user_channel_rights(
-        &self,
-        channel_id: i64,
-        user_id: i64,
-    ) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            r#"SELECT grr.rights 
-            FROM group_role_rights grr
-            INNER JOIN channels c ON c.group_id = grr.group_id    
-            INNER JOIN users u ON u.role_id = grr.role_id
-            WHERE c.channel_id = $1 AND u.user_id = $2"#,
-            channel_id,
-            user_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(result)
     }
 }
 
@@ -640,7 +564,6 @@ pub fn channel_routes(
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
         .routes(routes!(list_channels_handler))
-        .routes(routes!(get_channel_by_id_handler))
         .routes(routes!(create_channel_handler))
         .routes(routes!(delete_channel_handler))
         .routes(routes!(update_channel_name_handler))
@@ -673,37 +596,6 @@ async fn list_channels_handler(
         .await
         .map_err(ApiError::from)?;
     Ok(Json(channels))
-}
-
-#[utoipa::path(
-    get,
-    tag = "channel",
-    path = "/{id}",
-    params(
-        ("id", Path, description = "The ID of the channel to get details for"),
-    ),
-    responses(
-        (status = 200, description = "Successfully retrieved channel details", body = Channel),
-        (status = 403, description = "Permission denied", body = ApiError),
-        (status = 404, description = "Channel not found", body = ApiError),
-        (status = 500, description = "Internal Server Error", body = ApiError),
-    ),
-    security(
-        ("api_key" = [])
-    )
-)]
-#[axum::debug_handler]
-async fn get_channel_by_id_handler(
-    State(service): State<ChannelService<Postgre, DefaultNotifierManager, TextLogManager>>,
-    Extension(session): Extension<Session>,
-    Path(id): Path<i64>,
-) -> Result<Json<Channel>, ApiError> {
-    let user = session.user_id;
-    let channel_data = service
-        .get_channel(id, user)
-        .await
-        .map_err(ApiError::from)?;
-    Ok(Json(channel_data))
 }
 
 #[utoipa::path(
@@ -802,7 +694,12 @@ async fn update_channel_name_handler(
     Json(payload): Json<UpdateChannelRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .update_channel_name(id, payload.name.clone(), session.user_id, session.session_id)
+        .update_channel_name(
+            id,
+            payload.name.clone(),
+            session.user_id,
+            session.session_id,
+        )
         .await
         .map_err(ApiError::from)?;
 
