@@ -590,6 +590,7 @@ export class RTCPProtocol {
 
     this.pings.forEach(({ timer }) => clearTimeout(timer));
     this.pings = [];
+    this.missedPongs = 0;
 
     this.sendPackets.clear();
     this.receivedPackets.clear();
