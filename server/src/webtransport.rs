@@ -13,22 +13,20 @@ use std::path::PathBuf;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum DomainError {
+    #[error("Bad Request")]
     BadRequest(String),
-    InternalError(String),
+    #[error("Internal error: {0}")]
+    InternalError(#[from] DatabaseError),
 }
 
-impl From<DatabaseError> for DomainError {
-    fn from(err: DatabaseError) -> Self {
-        DomainError::InternalError(format!("Database error: {:?}", err))
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum SessionError {
+    #[error("Bad Request: {0}")]
     BadRequest(String),
-    InternalError,
+    #[error("Internal error")]
+    InternalError(#[from] DomainError),
 }
 
 pub struct ServerError;
@@ -39,12 +37,9 @@ impl From<DomainError> for ServerError {
     }
 }
 
-impl From<DomainError> for SessionError {
-    fn from(err: DomainError) -> Self {
-        match err {
-            DomainError::BadRequest(msg) => SessionError::BadRequest(msg),
-            DomainError::InternalError(_) => SessionError::InternalError,
-        }
+impl From<DatabaseError> for ServerError {
+    fn from(_err: DatabaseError) -> Self {
+        ServerError
     }
 }
 
@@ -195,7 +190,7 @@ pub trait Repository: Send + Sync + Clone {
 #[derive(Clone)]
 pub struct Service<L: LogManager> {
     repository: Postgre,
-    logger: L,
+    pub logger: L,
 }
 
 impl<L: LogManager> Service<L> {
@@ -210,26 +205,24 @@ impl<L: LogManager> Service<L> {
             .map_err(DomainError::from)
     }
 
-    pub async fn get_user_rights_in_channel(
+    pub async fn get_channel_rights(
         &self,
-        user_id: i64,
         channel_id: i64,
-    ) -> Result<Option<i64>, DomainError> {
-        self.repository
+        user_id: i64,
+    ) -> Result<i64, DomainError> {
+        Ok(self
+            .repository
             .find_user_channel_rights(channel_id, user_id)
-            .await
-            .map_err(DomainError::from)
+            .await?
+            .unwrap_or(0))
     }
 
-    pub async fn get_user_group_rights(
-        &self,
-        user_id: i64,
-        group_id: i64,
-    ) -> Result<Option<i64>, DomainError> {
-        self.repository
+    pub async fn get_group_rights(&self, group_id: i64, user_id: i64) -> Result<i64, DomainError> {
+        Ok(self
+            .repository
             .find_user_group_rights(group_id, user_id)
-            .await
-            .map_err(DomainError::from)
+            .await?
+            .unwrap_or(0))
     }
 
     pub async fn get_voip_participant(
@@ -360,7 +353,9 @@ impl Repository for Postgre {
     async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError> {
         let result = sqlx::query_as!(
             Session,
-            r#"SELECT * FROM sessions WHERE session_token = $1"#,
+            r#"SELECT * FROM sessions
+               WHERE session_token = $1
+               AND (expires_at IS NULL OR expires_at > NOW())"#,
             session_token
         )
         .fetch_optional(&self.pool)
@@ -484,7 +479,7 @@ impl SubscriberHandler {
 }
 
 const MAX_INVALID_VOIP_PACKETS: u32 = 1000;
-const MAX_BYTES_PER_SECOND: u64 = 500_000;
+const MAX_BYTES_PER_SECOND: u64 = 3_000_000;
 const RATE_LIMIT_WINDOW_MS: u128 = 1000;
 
 struct SubscriberSession<L: LogManager> {
@@ -526,39 +521,33 @@ impl<L: LogManager> SubscriberSession<L> {
     }
 
     async fn send_error(&mut self, reason: String) {
-        if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control {
+        let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
             payload: ControlPayload::Error { reason },
-        }) {
-            self.connection.send_ordered(serialized_event.into()).await;
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
+        })
+        .expect("serialization");
+        self.connection.send_ordered(bytes.into()).await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
     async fn handle_server_message(&mut self, msg: SubscriberMessage) -> Result<(), SessionError> {
         match msg {
             SubscriberMessage::Event(payload) => {
-                if let Ok(serialized_event) =
-                    rmp_serde::to_vec_named(&ConnectionMessage::Event { payload })
-                {
-                    self.connection.send_ordered(serialized_event.into()).await;
-                }
+                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Event { payload })
+                    .expect("serialization");
+                self.connection.send_ordered(bytes.into()).await;
             }
             SubscriberMessage::Voip(payload) => {
-                if let Ok(serialized_event) =
-                    rmp_serde::to_vec_named(&ConnectionMessage::Voip { payload })
-                {
-                    self.connection
-                        .send_unordered(serialized_event.into())
-                        .await;
-                }
+                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Voip { payload })
+                    .expect("serialization");
+                self.connection.send_unordered(bytes.into()).await;
             }
             SubscriberMessage::Close(_) => {
-                if let Ok(serialized_event) = rmp_serde::to_vec_named(&ConnectionMessage::Control {
+                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
                     payload: ControlPayload::Close,
-                }) {
-                    self.connection.send_ordered(serialized_event.into()).await;
-                    return Err(SessionError::BadRequest("Close".to_string()));
-                }
+                })
+                .expect("serialization");
+                self.connection.send_ordered(bytes.into()).await;
+                return Err(SessionError::BadRequest("Close".to_string()));
             }
         }
         Ok(())
@@ -642,10 +631,10 @@ impl<L: LogManager> SubscriberSession<L> {
                     Some(ref session) => {
                         self.may_session = Some(session.clone());
                         self.send_to_server(ServerMessage::Command(CommandPayload::Connect(
-                            session.clone().user_id,
+                            session.user_id,
                             self.server_tx.clone(),
                             self.identifier.clone(),
-                            session.clone().session_token,
+                            session.session_token.clone(),
                         )))
                         .await;
                         self.send_to_connection(
@@ -695,21 +684,19 @@ impl<L: LogManager> SubscriberSession<L> {
         channel_id: i64,
         sender_id: i64,
     ) -> Result<(), SessionError> {
-        match self
+        if self
             .service
-            .get_user_rights_in_channel(sender_id, channel_id)
-            .await
+            .get_channel_rights(channel_id, sender_id)
+            .await?
+            > 2
         {
-            Ok(Some(right)) if right > 2 => {
-                self.send_to_server(ServerMessage::Voip(
-                    payload,
-                    VoipRoutingPolicy::Channel(channel_id),
-                ))
-                .await;
-                Ok(())
-            }
-            _ => Err(SessionError::BadRequest("No rights".to_string())),
+            self.send_to_server(ServerMessage::Voip(
+                payload,
+                VoipRoutingPolicy::Channel(channel_id),
+            ))
+            .await;
         }
+        Ok(())
     }
 
     async fn route_to_recipient(&mut self, payload: VoipPayload, recipient_id: i64) {
@@ -724,12 +711,11 @@ impl<L: LogManager> SubscriberSession<L> {
     where
         T: serde::Serialize,
     {
-        if let Ok(serialized_data) = rmp_serde::to_vec_named(&payload) {
-            if ordered {
-                self.connection.send_ordered(serialized_data.into()).await;
-            } else {
-                self.connection.send_unordered(serialized_data.into()).await;
-            }
+        let bytes = rmp_serde::to_vec_named(&payload).expect("serialization");
+        if ordered {
+            self.connection.send_ordered(bytes.into()).await;
+        } else {
+            self.connection.send_unordered(bytes.into()).await;
         }
     }
 
@@ -870,15 +856,10 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         for subscriber in &self.observers {
             let can_receive = match &policy {
                 VoipRoutingPolicy::Channel(channel_id) => {
-                    if let Some(rights) = self
-                        .service
-                        .get_user_rights_in_channel(subscriber.user_id(), *channel_id)
+                    self.service
+                        .get_channel_rights(*channel_id, subscriber.user_id())
                         .await?
-                    {
-                        rights >= 1
-                    } else {
-                        false
-                    }
+                        >= 1
                 }
                 VoipRoutingPolicy::Recipient(target_user_id) => {
                     subscriber.user_id() == *target_user_id || subscriber.user_id() == sender_id
@@ -994,39 +975,23 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                     group_id,
                     minimun_rights,
                 } => {
-                    if let Some(rights) = self
-                        .service
-                        .get_user_group_rights(subscriber.user_id(), *group_id)
+                    self.service
+                        .get_group_rights(*group_id, subscriber.user_id())
                         .await?
-                    {
-                        rights >= *minimun_rights
-                    } else {
-                        false
-                    }
+                        >= *minimun_rights
                 }
                 ControlRoutingPolicy::ChannelRights {
                     channel_id,
                     minimun_rights,
                 } => {
-                    if let Some(rights) = self
-                        .service
-                        .get_user_rights_in_channel(subscriber.user_id(), *channel_id)
+                    self.service
+                        .get_channel_rights(*channel_id, subscriber.user_id())
                         .await?
-                    {
-                        rights >= *minimun_rights
-                    } else {
-                        false
-                    }
+                        >= *minimun_rights
                 }
                 ControlRoutingPolicy::User { user_id } => subscriber.user_id() == *user_id,
                 ControlRoutingPolicy::Role { role_id } => {
-                    if let Some(user_role) =
-                        self.service.get_user_role(subscriber.user_id()).await?
-                    {
-                        user_role == *role_id
-                    } else {
-                        false
-                    }
+                    self.service.get_user_role(subscriber.user_id()).await? == Some(*role_id)
                 }
                 ControlRoutingPolicy::Broadcast => true,
             };
