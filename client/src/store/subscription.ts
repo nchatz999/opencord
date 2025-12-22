@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { Subscription, MediaType } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 
 interface SubscriptionState {
@@ -36,7 +36,7 @@ function createSubscriptionStore(): SubscriptionStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<Subscription[]>("/voip/subscriptions", {
+      const result = await request<Subscription[]>("/voip/subscriptions", {
         method: "GET",
       });
       if (result.isErr()) {
@@ -118,7 +118,7 @@ function createSubscriptionStore(): SubscriptionStore {
     },
 
     async subscribe(publisherId, mediaType) {
-      const result = await fetchApi("/voip/subscribe", {
+      const result = await request("/voip/subscribe", {
         method: "POST",
         body: { publisherId, mediaType },
       });
@@ -127,7 +127,7 @@ function createSubscriptionStore(): SubscriptionStore {
     },
 
     async unsubscribe(publisherId, mediaType) {
-      const result = await fetchApi("/voip/unsubscribe", {
+      const result = await request("/voip/unsubscribe", {
         method: "POST",
         body: { publisherId, mediaType },
       });

@@ -5,7 +5,6 @@ import FilePreview from "./FilePreview";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import { useToaster } from "../../components/Toaster";
 import { useChannel, useUser, useMessage } from "../../store/index";
-import { toBase64 } from "../../utils";
 import Button from "../../components/Button";
 import EmojiPicker from "../../components/EmojiPicker";
 import { formatLinks } from "../../utils/messageFormatting";
@@ -25,6 +24,7 @@ const MessageInput: Component<{
   const [content, setContent] = createSignal("");
   const [files, setFiles] = createSignal<File[]>([]);
   const [isDragging, setIsDragging] = createSignal(false);
+  const [uploadProgress, setUploadProgress] = createSignal<number | null>(null);
 
   let textareaRef: HTMLDivElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
@@ -47,6 +47,10 @@ const MessageInput: Component<{
       : "Select a channel to start messaging";
   });
 
+  const canSend = createMemo(() =>
+    (content().trim().length > 0 || files().length > 0) && uploadProgress() === null
+  );
+
   createEffect(() => {
     if (textareaRef && content()) {
       textareaRef.style.height = "auto";
@@ -55,20 +59,23 @@ const MessageInput: Component<{
   });
 
   const handleSubmit = async () => {
-    const fileUploads = await Promise.all(
-      files().map(async (file) => ({
-        fileName: file.name,
-        contentType: file.type,
-        data: await toBase64(file),
-      }))
-    );
+    if (!canSend()) return;
+
+    const currentFiles = files();
+    if (currentFiles.length > 0) {
+      setUploadProgress(0);
+    }
 
     const result = await messageActions.send(
       props.context.type,
       props.context.id,
       content().trim() || undefined,
-      fileUploads
+      currentFiles,
+      null,
+      currentFiles.length > 0 ? setUploadProgress : undefined
     );
+
+    setUploadProgress(null);
 
     if (result.isErr()) {
       addToast(`Failed to send message: ${result.error}`, "error");
@@ -141,6 +148,20 @@ const MessageInput: Component<{
           </div>
         </Show>
 
+        <Show when={uploadProgress() !== null}>
+          <div class="mb-3 px-1">
+            <div class="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+              <span>Uploading... {uploadProgress()}%</span>
+            </div>
+            <div class="h-1 bg-muted rounded-full overflow-hidden">
+              <div
+                class="h-full bg-link transition-all duration-150"
+                style={{ width: `${uploadProgress()}%` }}
+              />
+            </div>
+          </div>
+        </Show>
+
         <div
           class={`relative flex items-center gap-3 py-3 px-1 bg-muted rounded-lg transition-colors ${isDragging() ? "bg-accent border-2 border-dashed border-link" : ""}`}
           onDragOver={handleDragOver}
@@ -178,7 +199,7 @@ const MessageInput: Component<{
           <Button
             variant="ghost"
             onClick={handleSubmit}
-            disabled={content().trim().length == 0}
+            disabled={!canSend()}
           >
             <Send size={20} />
           </Button>

@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { File } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 
 interface FileState {
   files: File[];
@@ -58,7 +58,7 @@ function createFileStore(): FileStore {
           ? `/message/dm/${contextId}/files`
           : `/message/channel/${contextId}/files`;
 
-      const result = await fetchApi<File[]>(endpoint, {
+      const result = await request<File[]>(endpoint, {
         method: "GET",
         query: { limit, timestamp },
       });
@@ -75,7 +75,7 @@ function createFileStore(): FileStore {
     },
 
     async downloadFile(fileId) {
-      const result = await fetchApi<Blob>(`/message/files/${fileId}`, {
+      const result = await request<Blob>(`/message/files/${fileId}`, {
         method: "GET",
         responseType: "blob",
       });

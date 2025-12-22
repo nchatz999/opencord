@@ -4,7 +4,8 @@ export const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 export const CODE_BLOCK_REGEX = /```([^`]*)```/g;
 export const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
 
-export function formatLinks(text: string, linkClass: string, preventClick = false): JSX.Element {
+export function formatLinks(text: string | null, linkClass: string, preventClick = false): JSX.Element {
+  if (!text) return <></>;
   return (
     <>
       {text.split(URL_REGEX).map((part, i) =>
@@ -27,10 +28,11 @@ export function formatLinks(text: string, linkClass: string, preventClick = fals
 }
 
 export function formatMessageText(
-  text: string,
+  text: string | null,
   isOwner: boolean,
   type: "direct" | "channel"
 ): JSX.Element {
+  if (!text) return <></>;
   const linkClass = type === "direct" && isOwner
     ? "text-link hover:text-primary-foreground hover:underline"
     : "text-link hover:text-foreground-bright hover:underline";
@@ -66,6 +68,7 @@ export function formatMessageText(
   );
 }
 
-export function extractYoutubeIds(text: string): string[] {
+export function extractYoutubeIds(text: string | null): string[] {
+  if (!text) return [];
   return Array.from(text.matchAll(YOUTUBE_REGEX), match => match[1]);
 }

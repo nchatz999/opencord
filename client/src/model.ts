@@ -52,7 +52,7 @@ export interface Message {
   senderId: number;
   channelId: number | null;
   recipientId: number | null;
-  messageText: string;
+  messageText: string | null;
   createdAt: string;
   modifiedAt: string | null;
   replyToMessageId: number | null;

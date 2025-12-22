@@ -171,7 +171,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
                     <CopyIcon size={16} />
                   </Button>
                 </Show>
-                <Show when={isOwner() && !isEditing()}>
+                <Show when={isOwner() && !isEditing() && props.message.messageText}>
                   <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} title="Edit">
                     <Edit2Icon size={16} />
                   </Button>

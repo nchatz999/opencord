@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { VoipParticipant } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 import { usePlayback } from "./playback";
 import { useAuth } from "./auth";
@@ -54,7 +54,7 @@ function createVoipStore(): VoipStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<VoipParticipant[]>("/voip/participants", {
+      const result = await request<VoipParticipant[]>("/voip/participants", {
         method: "GET",
       });
       if (result.isErr()) {
@@ -158,7 +158,7 @@ function createVoipStore(): VoipStore {
     },
 
     async joinChannel(channelId, muted, deafened) {
-      const result = await fetchApi(`/voip/channel/${channelId}/join/${muted}/${deafened}`, {
+      const result = await request(`/voip/channel/${channelId}/join/${muted}/${deafened}`, {
         method: "POST",
       });
       if (result.isErr()) {
@@ -168,7 +168,7 @@ function createVoipStore(): VoipStore {
     },
 
     async joinPrivate(userId, muted, deafened) {
-      const result = await fetchApi(`/voip/private/${userId}/join/${muted}/${deafened}`, {
+      const result = await request(`/voip/private/${userId}/join/${muted}/${deafened}`, {
         method: "POST",
       });
       if (result.isErr()) {
@@ -178,7 +178,7 @@ function createVoipStore(): VoipStore {
     },
 
     async leave() {
-      const result = await fetchApi("/voip/leave", { method: "POST" });
+      const result = await request("/voip/leave", { method: "POST" });
       if (result.isErr()) {
         return err(result.error.reason);
       }
@@ -186,7 +186,7 @@ function createVoipStore(): VoipStore {
     },
 
     async setMuted(muted) {
-      const result = await fetchApi("/voip/mute", {
+      const result = await request("/voip/mute", {
         method: "PUT",
         body: { mute: muted },
       });
@@ -197,7 +197,7 @@ function createVoipStore(): VoipStore {
     },
 
     async setDeafened(deafened) {
-      const result = await fetchApi("/voip/deafen", {
+      const result = await request("/voip/deafen", {
         method: "PUT",
         body: { deafen: deafened },
       });
@@ -208,7 +208,7 @@ function createVoipStore(): VoipStore {
     },
 
     async publishScreen(publish) {
-      const result = await fetchApi("/voip/screen/publish", {
+      const result = await request("/voip/screen/publish", {
         method: "PUT",
         body: { publish },
       });
@@ -219,7 +219,7 @@ function createVoipStore(): VoipStore {
     },
 
     async publishCamera(publish) {
-      const result = await fetchApi("/voip/camera/publish", {
+      const result = await request("/voip/camera/publish", {
         method: "PUT",
         body: { publish },
       });

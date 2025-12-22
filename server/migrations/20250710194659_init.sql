@@ -94,7 +94,7 @@ CREATE TABLE messages (
     sender_id BIGINT NOT NULL,
     channel_id BIGINT REFERENCES channels(channel_id),
     recipient_id BIGINT REFERENCES users(user_id),
-    message_text TEXT NOT NULL,
+    message_text TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     reply_to_message_id BIGINT,

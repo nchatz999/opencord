@@ -9,7 +9,7 @@ pub struct Message {
     pub sender_id: i64,
     pub channel_id: Option<i64>,
     pub recipient_id: Option<i64>,
-    pub message_text: String,
+    pub message_text: Option<String>,
     #[serde(with = "time::serde::iso8601")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::iso8601::option")]
@@ -44,7 +44,6 @@ use crate::{
     middleware::{AuthorizeService, authorize},
     webtransport::{ControlRoutingPolicy, ServerMessage},
 };
-use base64::{Engine as _, engine::general_purpose};
 use uuid::Uuid;
 
 use crate::error::DatabaseError;
@@ -363,12 +362,8 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         let mut file_attachments = Vec::new();
 
         for f in &files {
-            let file_data = general_purpose::STANDARD
-                .decode(&f.data)
-                .map_err(|_| DomainError::BadRequest("Invalid file data encoding".to_string()))?;
-
-            let file_hash = format!("{:x}", Sha256::digest(&file_data));
-            let file_size = file_data.len() as i64;
+            let file_hash = format!("{:x}", Sha256::digest(&f.data));
+            let file_size = f.data.len() as i64;
 
             let file_attachment = db_tx
                 .create_file(
@@ -380,7 +375,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 )
                 .await?;
 
-            file_tx.stage_upload(file_attachment.file_id, &file_data)?;
+            file_tx.stage_upload(file_attachment.file_id, &f.data)?;
 
             file_attachments.push(file_attachment);
         }
@@ -1095,28 +1090,11 @@ pub struct FileAttachment {
     pub created_at: OffsetDateTime,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct NewFileAttachment {
     pub file_name: String,
     pub content_type: String,
-    pub data: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateMessageRequest {
-    pub message_text: Option<String>,
-    pub reply_to_message_id: Option<i64>,
-    pub files: Vec<FileUpload>,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct FileUpload {
-    pub file_name: String,
-    pub content_type: String,
-    pub data: String,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -1156,7 +1134,7 @@ impl From<DomainError> for ApiError {
 }
 
 use axum::{
-    extract::{Extension, Path, Query, State},
+    extract::{Extension, Multipart, Path, Query, State},
     middleware::from_fn_with_state,
     response::IntoResponse,
 };
@@ -1187,7 +1165,7 @@ pub fn message_routes(
     params(
         ("channel_id", Path, description = "The ID of the channel to send message to"),
     ),
-    request_body = CreateMessageRequest,
+    request_body(content_type = "multipart/form-data"),
     responses(
         (status = 201, description = "Message created successfully"),
         (status = 400, description = "Bad request", body = ApiError),
@@ -1202,25 +1180,62 @@ async fn create_channel_message_handler(
     State(mut service): State<AppMessageService>,
     Extension(session): Extension<Session>,
     Path(channel_id): Path<i64>,
-    Json(payload): Json<CreateMessageRequest>,
+    mut multipart: Multipart,
 ) -> Result<StatusCode, ApiError> {
-    let files: Vec<NewFileAttachment> = payload
-        .files
-        .into_iter()
-        .map(|f| NewFileAttachment {
-            file_name: f.file_name,
-            content_type: f.content_type,
-            data: f.data,
-        })
-        .collect();
+    let mut message_text: Option<String> = None;
+    let mut reply_to_message_id: Option<i64> = None;
+    let mut files: Vec<NewFileAttachment> = Vec::new();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        ApiError::UnprocessableEntity(format!("Failed to read multipart field: {}", e))
+    })? {
+        let name = field.name().unwrap_or_default().to_string();
+
+        match name.as_str() {
+            "messageText" => {
+                message_text = Some(field.text().await.map_err(|e| {
+                    ApiError::UnprocessableEntity(format!("Invalid message text: {}", e))
+                })?);
+            }
+            "replyToMessageId" => {
+                let text = field.text().await.map_err(|e| {
+                    ApiError::UnprocessableEntity(format!("Invalid reply ID: {}", e))
+                })?;
+                reply_to_message_id = text.parse().ok();
+            }
+            "files" => {
+                let file_name = field.file_name().unwrap_or("unnamed").to_string();
+                let content_type = field
+                    .content_type()
+                    .unwrap_or("application/octet-stream")
+                    .to_string();
+                let data = field.bytes().await.map_err(|e| {
+                    ApiError::UnprocessableEntity(format!("Failed to read file: {}", e))
+                })?;
+
+                files.push(NewFileAttachment {
+                    file_name,
+                    content_type,
+                    data: data.to_vec(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if message_text.is_none() && files.is_empty() {
+        return Err(ApiError::UnprocessableEntity(
+            "Message must have text or files".to_string(),
+        ));
+    }
 
     service
         .create_channel_message(
             session.user_id,
             session.session_id,
             channel_id,
-            payload.message_text,
-            payload.reply_to_message_id,
+            message_text,
+            reply_to_message_id,
             files,
         )
         .await
@@ -1236,7 +1251,7 @@ async fn create_channel_message_handler(
     params(
         ("user_id", Path, description = "The ID of the user to send DM to"),
     ),
-    request_body = CreateMessageRequest,
+    request_body(content_type = "multipart/form-data"),
     responses(
         (status = 201, description = "Message created successfully"),
         (status = 400, description = "Bad request", body = ApiError),
@@ -1251,25 +1266,62 @@ async fn create_dm_message_handler(
     State(mut service): State<AppMessageService>,
     Extension(session): Extension<Session>,
     Path(recipient_id): Path<i64>,
-    Json(payload): Json<CreateMessageRequest>,
+    mut multipart: Multipart,
 ) -> Result<StatusCode, ApiError> {
-    let files: Vec<NewFileAttachment> = payload
-        .files
-        .into_iter()
-        .map(|f| NewFileAttachment {
-            file_name: f.file_name,
-            content_type: f.content_type,
-            data: f.data,
-        })
-        .collect();
+    let mut message_text: Option<String> = None;
+    let mut reply_to_message_id: Option<i64> = None;
+    let mut files: Vec<NewFileAttachment> = Vec::new();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        ApiError::UnprocessableEntity(format!("Failed to read multipart field: {}", e))
+    })? {
+        let name = field.name().unwrap_or_default().to_string();
+
+        match name.as_str() {
+            "messageText" => {
+                message_text = Some(field.text().await.map_err(|e| {
+                    ApiError::UnprocessableEntity(format!("Invalid message text: {}", e))
+                })?);
+            }
+            "replyToMessageId" => {
+                let text = field.text().await.map_err(|e| {
+                    ApiError::UnprocessableEntity(format!("Invalid reply ID: {}", e))
+                })?;
+                reply_to_message_id = text.parse().ok();
+            }
+            "files" => {
+                let file_name = field.file_name().unwrap_or("unnamed").to_string();
+                let content_type = field
+                    .content_type()
+                    .unwrap_or("application/octet-stream")
+                    .to_string();
+                let data = field.bytes().await.map_err(|e| {
+                    ApiError::UnprocessableEntity(format!("Failed to read file: {}", e))
+                })?;
+
+                files.push(NewFileAttachment {
+                    file_name,
+                    content_type,
+                    data: data.to_vec(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if message_text.is_none() && files.is_empty() {
+        return Err(ApiError::UnprocessableEntity(
+            "Message must have text or files".to_string(),
+        ));
+    }
 
     service
         .create_dm_message(
             session.user_id,
             session.session_id,
             recipient_id,
-            payload.message_text,
-            payload.reply_to_message_id,
+            message_text,
+            reply_to_message_id,
             files,
         )
         .await

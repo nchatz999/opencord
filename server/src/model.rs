@@ -83,7 +83,7 @@ pub enum EventPayload {
         message_id: i64,
         sender_id: i64,
         message_type: MessageType,
-        message_text: String,
+        message_text: Option<String>,
         reply_to_message_id: Option<i64>,
         #[serde(with = "time::serde::iso8601")]
         timestamp: OffsetDateTime,

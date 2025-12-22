@@ -2,7 +2,7 @@ import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { setServerUrl } from "../lib/ServerConfig";
 import type { User, Session } from "../model";
 import { useUser } from "./user";
@@ -85,7 +85,7 @@ function createAuthStore(): AuthStore {
         setServerUrl(serverUrl);
       }
 
-      const result = await fetchApi<{
+      const result = await request<{
         session_token: string;
         expires_at?: string;
         user_id: number;
@@ -118,7 +118,7 @@ function createAuthStore(): AuthStore {
         setServerUrl(serverUrl);
       }
 
-      const result = await fetchApi<{ user_id: number }>("/auth/register", {
+      const result = await request<{ user_id: number }>("/auth/register", {
         method: "POST",
         body: {
           username,
@@ -143,7 +143,7 @@ function createAuthStore(): AuthStore {
         return ok(undefined);
       }
 
-      const result = await fetchApi("/auth/logout", {
+      const result = await request("/auth/logout", {
         method: "POST",
         body: { session_token: state.session.sessionToken },
       });
@@ -158,7 +158,7 @@ function createAuthStore(): AuthStore {
     },
 
     async getSessions() {
-      const result = await fetchApi<Session[]>("/auth/sessions", {
+      const result = await request<Session[]>("/auth/sessions", {
         method: "GET",
       });
 
@@ -169,7 +169,7 @@ function createAuthStore(): AuthStore {
     },
 
     async terminateSession(sessionToken) {
-      const result = await fetchApi("/auth/logout", {
+      const result = await request("/auth/logout", {
         method: "POST",
         body: { session_token: sessionToken },
       });

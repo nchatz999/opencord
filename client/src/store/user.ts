@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { User, UserStatusType } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 
 interface UserState {
@@ -36,7 +36,7 @@ function createUserStore(): UserStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<User[]>("/user", { method: "GET" });
+      const result = await request<User[]>("/user", { method: "GET" });
       if (result.isErr()) {
         return err(result.error.reason);
       }
@@ -100,7 +100,7 @@ function createUserStore(): UserStore {
     },
 
     async updateStatus(userId, status) {
-      const result = await fetchApi(`/user/${userId}/manual-status`, {
+      const result = await request(`/user/${userId}/manual-status`, {
         method: "PUT",
         body: { manualStatus: status },
       });
@@ -111,7 +111,7 @@ function createUserStore(): UserStore {
     },
 
     async updateAvatar(fileName, contentType, base64Data) {
-      const result = await fetchApi("/user/avatar", {
+      const result = await request("/user/avatar", {
         method: "PUT",
         body: { fileName, contentType, data: base64Data },
       });

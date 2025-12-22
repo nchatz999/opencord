@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { Group } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 import { useChannel } from "./channel";
 
@@ -40,7 +40,7 @@ function createGroupStore(): GroupStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<Group[]>("/group", { method: "GET" });
+      const result = await request<Group[]>("/group", { method: "GET" });
       if (result.isErr()) {
         return err(result.error.reason);
       }
@@ -117,7 +117,7 @@ function createGroupStore(): GroupStore {
     },
 
     async create(name) {
-      const result = await fetchApi<{ groupId: number }>("/group", {
+      const result = await request<{ groupId: number }>("/group", {
         method: "POST",
         body: { name },
       });
@@ -128,7 +128,7 @@ function createGroupStore(): GroupStore {
     },
 
     async rename(groupId, name) {
-      const result = await fetchApi(`/group/${groupId}`, {
+      const result = await request(`/group/${groupId}`, {
         method: "PUT",
         body: { name },
       });
@@ -139,7 +139,7 @@ function createGroupStore(): GroupStore {
     },
 
     async delete(groupId) {
-      const result = await fetchApi(`/group/${groupId}`, {
+      const result = await request(`/group/${groupId}`, {
         method: "DELETE",
       });
       if (result.isErr()) {

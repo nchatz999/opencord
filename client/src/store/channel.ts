@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { Channel, ChannelType } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 import { useVoip } from "./voip";
 import { useMessage } from "./message";
@@ -48,7 +48,7 @@ function createChannelStore(): ChannelStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<Channel[]>("/channel", { method: "GET" });
+      const result = await request<Channel[]>("/channel", { method: "GET" });
       if (result.isErr()) {
         return err(result.error.reason);
       }
@@ -135,7 +135,7 @@ function createChannelStore(): ChannelStore {
     },
 
     async create(groupId, name, type) {
-      const result = await fetchApi<{ channelId: number }>("/channel", {
+      const result = await request<{ channelId: number }>("/channel", {
         method: "POST",
         body: { groupId, name, type },
       });
@@ -146,7 +146,7 @@ function createChannelStore(): ChannelStore {
     },
 
     async rename(channelId, name) {
-      const result = await fetchApi(`/channel/${channelId}`, {
+      const result = await request(`/channel/${channelId}`, {
         method: "PUT",
         body: { name },
       });
@@ -157,7 +157,7 @@ function createChannelStore(): ChannelStore {
     },
 
     async delete(channelId) {
-      const result = await fetchApi(`/channel/${channelId}`, {
+      const result = await request(`/channel/${channelId}`, {
         method: "DELETE",
       });
       if (result.isErr()) {

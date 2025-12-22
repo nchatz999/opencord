@@ -1,9 +1,9 @@
 import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
-import type { Message, File, MessageType } from "../model";
+import type { Message, File } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request, upload } from "../utils";
 import { useConnection } from "./connection";
 import { useFile } from "./file";
 import { useAuth } from "./auth";
@@ -34,8 +34,9 @@ interface MessageActions {
     contextType: "channel" | "dm",
     contextId: number,
     text: string | undefined,
-    files?: { fileName: string; contentType: string; data: string }[],
-    replyToMessageId?: number | null
+    files?: File[],
+    replyToMessageId?: number | null,
+    onProgress?: (percent: number) => void
   ) => Promise<Result<void, string>>;
   updateMessage: (messageId: number, text: string) => Promise<Result<void, string>>;
   delete: (messageId: number) => Promise<Result<void, string>>;
@@ -63,7 +64,7 @@ function createMessageStore(): MessageStore {
             messageId: number;
             senderId: number;
             messageType: { type: "Channel"; channel_id: number } | { type: "Direct"; recipient_id: number };
-            messageText: string;
+            messageText: string | null;
             timestamp: string;
             replyToMessageId: number | null;
             files: File[];
@@ -233,7 +234,7 @@ function createMessageStore(): MessageStore {
           ? `/message/dm/${contextId}/messages`
           : `/message/channel/${contextId}/messages`;
 
-      const result = await fetchApi<Message[]>(endpoint, {
+      const result = await request<Message[]>(endpoint, {
         method: "GET",
         query: { limit, timestamp },
       });
@@ -249,16 +250,24 @@ function createMessageStore(): MessageStore {
       return ok(result.value);
     },
 
-    async send(contextType, contextId, text, files = [], replyToMessageId = null) {
+    async send(contextType, contextId, text, files = [], replyToMessageId = null, onProgress) {
       const endpoint =
         contextType === "dm"
           ? `/message/dm/${contextId}/messages`
           : `/message/channel/${contextId}/messages`;
 
-      const result = await fetchApi(endpoint, {
-        method: "POST",
-        body: { messageText: text, files, replyToMessageId },
-      });
+      const formData = new FormData();
+      if (text) {
+        formData.append("messageText", text);
+      }
+      if (replyToMessageId) {
+        formData.append("replyToMessageId", String(replyToMessageId));
+      }
+      for (const file of files) {
+        formData.append("files", file);
+      }
+
+      const result = await upload(endpoint, formData, onProgress);
 
       if (result.isErr()) {
         return err(result.error.reason);
@@ -267,7 +276,7 @@ function createMessageStore(): MessageStore {
     },
 
     async updateMessage(messageId, text) {
-      const result = await fetchApi(`/message/${messageId}`, {
+      const result = await request(`/message/${messageId}`, {
         method: "PUT",
         body: { message_text: text },
       });
@@ -279,7 +288,7 @@ function createMessageStore(): MessageStore {
     },
 
     async delete(messageId) {
-      const result = await fetchApi(`/message/${messageId}`, {
+      const result = await request(`/message/${messageId}`, {
         method: "DELETE",
       });
 

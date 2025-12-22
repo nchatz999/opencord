@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { Role } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 
 interface RoleState {
@@ -36,7 +36,7 @@ function createRoleStore(): RoleStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<Role[]>("/role", { method: "GET" });
+      const result = await request<Role[]>("/role", { method: "GET" });
       if (result.isErr()) {
         return err(result.error.reason);
       }
@@ -100,7 +100,7 @@ function createRoleStore(): RoleStore {
     },
 
     async create(name) {
-      const result = await fetchApi<{ roleId: number }>("/role", {
+      const result = await request<{ roleId: number }>("/role", {
         method: "POST",
         body: { name },
       });
@@ -111,7 +111,7 @@ function createRoleStore(): RoleStore {
     },
 
     async delete(roleId) {
-      const result = await fetchApi(`/role/${roleId}`, {
+      const result = await request(`/role/${roleId}`, {
         method: "DELETE",
       });
       if (result.isErr()) {

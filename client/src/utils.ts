@@ -18,17 +18,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const toBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.readAsDataURL(file)
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.substring(result.indexOf(',') + 1))
-    }
-    reader.onerror = (error) => reject(error)
-  })
-
 type ErrorResponse = {
   code: string;
   reason: string;
@@ -38,52 +27,70 @@ const getBaseUrl = () => {
   return getServerUrlOrDefault();
 };
 
-export async function fetchApi<T = unknown>(
+export function upload<T = unknown>(
+  url: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void
+): Promise<Result<T, ErrorResponse>> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(ok(undefined as T));
+      } else {
+        resolve(err(JSON.parse(xhr.responseText)));
+      }
+    };
+
+    xhr.onerror = () => resolve(err({ code: 'NETWORK_ERROR', reason: 'Upload failed' }));
+
+    xhr.open('POST', `${getBaseUrl()}${url}`);
+    xhr.send(formData);
+  });
+}
+
+export async function request<T = unknown>(
   url: string,
   options?: {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     body?: Record<string, unknown>;
     query?: Record<string, string | number | boolean | undefined | null>;
-    headers?: Record<string, string>;
     responseType?: 'json' | 'blob';
   }
 ): Promise<Result<T, ErrorResponse>> {
-  const { method = 'GET', body, query, headers = {}, responseType = 'json' } = options || {};
-  const baseUrl = getBaseUrl();
-  let finalUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+  const { method = 'GET', body, query, responseType = 'json' } = options || {};
+
+  let finalUrl = `${getBaseUrl()}${url}`;
   if (query) {
     const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        params.append(key, String(value));
-      }
-    });
+    for (const [key, value] of Object.entries(query)) {
+      if (value != null) params.append(key, String(value));
+    }
     const queryString = params.toString();
-    if (queryString) {
-      finalUrl += (finalUrl.includes('?') ? '&' : '?') + queryString;
-    }
+    if (queryString) finalUrl += `?${queryString}`;
   }
-  const fetchOptions: RequestInit = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-  };
-  if (body && method !== 'GET') {
-    fetchOptions.body = JSON.stringify(body);
-  }
+
   try {
-    const response = await fetch(finalUrl, fetchOptions);
+    const response = await fetch(finalUrl, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
+    });
+
     if (!response.ok) {
-      const errorData = await response.json();
-      return err(errorData);
+      return err(await response.json());
     }
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
+    if (response.headers.get('content-length') === '0') {
       return ok(undefined as T);
     }
-    const data = responseType === 'blob' ? await response.blob() : await response.json();
-    return ok(data);
+    return ok(responseType === 'blob' ? await response.blob() : await response.json());
   } catch (error) {
     return err({
       code: 'NETWORK_ERROR',

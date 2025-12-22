@@ -76,7 +76,7 @@ export type EventPayload =
     messageId: number;
     senderId: number;
     messageType: string;
-    messageText: string;
+    messageText: string | null;
     replyToMessageId: number | null;
     timestamp: string;
     files: File[];

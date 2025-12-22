@@ -8,7 +8,7 @@ import { useAcl, useAuth, useModal, useRole, useServer, useUser } from '../../st
 import { Input } from '../../components/Input'
 import Select from '../../components/Select'
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table'
-import { fetchApi } from '../../utils'
+import { request } from '../../utils'
 import type { User } from '../../model'
 
 
@@ -96,7 +96,7 @@ const ServerSettingsModal: Component = () => {
   const loadInvites = async () => {
     if (!isAdmin()) return;
 
-    const result = await fetchApi<Invite[]>("/auth/invites", {
+    const result = await request<Invite[]>("/auth/invites", {
       method: "GET",
     });
 
@@ -120,7 +120,7 @@ const ServerSettingsModal: Component = () => {
       return;
     }
 
-    const result = await fetchApi<Invite>("/auth/invites", {
+    const result = await request<Invite>("/auth/invites", {
       method: "POST",
       body: {
         code: newInviteCode(),
@@ -142,7 +142,7 @@ const ServerSettingsModal: Component = () => {
   };
 
   const deleteInvite = async (inviteId: number) => {
-    const result = await fetchApi("/auth/invites", {
+    const result = await request("/auth/invites", {
       method: "DELETE",
       body: { invite_id: inviteId },
     });
@@ -168,7 +168,7 @@ const ServerSettingsModal: Component = () => {
     if (!isAdmin()) return;
 
     setLogsLoading(true);
-    const result = await fetchApi<LogEntry[]>("/log", {
+    const result = await request<LogEntry[]>("/log", {
       method: "GET",
     });
 
@@ -186,7 +186,7 @@ const ServerSettingsModal: Component = () => {
     if (!isAdmin()) return;
 
     setLogsLoading(true);
-    const result = await fetchApi<{ deletedCount: number }>("/log", {
+    const result = await request<{ deletedCount: number }>("/log", {
       method: "DELETE",
       query: category ? { category } : undefined,
     });

@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { GroupRoleRights } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 import { useChannel } from "./channel";
 import { useGroup } from "./group";
@@ -40,7 +40,7 @@ function createAclStore(): AclStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<GroupRoleRights[]>("/acl/group-role-rights", {
+      const result = await request<GroupRoleRights[]>("/acl/group-role-rights", {
         method: "GET",
       });
       if (result.isErr()) {
@@ -114,7 +114,7 @@ function createAclStore(): AclStore {
     },
 
     async grant(right) {
-      const result = await fetchApi<void>("/acl/group-role-rights", {
+      const result = await request<void>("/acl/group-role-rights", {
         method: "PUT",
         body: [right],
       });
@@ -126,7 +126,7 @@ function createAclStore(): AclStore {
     async grantMany(rights) {
       if (rights.length === 0) return ok(undefined);
 
-      const result = await fetchApi<void>("/acl/group-role-rights", {
+      const result = await request<void>("/acl/group-role-rights", {
         method: "PUT",
         body: rights,
       });
@@ -139,7 +139,7 @@ function createAclStore(): AclStore {
     },
 
     async updateUserRole(userId, roleId) {
-      const result = await fetchApi(`/acl/user/${userId}/role`, {
+      const result = await request(`/acl/user/${userId}/role`, {
         method: "PUT",
         body: { roleId },
       });

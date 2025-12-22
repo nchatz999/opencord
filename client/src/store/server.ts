@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { ServerConfig } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { fetchApi } from "../utils";
+import { request } from "../utils";
 import { useConnection } from "./connection";
 
 interface ServerState {
@@ -33,7 +33,7 @@ function createServerStore(): ServerStore {
     async init() {
       actions.cleanup();
 
-      const result = await fetchApi<ServerConfig>("/server/config", { method: "GET" });
+      const result = await request<ServerConfig>("/server/config", { method: "GET" });
       if (result.isErr()) {
         return err(result.error.reason);
       }
@@ -65,7 +65,7 @@ function createServerStore(): ServerStore {
     },
 
     async updateName(name) {
-      const result = await fetchApi<ServerConfig>("/server/name", {
+      const result = await request<ServerConfig>("/server/name", {
         method: "PUT",
         body: { serverName: name },
       });
@@ -76,7 +76,7 @@ function createServerStore(): ServerStore {
     },
 
     async updateAvatar(fileName, contentType, base64Data) {
-      const result = await fetchApi<ServerConfig>("/server/avatar", {
+      const result = await request<ServerConfig>("/server/avatar", {
         method: "PUT",
         body: { fileName, contentType, data: base64Data },
       });
