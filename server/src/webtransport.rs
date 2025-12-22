@@ -1129,10 +1129,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 Some(msg) = session.server_rx.recv() => {
                     if let Err(e) = session.handle_server_message(msg).await{
                         let error_msg = format!("{:?}", e);
-                        let _ = session.service.logger.log_entry(
-                            format!("Server message error: {}", error_msg),
-                            "webtransport".to_string(),
-                        ).await;
                         session.send_error(error_msg).await;
                         break;
                     }
@@ -1142,10 +1138,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                         Some(msg) => {
                             if let Err(e) = session.handle_connection_message(msg).await {
                                 let error_msg = format!("{:?}", e);
-                                let _ = session.service.logger.log_entry(
-                                    format!("Connection message error: {}", error_msg),
-                                    "webtransport".to_string(),
-                                ).await;
                                 session.send_error(error_msg).await;
                                 break;
                             }

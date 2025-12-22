@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 use utoipa::ToSchema;
 
 use crate::channel::{Channel, ChannelType};
 use crate::group::{Group, GroupRoleRights};
-use crate::managers::{FileManager, LocalFileManager};
+use crate::managers::{FileError, FileManager, LocalFileManager};
 use crate::message::File;
 use crate::user::User;
 
@@ -18,6 +17,9 @@ pub enum DomainError {
 
     #[error("Internal error")]
     InternalError(#[from] DatabaseError),
+
+    #[error("File manager error")]
+    FileManagerError(#[from] FileError),
 }
 
 use crate::error::{ApiError, DatabaseError};
@@ -261,9 +263,7 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
                     .await?;
 
                 for file in &deleted_files {
-                    if let Err(e) = self.file_manager.delete_file(file.file_id) {
-                        warn!("Failed to delete file {} from storage: {}", file.file_id, e);
-                    }
+                    self.file_manager.delete_file(file.file_id)?;
                 }
 
                 let routing = ControlRoutingPolicy::GroupRights {
@@ -456,9 +456,7 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
                     .await?;
 
                 for file in &deleted_files {
-                    if let Err(e) = self.file_manager.delete_file(file.file_id) {
-                        warn!("Failed to delete file {} from storage: {}", file.file_id, e);
-                    }
+                    self.file_manager.delete_file(file.file_id)?;
                 }
 
                 let routing = ControlRoutingPolicy::GroupRights {
@@ -929,6 +927,10 @@ impl From<DomainError> for ApiError {
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
+            }
+            DomainError::FileManagerError(file_err) => {
+                tracing::error!("File manager error: {}", file_err);
+                ApiError::InternalServerError("File system error".to_string())
             }
         }
     }
