@@ -125,18 +125,6 @@ CREATE INDEX idx_messages_recipient ON messages(recipient_id);
 CREATE INDEX idx_files_message ON files(message_id);
 CREATE INDEX idx_files_uuid ON files(file_uuid);
 
--- Deleted messages tracking
-CREATE TABLE deleted_messages (
-    deletion_id BIGSERIAL PRIMARY KEY,
-    message_id BIGINT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
-    deleted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- Indexes for deletion tracking
-CREATE INDEX idx_deleted_messages_message_id ON deleted_messages(message_id);
-CREATE INDEX idx_deleted_messages_deleted_at ON deleted_messages(deleted_at);
-
 -- ============================================
 -- Permission System Tables
 -- ============================================
@@ -237,60 +225,12 @@ CREATE INDEX idx_voip_participants_recipient ON voip_participants(recipient_id);
 -- Configuration Tables
 -- ============================================
 
--- Settings table - stores application configuration
-CREATE TABLE settings (
-    setting_id BIGSERIAL PRIMARY KEY,
-    setting_name VARCHAR(255) NOT NULL UNIQUE,
-    setting_value TEXT
-);
-
 -- Server config table - stores server-wide settings
 CREATE TABLE server_config (
     id BIGSERIAL PRIMARY KEY,
     server_name VARCHAR(100) NOT NULL DEFAULT 'Opencord',
     avatar_file_id BIGINT REFERENCES avatar_files(file_id) ON DELETE SET NULL
 );
-
--- ============================================
--- Account Management Tables
--- ============================================
-
--- Reset tokens table for password reset functionality
-CREATE TABLE reset_tokens (
-    token_id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    token VARCHAR(255) NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMPTZ NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-
--- Index for efficient token lookups
-CREATE INDEX idx_reset_tokens_token ON reset_tokens(token);
-CREATE INDEX idx_reset_tokens_user_id ON reset_tokens(user_id);
-CREATE INDEX idx_reset_tokens_expires_at ON reset_tokens(expires_at);
-
--- Update email tokens - for email change verification
-CREATE TABLE update_email_tokens (
-    token_id BIGSERIAL PRIMARY KEY,
-    token VARCHAR(255) NOT NULL,
-    user_id BIGINT NOT NULL,
-    new_email VARCHAR(255) NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(user_id)
-);
-
--- Unverified users - temporary storage for users pending email verification
-CREATE TABLE unverified_users (
-    unverified_token_id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL,
-    username VARCHAR(255) NOT NULL,
-    password_hash TEXT NOT NULL,
-    token VARCHAR(255) NOT NULL,
-    token_expiry TIMESTAMPTZ NOT NULL
-);
-
 
 -- ============================================
 -- Triggers for Permission Management
