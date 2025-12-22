@@ -1,8 +1,5 @@
 import { createRoot } from "solid-js";
-import { RTCPProtocol } from "opencord-transport";
 import { decode, encode } from "@msgpack/msgpack";
-import type { Result } from "opencord-utils";
-import { ok, err } from "opencord-utils";
 import type {
   Channel,
   Group,
@@ -14,6 +11,8 @@ import type {
   File,
   ServerConfig,
 } from "../model";
+import { err, ok, type Result } from "opencord-utils";
+import { RTCPProtocol } from "opencord-transport";
 
 function hexToUint8Array(hexString: string): Uint8Array {
   const cleanHex = hexString.replace(/[^0-9A-Fa-f]/g, '');
@@ -149,7 +148,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     }
   }
 
-  function handleControlPayload(payload: ControlPayload): void {
+  async function handleControlPayload(payload: ControlPayload) {
     switch (payload.type) {
       case "answer":
         if (pendingConnection) {
@@ -160,13 +159,13 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
         break;
 
       case "close":
+        await actions.disconnect()
         notifyClosed();
-        actions.disconnect();
         break;
 
       case "error":
-        notifyError(payload.reason);
         actions.disconnect();
+        notifyError(payload.reason);
         break;
 
       case "connect":
@@ -243,15 +242,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
 
     async disconnect(): Promise<void> {
       pendingConnection = null;
-
-      const closeMessage: ConnectionMessage = {
-        type: "control",
-        payload: {
-          type: "close",
-        },
-      };
-      protocol.send(encode(closeMessage));
-      await protocol.disconnect();
+      await protocol.disconnect()
     },
 
     async sendVoip(payload: VoipPayload): Promise<void> {

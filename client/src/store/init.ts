@@ -182,6 +182,11 @@ connection.onConnectionError((reason) => {
   appActions.setView("error", reason);
 });
 
+connection.onConnectionClosed(async () => {
+  await authActions.logout()
+  appActions.setView("unauthenticated");
+});
+
 export { connection };
 
 export async function resetStore() {
