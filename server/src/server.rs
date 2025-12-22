@@ -36,56 +36,40 @@ pub enum DomainError {
 }
 
 pub trait ServerTransaction: Send + Sync {
-    fn create_avatar(
+    async fn create_avatar(
         &mut self,
         file_uuid: &str,
         file_name: &str,
         file_type: &str,
         file_size: i64,
         file_hash: &str,
-    ) -> impl std::future::Future<Output = Result<AvatarFile, DatabaseError>> + Send;
+    ) -> Result<AvatarFile, DatabaseError>;
 
-    fn update_server_avatar(
+    async fn update_server_avatar(
         &mut self,
         avatar_file_id: i64,
-    ) -> impl std::future::Future<Output = Result<Option<ServerConfig>, DatabaseError>> + Send;
+    ) -> Result<Option<ServerConfig>, DatabaseError>;
 
-    fn update_server_name(
+    async fn update_server_name(
         &mut self,
         name: &str,
-    ) -> impl std::future::Future<Output = Result<Option<ServerConfig>, DatabaseError>> + Send;
+    ) -> Result<Option<ServerConfig>, DatabaseError>;
 }
 
 pub trait ServerRepository: Send + Sync + Clone {
     type Transaction: ServerTransaction;
 
-    fn begin(
-        &self,
-    ) -> impl std::future::Future<Output = Result<Self::Transaction, DatabaseError>> + Send;
+    async fn begin(&self) -> Result<Self::Transaction, DatabaseError>;
 
-    fn commit(
-        &self,
-        transaction: Self::Transaction,
-    ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
+    async fn commit(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
 
-    fn rollback(
-        &self,
-        transaction: Self::Transaction,
-    ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
+    async fn rollback(&self, transaction: Self::Transaction) -> Result<(), DatabaseError>;
 
-    fn get_server_config(
-        &self,
-    ) -> impl std::future::Future<Output = Result<Option<ServerConfig>, DatabaseError>> + Send;
+    async fn get_server_config(&self) -> Result<Option<ServerConfig>, DatabaseError>;
 
-    fn find_avatar_file(
-        &self,
-        avatar_id: i64,
-    ) -> impl std::future::Future<Output = Result<Option<AvatarFile>, DatabaseError>> + Send;
+    async fn find_avatar_file(&self, avatar_id: i64) -> Result<Option<AvatarFile>, DatabaseError>;
 
-    fn find_user_role(
-        &mut self,
-        user_id: i64,
-    ) -> impl std::future::Future<Output = Result<Option<i64>, DatabaseError>> + Send;
+    async fn find_user_role(&mut self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
 }
 
 #[derive(Clone)]
@@ -452,9 +436,9 @@ pub fn server_routes(
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
         .routes(routes!(get_server_config_handler))
+        .routes(routes!(get_server_avatar_handler))
         .routes(routes!(update_server_name_handler))
         .routes(routes!(update_server_avatar_handler))
-        .routes(routes!(get_server_avatar_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(server_service)
 }

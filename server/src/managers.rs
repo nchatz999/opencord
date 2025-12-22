@@ -7,7 +7,6 @@ pub enum FileError {
     Io(io::Error),
     NotFound(i64),
     TransactionFailed(String),
-    AccessDenied,
 }
 
 impl From<io::Error> for FileError {
@@ -22,7 +21,6 @@ impl std::fmt::Display for FileError {
             FileError::Io(err) => write!(f, "IO error: {}", err),
             FileError::NotFound(id) => write!(f, "File not found: {}", id),
             FileError::TransactionFailed(msg) => write!(f, "Transaction failed: {}", msg),
-            FileError::AccessDenied => write!(f, "Access denied"),
         }
     }
 }
