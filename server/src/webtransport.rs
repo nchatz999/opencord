@@ -479,7 +479,7 @@ impl SubscriberHandler {
 }
 
 const MAX_INVALID_VOIP_PACKETS: u32 = 1000;
-const MAX_BYTES_PER_SECOND: u64 = 3_000_000;
+const MAX_BYTES_PER_SECOND: u64 = 6_000_000;
 const RATE_LIMIT_WINDOW_MS: u128 = 1000;
 
 struct SubscriberSession<L: LogManager> {

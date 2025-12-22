@@ -3,6 +3,7 @@ import { Show } from "solid-js";
 import {
   MicOff,
   VolumeX,
+  Volume2,
   Monitor,
   Video,
 } from "lucide-solid";
@@ -83,13 +84,15 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
         ),
       },
       {
-        id: "separator-1",
-        label: "",
-        separator: true,
-        onClick: () => { },
+        id: "mute-toggle",
+        label: volume() === 0 ? "Unmute" : "Mute",
+        icon: volume() === 0 ? <Volume2 size={14} /> : <VolumeX size={14} />,
+        onClick: () => {
+          playbackActions.adjustVolume(props.participant.userId, volume() === 0 ? 100 : 0);
+        },
       },
       {
-        id: "separator-2",
+        id: "separator-1",
         label: "",
         separator: true,
         onClick: () => { },
@@ -143,6 +146,12 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
                 <Show when={aclActions.getChannelRights(props.channelId, u().roleId) <= 2}>
                   <div class="p-0.5 bg-action-negative rounded-full" title="Server muted">
                     <MicOff size={8} class="text-primary-foreground" />
+                  </div>
+                </Show>
+
+                <Show when={volume() === 0}>
+                  <div class="p-0.5 bg-action-warning rounded-full" title="Locally muted">
+                    <Volume2 size={8} class="text-primary-foreground" />
                   </div>
                 </Show>
 
