@@ -2,7 +2,7 @@ export { FECEncoder } from "./packet";
 
 export { FrameBuffer } from "./transmission";
 
-export { RTCPProtocol } from "./transmission";
+export { MediaTransport } from "./transmission";
 
 export { PacketSerializer } from "./packet";
 

@@ -7,6 +7,7 @@ import type { Message } from "../../model";
 import { useToaster } from "../../components/Toaster";
 import { useAuth, useMessage, useUser } from "../../store/index";
 import Button from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { formatLinks, formatMessageText, extractYoutubeIds } from "../../utils/messageFormatting";
 
 interface MessageProps {
@@ -18,6 +19,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
   const [isEditing, setIsEditing] = createSignal(false);
   const [editedContent, setEditedContent] = createSignal(props.message.messageText || "");
   const { addToast } = useToaster();
+  const confirm = useConfirm();
   const [, authActions] = useAuth();
   const [, messageActions] = useMessage();
   const [, userActions] = useUser();
@@ -51,7 +53,13 @@ const MessageComponent: Component<MessageProps> = (props) => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this message?")) return;
+    const confirmed = await confirm({
+      title: "Delete Message",
+      message: "Are you sure you want to delete this message?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
 
     const result = await messageActions.delete(props.message.id);
 

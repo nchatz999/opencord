@@ -26,5 +26,5 @@ stop:
 	pkill -x server || true
 
 clean:
-	rm -rf client/dist utils/dist transport/client/dist
+	rm -rf client/dist
 	cargo clean

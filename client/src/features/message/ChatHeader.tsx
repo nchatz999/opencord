@@ -57,7 +57,6 @@ const ChatHeader: Component<{
                     {user().status}
                   </span>
                 </div>
-                <p class="text-xs text-muted-foreground">{user().status}</p>
               </div>
 
               {}

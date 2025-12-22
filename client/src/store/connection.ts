@@ -12,7 +12,7 @@ import type {
   ServerConfig,
 } from "../model";
 import { err, ok, type Result } from "opencord-utils";
-import { RTCPProtocol } from "opencord-transport";
+import { MediaTransport } from "opencord-transport";
 
 function hexToUint8Array(hexString: string): Uint8Array {
   const cleanHex = hexString.replace(/[^0-9A-Fa-f]/g, '');
@@ -119,7 +119,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     reject: (error: Error) => void;
   } | null = null;
 
-  const protocol = new RTCPProtocol(
+  const protocol = new MediaTransport(
     (data: ArrayBuffer) => {
       const message = decode(data) as ConnectionMessage;
       handleConnectionMessage(message);

@@ -5,6 +5,7 @@ import { RIGHTS } from "../../model";
 import { useModal, useRole, useGroup, useAcl } from "../../store/index";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
+import { useToaster } from "../../components/Toaster";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
 
@@ -13,6 +14,7 @@ const CreateGroupModal: Component = () => {
   const [, roleActions] = useRole();
   const [, groupActions] = useGroup();
   const [, aclActions] = useAcl();
+  const { addToast } = useToaster();
 
   const [name, setName] = createSignal<string>("");
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
@@ -25,14 +27,14 @@ const CreateGroupModal: Component = () => {
 
   const handleSave = async () => {
     if (!name().trim()) {
-      alert("Please enter a group name");
+      addToast("Please enter a group name", "error");
       return;
     }
 
     const createResult = await groupActions.create(name().trim());
 
     if (createResult.isErr()) {
-      alert(`Error creating group: ${createResult.error}`);
+      addToast(`Error creating group: ${createResult.error}`, "error");
       return;
     }
 
@@ -46,7 +48,7 @@ const CreateGroupModal: Component = () => {
       });
 
       if (aclResult.isErr()) {
-        alert(`Failed to set group permissions: ${aclResult.error}`);
+        addToast(`Failed to set group permissions: ${aclResult.error}`, "error");
         return;
       }
     }

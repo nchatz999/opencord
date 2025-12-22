@@ -97,9 +97,9 @@ export class FrameBuffer {
   }
 }
 
-export type RtcpError = { type: "disconnect", message: string } | { type: "error", message: Error }
+export type TransportError = { type: "disconnect", message: string } | { type: "error", message: Error }
 
-export class RTCPProtocol {
+export class MediaTransport {
   token: string = "";
   outSeq: bigint;
   outFrame: bigint = 0n;
@@ -154,7 +154,7 @@ export class RTCPProtocol {
     this.token = token
   }
 
-  public async connect(url: string, hash?: WebTransportHash): Promise<Result<void, RtcpError>> {
+  public async connect(url: string, hash?: WebTransportHash): Promise<Result<void, TransportError>> {
     if (!this.closed) {
       throw new Error("Already connected. Disconnect first.");
     }

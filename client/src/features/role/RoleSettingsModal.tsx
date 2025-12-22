@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-solid'
 import { RIGHTS, type Role } from '../../model'
 import { useAuth, useAcl, useGroup, useModal, useUser, useRole } from '../../store/index'
 import { useToaster } from '../../components/Toaster'
+import { useConfirm } from '../../components/ConfirmDialog'
 import { Input } from '../../components/Input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/Table'
 import Checkbox from '../../components/CheckBox'
@@ -23,6 +24,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
   const [, roleActions] = useRole()
   const user = () => authActions.getUser()
   const { addToast } = useToaster()
+  const confirm = useConfirm()
 
   const [searchTerm, setSearchTerm] = createSignal('')
   const [isDeleting, setIsDeleting] = createSignal(false)
@@ -164,9 +166,13 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
   }
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete the role "${props.role.roleName}"?`)) {
-      return
-    }
+    const confirmed = await confirm({
+      title: "Delete Role",
+      message: `Are you sure you want to delete the role "${props.role.roleName}"?`,
+      confirmText: "Delete",
+      variant: "danger",
+    })
+    if (!confirmed) return
 
     setIsDeleting(true)
     const result = await roleActions.delete(props.role.roleId)

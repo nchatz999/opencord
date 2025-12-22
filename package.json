@@ -8,7 +8,7 @@
     "client"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace=client",
     "dev": "npm run dev --workspace=client"
   },
   "engines": {

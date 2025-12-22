@@ -5,6 +5,8 @@ import { RIGHTS, type Group } from "../../model";
 import { useModal, useRole, useGroup, useAcl } from "../../store/index";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
+import { useToaster } from "../../components/Toaster";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
 
@@ -17,6 +19,8 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const [, roleActions] = useRole();
   const [, groupActions] = useGroup();
   const [, aclActions] = useAcl();
+  const { addToast } = useToaster();
+  const confirm = useConfirm();
 
   const [name, setName] = createSignal(props.group.groupName);
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
@@ -33,14 +37,14 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   const handleSave = async () => {
     const trimmedName = name().trim();
     if (!trimmedName) {
-      alert("Please enter a group name");
+      addToast("Please enter a group name", "error");
       return;
     }
 
     if (trimmedName !== props.group.groupName) {
       const renameResult = await groupActions.rename(props.group.groupId, trimmedName);
       if (renameResult.isErr()) {
-        alert(`Error renaming group: ${renameResult.error}`);
+        addToast(`Error renaming group: ${renameResult.error}`, "error");
         return;
       }
     }
@@ -53,7 +57,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       });
 
       if (aclResult.isErr()) {
-        alert(`Failed to update group permissions: ${aclResult.error}`);
+        addToast(`Failed to update group permissions: ${aclResult.error}`, "error");
         return;
       }
     }
@@ -62,14 +66,18 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete the group "${props.group.groupName}"?`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "Delete Group",
+      message: `Are you sure you want to delete the group "${props.group.groupName}"?`,
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
 
     const result = await groupActions.delete(props.group.groupId);
 
     if (result.isErr()) {
-      alert(`Failed to delete group: ${result.error}`);
+      addToast(`Failed to delete group: ${result.error}`, "error");
       return;
     }
 

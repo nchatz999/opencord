@@ -4,6 +4,7 @@ import { Hash, Volume2, X } from "lucide-solid";
 import { ChannelType, RIGHTS, type Channel } from "../../model";
 import { useAcl, useModal, useRole, useChannel } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
+import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import { Tabs } from "../../components/Tabs";
 import { Input } from "../../components/Input";
@@ -16,6 +17,7 @@ interface ChannelSettingsProps {
 
 const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   const { addToast } = useToaster();
+  const confirm = useConfirm();
   const [, aclActions] = useAcl();
   const [, modalActions] = useModal();
   const [, roleActions] = useRole();
@@ -112,9 +114,14 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete the channel "${name()}"?`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "Delete Channel",
+      message: `Are you sure you want to delete the channel "${name()}"?`,
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
     const result = await channelActions.delete(props.channel.channelId);
 
     if (result.isErr()) {

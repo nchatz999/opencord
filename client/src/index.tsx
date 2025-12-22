@@ -5,6 +5,7 @@ import "./index.css";
 
 import "./polyfills/polyfill.js";
 import { ToasterProvider } from "./components/Toaster";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import { ContextMenuProvider } from "./components/ContentMenu";
 import LoginPage from "./pages/LoginPage";
 import LoadingPage from "./pages/LoadingPage";
@@ -19,8 +20,9 @@ const Root = () => {
 
   return (
     <ToasterProvider>
-      <ContextMenuProvider>
-        <Switch>
+      <ConfirmProvider>
+        <ContextMenuProvider>
+          <Switch>
           <Match when={app.view === "loading"}>
             <LoadingPage />
           </Match>
@@ -35,8 +37,9 @@ const Root = () => {
               <App />
             </Show>
           </Match>
-        </Switch>
-      </ContextMenuProvider>
+          </Switch>
+        </ContextMenuProvider>
+      </ConfirmProvider>
     </ToasterProvider>
   );
 };

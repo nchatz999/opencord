@@ -57,8 +57,6 @@ const ModalManager: Component = () => {
       <Match when={current()?.type === "serverSettings"}>
         <ServerSettingsModal />
       </Match>
-
-      <Match when={true}>z</Match>
     </Switch>
   );
 };
