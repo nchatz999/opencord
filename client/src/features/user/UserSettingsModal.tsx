@@ -588,6 +588,8 @@ const UserSettingsModal: Component = () => {
         <div class="mt-6 flex justify-end space-x-2">
           <Button onClick={async () => {
             await microphoneActions.stop();
+            await cameraActions.stop();
+            await screenShareActions.stop();
             await authActions.logout();
             await connection.disconnect();
             modalActions.close();

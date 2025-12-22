@@ -128,9 +128,9 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
       const message = decode(data) as ConnectionMessage;
       handleConnectionMessage(message);
     },
-    (error: string) => {
+    async (error: string) => {
+      await actions.disconnect();
       notifyError(error);
-      actions.disconnect();
     }
   );
 
@@ -164,7 +164,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
         break;
 
       case "error":
-        actions.disconnect();
+        await actions.disconnect();
         notifyError(payload.reason);
         break;
 
