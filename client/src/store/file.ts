@@ -77,6 +77,7 @@ function createFileStore(): FileStore {
     async downloadFile(fileId) {
       const result = await fetchApi<Blob>(`/message/files/${fileId}`, {
         method: "GET",
+        responseType: "blob",
       });
 
       if (result.isErr()) {

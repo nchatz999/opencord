@@ -45,9 +45,10 @@ export async function fetchApi<T = unknown>(
     body?: Record<string, unknown>;
     query?: Record<string, string | number | boolean | undefined | null>;
     headers?: Record<string, string>;
+    responseType?: 'json' | 'blob';
   }
 ): Promise<Result<T, ErrorResponse>> {
-  const { method = 'GET', body, query, headers = {} } = options || {};
+  const { method = 'GET', body, query, headers = {}, responseType = 'json' } = options || {};
   const baseUrl = getBaseUrl();
   let finalUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   if (query) {
@@ -81,7 +82,7 @@ export async function fetchApi<T = unknown>(
     if (response.status === 204 || response.headers.get('content-length') === '0') {
       return ok(undefined as T);
     }
-    const data = await response.json();
+    const data = responseType === 'blob' ? await response.blob() : await response.json();
     return ok(data);
   } catch (error) {
     return err({

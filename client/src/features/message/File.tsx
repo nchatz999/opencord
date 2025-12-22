@@ -23,7 +23,8 @@ const FileItem: Component<FileProps> = (props) => {
     }
   });
 
-  const handleDownload = async () => {
+  const handleDownload = async (e: MouseEvent) => {
+    e.preventDefault();
     const result = await fileActions.downloadFile(props.file.fileId);
 
     if (result.isErr()) return;

@@ -33,6 +33,7 @@ use server::{ServerService, server_routes};
 use user::{UserService, user_routes};
 use voip::{VoipService, voip_routes};
 
+use axum::extract::DefaultBodyLimit;
 use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -203,6 +204,7 @@ async fn main() -> Result<(), sqlx::Error> {
             "/server",
             server_routes(server_service, authorize_service.clone()),
         )
+        .layer(DefaultBodyLimit::max(512 * 1024 * 1024))
         .layer(cors)
         .with_state(postgre)
         .split_for_parts();
@@ -214,7 +216,8 @@ async fn main() -> Result<(), sqlx::Error> {
         .unwrap_or(false);
 
     let router = if serve_client {
-        let client_path = std::env::var("CLIENT_PATH").unwrap_or_else(|_| "client/dist".to_string());
+        let client_path =
+            std::env::var("CLIENT_PATH").unwrap_or_else(|_| "client/dist".to_string());
         let index_path = PathBuf::from(&client_path).join("index.html");
         let serve_dir = ServeDir::new(&client_path).fallback(ServeFile::new(&index_path));
         println!("Serving client from: {}", client_path);
