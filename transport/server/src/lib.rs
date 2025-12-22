@@ -9,7 +9,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration, Instant};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use web_transport::quinn::{self, quinn::rustls::pki_types::CertificateDer, Request};
 
 use crate::packet::{FecEncoder, RtpBody};
@@ -103,6 +103,7 @@ impl Connection {
             out_seq: 0,
             in_seq: 0,
             nacks: vec![],
+            nack_responses: HashMap::new(),
             next_frame_id: 0,
             send_pings: HashMap::new(),
             failed_pings: 0,
@@ -134,32 +135,22 @@ impl Connection {
 
     pub async fn send_ordered(&mut self, data: Bytes) {
         if let Some(sender) = &self.outgoing_sender_safe {
-            sender.send(data.into()).await.unwrap();
-        } else {
-            warn!("Attempted to send data on a closed connection.");
+            let _ = sender.send(data.into()).await;
         }
     }
     pub async fn send(&mut self, data: Bytes, safe: bool) {
         if safe {
             if let Some(sender) = &self.outgoing_sender_safe {
-                sender.send(data.into()).await.unwrap();
-            } else {
-                warn!("Attempted to send data on a closed connection.");
+                let _ = sender.send(data.into()).await;
             }
-        } else {
-            if let Some(sender) = &self.outgoing_sender {
-                sender.send(data.into()).await.unwrap();
-            } else {
-                warn!("Attempted to send data on a closed connection.");
-            }
+        } else if let Some(sender) = &self.outgoing_sender {
+            let _ = sender.send(data.into()).await;
         }
     }
 
     pub async fn send_unordered(&mut self, data: Bytes) {
         if let Some(sender) = &self.outgoing_sender {
-            sender.send(data.into()).await.unwrap();
-        } else {
-            warn!("Attempted to send data on a closed connection.");
+            let _ = sender.send(data.into()).await;
         }
     }
     pub async fn close(&mut self) {
@@ -179,6 +170,10 @@ impl Connection {
 
 const MAX_MISSED_PONGS: usize = 15;
 const MAX_RETRANSMISSIONS: u32 = 5;
+const MAX_SEQUENCE_GAP: u64 = 100;
+const MAX_FRAMES: usize = 16384;
+const MAX_PACKETS: usize = 262144;
+const NACK_COOLDOWN: Duration = Duration::from_millis(30);
 const PING_INTERVAL: Duration = Duration::from_millis(200);
 const CHECK_PING_INTERVAL: Duration = Duration::from_secs(1);
 const PONG_TIMEOUT: u64 = 2000;
@@ -203,6 +198,7 @@ struct ConnectionRunner {
     in_seq: u64,
     out_seq: u64,
     nacks: Vec<InFlightPacket>,
+    nack_responses: HashMap<u64, Instant>,
     next_frame_id: u64,
     send_pings: HashMap<u64, PingBody>,
     failed_pings: usize,
@@ -360,6 +356,7 @@ impl ConnectionRunner {
                     self.send_packets.retain(|_key,value| now - value.timestamp < 5000 );
                     self.received_rackets.retain(|_key,value| now - value.timestamp < 5000 );
                     self.nacks.retain(|nack| now - nack.created_at < 5000 );
+                    self.nack_responses.retain(|_, time| time.elapsed() < Duration::from_secs(5));
                 },
 
                 Some(command) = self.session_command_receiver.recv() => {
@@ -387,9 +384,9 @@ impl ConnectionRunner {
                         timestamp: body.timestamp,
                         data: vec![],
                     });
-                    self.session
-                        .send_datagram(packet::PacketSerializer::serialize(&pong))
-                        .unwrap();
+                    let _ = self
+                        .session
+                        .send_datagram(packet::PacketSerializer::serialize(&pong));
                 }
                 packet::Packet::Pong(body) => {
                     if let Some(ping) = self.send_pings.get(&body.timestamp) {
@@ -400,57 +397,70 @@ impl ConnectionRunner {
                         let rtt = now - ping.timestamp;
 
                         self.update_rto(rtt as f64);
-
+                        self.failed_pings = 0;
                         self.send_pings.remove(&body.timestamp);
                     }
                 }
                 packet::Packet::Rtp(body) => {
+                    if self.streams.len() >= MAX_FRAMES
+                        && !self.streams.contains_key(&body.frame_id)
+                    {
+                        return;
+                    }
+                    if self.received_rackets.len() >= MAX_PACKETS {
+                        return;
+                    }
                     let msg_sender = self.message_sender.clone();
                     let frame = self.streams.entry(body.frame_id).or_insert_with(|| {
                         packet::FrameBuffer::new(body.frame_id, body.total_fragments)
                     });
                     let sec = body.sequence_number;
-                    frame.add_packet(body.clone()).unwrap();
+                    if frame.add_packet(body.clone()).is_err() {
+                        return;
+                    }
                     if frame.is_complete() {
-                        let packet = frame.reconstruct_data().unwrap();
-                        msg_sender
-                            .send(Message::Unordered(packet.into()))
-                            .await
-                            .unwrap();
+                        if let Some(data) = frame.reconstruct_data() {
+                            let _ = msg_sender.send(Message::Unordered(data.into())).await;
+                        }
                     }
                     self.nacks
                         .retain(|item| item.packet.missing_sequence != sec);
                     self.received_rackets.insert(body.sequence_number, body);
 
                     if sec > self.in_seq {
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as u64;
-                        for i in self.in_seq..sec {
-                            let dur = Instant::now();
-                            let nack = packet::NackBody {
-                                missing_sequence: i,
-                            };
-                            self.nacks.push(InFlightPacket {
-                                packet: nack,
-                                sent_at: dur,
-                                created_at: now,
-                                retransmissions: 0,
-                            });
+                        if sec - self.in_seq <= MAX_SEQUENCE_GAP {
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis() as u64;
+                            for i in self.in_seq..sec {
+                                self.nacks.push(InFlightPacket {
+                                    packet: packet::NackBody {
+                                        missing_sequence: i,
+                                    },
+                                    sent_at: Instant::now(),
+                                    created_at: now,
+                                    retransmissions: 0,
+                                });
+                            }
                         }
-
                         self.in_seq = sec.wrapping_add(1);
-                    }
-                    if sec == self.in_seq {
+                    } else if sec == self.in_seq {
                         self.in_seq += 1;
                     }
                 }
                 packet::Packet::Nack(body) => {
-                    let packet = self.send_packets.get(&body.missing_sequence);
-                    if let Some(p) = packet {
-                        let encoded = PacketSerializer::serialize(&Packet::Rtp(p.clone()));
-                        self.session.send_datagram(encoded).unwrap();
+                    let now = Instant::now();
+                    if let Some(last) = self.nack_responses.get(&body.missing_sequence) {
+                        if now.duration_since(*last) < NACK_COOLDOWN {
+                            return;
+                        }
+                    }
+                    if let Some(p) = self.send_packets.get(&body.missing_sequence) {
+                        let _ = self
+                            .session
+                            .send_datagram(PacketSerializer::serialize(&Packet::Rtp(p.clone())));
+                        self.nack_responses.insert(body.missing_sequence, now);
                     }
                 }
 
@@ -468,13 +478,13 @@ impl ConnectionRunner {
                         let frame = self.streams.entry(p.frame_id).or_insert_with(|| {
                             packet::FrameBuffer::new(p.frame_id, p.total_fragments)
                         });
-                        frame.add_packet(p.clone()).unwrap();
+                        if frame.add_packet(p.clone()).is_err() {
+                            return;
+                        }
                         if frame.is_complete() {
-                            let packet = frame.reconstruct_data().unwrap();
-                            msg_sender
-                                .send(Message::Unordered(packet.into()))
-                                .await
-                                .unwrap();
+                            if let Some(data) = frame.reconstruct_data() {
+                                let _ = msg_sender.send(Message::Unordered(data.into())).await;
+                            }
                         }
                         self.nacks
                             .retain(|item| item.packet.missing_sequence != p.sequence_number);
@@ -520,8 +530,10 @@ impl ConnectionRunner {
                 data: chunk,
             };
             let encoded = PacketSerializer::serialize(&Packet::Rtp(rtp_packet.clone()));
-            self.send_packets
-                .insert(rtp_packet.sequence_number, rtp_packet.clone());
+            if self.send_packets.len() < MAX_PACKETS {
+                self.send_packets
+                    .insert(rtp_packet.sequence_number, rtp_packet.clone());
+            }
             if let Err(e) = self.session.send_datagram(encoded) {
                 error!("Failed to send RTP packet: {}", e);
             }

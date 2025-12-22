@@ -483,6 +483,10 @@ impl SubscriberHandler {
     }
 }
 
+const MAX_INVALID_VOIP_PACKETS: u32 = 1000;
+const MAX_BYTES_PER_SECOND: u64 = 500_000;
+const RATE_LIMIT_WINDOW_MS: u128 = 1000;
+
 struct SubscriberSession<L: LogManager> {
     may_session: Option<Session>,
     observer_tx: mpsc::Sender<ServerMessage>,
@@ -491,6 +495,9 @@ struct SubscriberSession<L: LogManager> {
     service: Service<L>,
     pub connection: Connection,
     identifier: String,
+    invalid_voip_count: u32,
+    bytes_this_window: u64,
+    window_start: std::time::Instant,
 }
 
 impl<L: LogManager> SubscriberSession<L> {
@@ -512,6 +519,9 @@ impl<L: LogManager> SubscriberSession<L> {
             service,
             connection: conn,
             identifier: token,
+            invalid_voip_count: 0,
+            bytes_this_window: 0,
+            window_start: std::time::Instant::now(),
         }
     }
 
@@ -580,11 +590,36 @@ impl<L: LogManager> SubscriberSession<L> {
             .may_session
             .clone()
             .ok_or_else(|| SessionError::BadRequest("No user authenticated".to_string()))?;
-        let voip_session = self
+
+        let now = std::time::Instant::now();
+        if now.duration_since(self.window_start).as_millis() > RATE_LIMIT_WINDOW_MS {
+            self.bytes_this_window = 0;
+            self.window_start = now;
+        }
+
+        let payload_size = match &payload {
+            VoipPayload::Speech { .. } => 32,
+            VoipPayload::Media { data, .. } => data.len() as u64,
+        };
+
+        self.bytes_this_window += payload_size;
+        if self.bytes_this_window > MAX_BYTES_PER_SECOND {
+            return Err(SessionError::BadRequest("VoIP abuse detected".to_string()));
+        }
+
+        let Some(voip_session) = self
             .service
             .get_voip_participant(user_session.user_id)
             .await?
-            .ok_or_else(|| SessionError::BadRequest("No active VoIP session".to_string()))?;
+        else {
+            self.invalid_voip_count += 1;
+            if self.invalid_voip_count > MAX_INVALID_VOIP_PACKETS {
+                return Err(SessionError::BadRequest("VoIP abuse detected".to_string()));
+            }
+            return Ok(());
+        };
+
+        self.invalid_voip_count = 0;
 
         if let Some(channel_id) = voip_session.channel_id {
             let _ = self
