@@ -31,6 +31,13 @@
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
 }
 
 @theme {

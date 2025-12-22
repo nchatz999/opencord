@@ -1,10 +1,12 @@
 import type { Component } from "solid-js";
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 
-import { Users, Video } from "lucide-solid";
+import { Users, Video, X, Maximize2, Minimize2, Expand } from "lucide-solid";
 import { useAuth, useVoip, useContext } from "../../store/index";
 import { type VoipParticipant, MediaType } from "../../model";
 import VideoStream from "./VideoStream";
+
+type FocusedStream = { publisherId: number; mediaType: MediaType } | null;
 
 
 const StreamsContent: Component = () => {
@@ -12,6 +14,19 @@ const StreamsContent: Component = () => {
   const [, voipActions] = useVoip();
   const [contextState] = useContext();
   const currentUser = () => authActions.getUser();
+
+  const [focusedStream, setFocusedStream] = createSignal<FocusedStream>(null);
+  const [isModalFullscreen, setIsModalFullscreen] = createSignal(false);
+
+  const openStreamModal = (publisherId: number, mediaType: MediaType) => {
+    setFocusedStream({ publisherId, mediaType });
+    setIsModalFullscreen(false);
+  };
+
+  const closeStreamModal = () => {
+    setFocusedStream(null);
+    setIsModalFullscreen(false);
+  };
 
   const getCurrentParticipants = createMemo(() => {
     const voipSession = voipActions.findById(currentUser().userId);
@@ -102,16 +117,36 @@ const StreamsContent: Component = () => {
                 {(participant) => (
                   <>
                     <Show when={participant.publishCamera}>
-                      <VideoStream
-                        publisherId={participant.userId}
-                        mediaType={MediaType.Camera}
-                      />
+                      <div
+                        class="relative cursor-pointer group"
+                        onClick={() => openStreamModal(participant.userId, MediaType.Camera)}
+                      >
+                        <VideoStream
+                          publisherId={participant.userId}
+                          mediaType={MediaType.Camera}
+                        />
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div class="p-3 rounded-full bg-background/60">
+                            <Expand size={24} class="text-foreground" />
+                          </div>
+                        </div>
+                      </div>
                     </Show>
                     <Show when={participant.publishScreen}>
-                      <VideoStream
-                        publisherId={participant.userId}
-                        mediaType={MediaType.Screen}
-                      />
+                      <div
+                        class="relative cursor-pointer group"
+                        onClick={() => openStreamModal(participant.userId, MediaType.Screen)}
+                      >
+                        <VideoStream
+                          publisherId={participant.userId}
+                          mediaType={MediaType.Screen}
+                        />
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div class="p-3 rounded-full bg-background/60">
+                            <Expand size={24} class="text-foreground" />
+                          </div>
+                        </div>
+                      </div>
                     </Show>
                   </>
                 )}
@@ -119,6 +154,56 @@ const StreamsContent: Component = () => {
             </div>
           </div>
         </div>
+      </Show>
+
+      <Show when={focusedStream()}>
+        {(stream) => (
+          <div
+            class={`fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm ${
+              isModalFullscreen() ? "" : "p-8"
+            }`}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeStreamModal();
+            }}
+          >
+            <div
+              class={`relative bg-sidebar border border-border rounded-lg overflow-hidden flex flex-col ${
+                isModalFullscreen()
+                  ? "w-full h-full rounded-none border-none"
+                  : "w-full max-w-5xl max-h-[90vh]"
+              }`}
+            >
+              <div class="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+                <span class="text-sm text-muted-foreground">
+                  {stream().mediaType === MediaType.Camera ? "Camera" : "Screen Share"}
+                </span>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setIsModalFullscreen((prev) => !prev)}
+                    title={isModalFullscreen() ? "Exit fullscreen" : "Fullscreen"}
+                  >
+                    {isModalFullscreen() ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                  </button>
+                  <button
+                    class="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={closeStreamModal}
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex-1 min-h-0">
+                <VideoStream
+                  publisherId={stream().publisherId}
+                  mediaType={stream().mediaType}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </Show>
     </Show>
   );

@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, Show, For } from "solid-js";
 import FileItem from "./File";
-import { Edit2Icon, ReplyIcon, Trash2Icon } from "lucide-solid";
+import { Edit2Icon, ReplyIcon, Trash2Icon, CopyIcon } from "lucide-solid";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import type { Message } from "../../model";
 import { useToaster } from "../../components/Toaster";
@@ -58,6 +58,12 @@ const MessageComponent: Component<MessageProps> = (props) => {
     if (result.isErr()) {
       addToast(`Error: ${result.error}`, "error");
     }
+  };
+
+  const handleCopy = async () => {
+    if (!props.message.messageText) return;
+    await navigator.clipboard.writeText(props.message.messageText);
+    addToast("Message copied", "success");
   };
 
   return (
@@ -152,6 +158,11 @@ const MessageComponent: Component<MessageProps> = (props) => {
               </div>
 
               <div class={`flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isOwner() ? "flex-row-reverse" : "flex-row"}`}>
+                <Show when={props.message.messageText}>
+                  <Button size="sm" variant="ghost" onClick={handleCopy} title="Copy">
+                    <CopyIcon size={16} />
+                  </Button>
+                </Show>
                 <Show when={isOwner() && !isEditing()}>
                   <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} title="Edit">
                     <Edit2Icon size={16} />

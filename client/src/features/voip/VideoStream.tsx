@@ -1,5 +1,5 @@
 import type { Component, JSX } from "solid-js";
-import { Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { Show, createEffect, createMemo } from "solid-js";
 
 import { Camera, Monitor, Volume2, Eye, EyeOff } from "lucide-solid";
 import { useAuth, useSubscription, usePlayback, useUser } from "../../store/index";
@@ -24,16 +24,6 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
   const [, userActions] = useUser();
 
   let videoRef: HTMLVideoElement | undefined;
-  const [isFullscreen, setIsFullscreen] = createSignal(false);
-
-  const handleFullscreenChange = () => {
-    setIsFullscreen(document.fullscreenElement === videoRef);
-  };
-
-  document.addEventListener("fullscreenchange", handleFullscreenChange);
-  onCleanup(() => {
-    document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  });
 
   const viewer = () => authActions.getUser();
   const publisher = () => userActions.findById(props.publisherId);
@@ -73,15 +63,6 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
     }
   };
 
-  const toggleFullscreen = (e: MouseEvent) => {
-    const video = e.currentTarget as HTMLVideoElement;
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      video.requestFullscreen();
-    }
-  };
-
   const screenAudioMenuItems = (): ContextMenuItem[] => [
     {
       id: "volume-control",
@@ -108,8 +89,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
       autoplay
       playsinline
       muted={true}
-      class="w-full h-full object-cover cursor-pointer"
-      onDblClick={toggleFullscreen}
+      class="w-full h-full object-cover"
     />
   );
 
@@ -144,7 +124,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
   );
 
   const renderOverlay = (username: string): JSX.Element => (
-    <Show when={!isFullscreen()}>
+    <>
       <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
         {renderPublisherBadge(username)}
         {renderSubscriptionButton()}
@@ -152,7 +132,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
       <Show when={!isCamera()}>
         {renderFpsIndicator()}
       </Show>
-    </Show>
+    </>
   );
 
   const renderContent = (username: string): JSX.Element => (
