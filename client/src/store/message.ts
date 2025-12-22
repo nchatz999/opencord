@@ -1,6 +1,6 @@
 import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
-import type { Message, File } from "../model";
+import type { Message, File as StoredFile } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { request, upload } from "../utils";
@@ -19,7 +19,7 @@ interface MessageActions {
   findById: (id: number) => Message | undefined;
   findByChannel: (channelId: number) => Message[];
   findByRecipient: (recipientId: number) => Message[];
-  getAttachments: (messageId: number) => File[];
+  getAttachments: (messageId: number) => StoredFile[];
   insert: (message: Message) => void;
   update: (message: Message) => void;
   remove: (id: number) => void;
@@ -36,7 +36,8 @@ interface MessageActions {
     text: string | undefined,
     files?: File[],
     replyToMessageId?: number | null,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal
   ) => Promise<Result<void, string>>;
   updateMessage: (messageId: number, text: string) => Promise<Result<void, string>>;
   delete: (messageId: number) => Promise<Result<void, string>>;
@@ -67,7 +68,7 @@ function createMessageStore(): MessageStore {
             messageText: string | null;
             timestamp: string;
             replyToMessageId: number | null;
-            files: File[];
+            files: StoredFile[];
           };
 
           const message: Message = {
@@ -250,7 +251,7 @@ function createMessageStore(): MessageStore {
       return ok(result.value);
     },
 
-    async send(contextType, contextId, text, files = [], replyToMessageId = null, onProgress) {
+    async send(contextType, contextId, text, files = [], replyToMessageId = null, onProgress, signal) {
       const endpoint =
         contextType === "dm"
           ? `/message/dm/${contextId}/messages`
@@ -267,8 +268,7 @@ function createMessageStore(): MessageStore {
         formData.append("files", file);
       }
 
-      const result = await upload(endpoint, formData, onProgress);
-
+      const result = await upload(endpoint, formData, onProgress, signal);
       if (result.isErr()) {
         return err(result.error.reason);
       }

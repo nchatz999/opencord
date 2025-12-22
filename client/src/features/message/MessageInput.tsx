@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
-import { Send, Paperclip } from "lucide-solid";
+import { Send, Paperclip, X } from "lucide-solid";
 import FilePreview from "./FilePreview";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import { useToaster } from "../../components/Toaster";
@@ -8,6 +8,7 @@ import { useChannel, useUser, useMessage } from "../../store/index";
 import Button from "../../components/Button";
 import EmojiPicker from "../../components/EmojiPicker";
 import { formatLinks } from "../../utils/messageFormatting";
+
 
 const formatContent = (text: string) => {
   if (!text) return <></>;
@@ -25,6 +26,9 @@ const MessageInput: Component<{
   const [files, setFiles] = createSignal<File[]>([]);
   const [isDragging, setIsDragging] = createSignal(false);
   const [uploadProgress, setUploadProgress] = createSignal<number | null>(null);
+  const [abortController, setAbortController] = createSignal<AbortController | null>(null);
+
+  const isUploading = () => uploadProgress() !== null;
 
   let textareaRef: HTMLDivElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
@@ -62,9 +66,10 @@ const MessageInput: Component<{
     if (!canSend()) return;
 
     const currentFiles = files();
-    if (currentFiles.length > 0) {
-      setUploadProgress(0);
-    }
+    const controller = new AbortController();
+
+    setAbortController(controller);
+    setUploadProgress(0);
 
     const result = await messageActions.send(
       props.context.type,
@@ -72,13 +77,17 @@ const MessageInput: Component<{
       content().trim() || undefined,
       currentFiles,
       null,
-      currentFiles.length > 0 ? setUploadProgress : undefined
+      setUploadProgress,
+      controller.signal
     );
 
+    setAbortController(null);
     setUploadProgress(null);
 
     if (result.isErr()) {
-      addToast(`Failed to send message: ${result.error}`, "error");
+      if (result.error !== "Upload cancelled") {
+        addToast(`Failed to send message: ${result.error}`, "error");
+      }
       return;
     }
 
@@ -88,6 +97,10 @@ const MessageInput: Component<{
       textareaRef.innerText = "";
       textareaRef.style.height = "";
     }
+  };
+
+  const handleCancel = () => {
+    abortController()?.abort();
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -142,16 +155,20 @@ const MessageInput: Component<{
                 <FilePreview
                   file={file}
                   onRemove={() => handleRemoveFile(file.name)}
+                  disabled={isUploading()}
                 />
               )}
             </For>
           </div>
         </Show>
 
-        <Show when={uploadProgress() !== null}>
+        <Show when={isUploading()}>
           <div class="mb-3 px-1">
-            <div class="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+            <div class="flex items-center justify-between text-sm text-muted-foreground mb-1">
               <span>Uploading... {uploadProgress()}%</span>
+              <Button size="sm" variant="ghost" onClick={handleCancel} title="Cancel upload">
+                <X size={16} />
+              </Button>
             </div>
             <div class="h-1 bg-muted rounded-full overflow-hidden">
               <div

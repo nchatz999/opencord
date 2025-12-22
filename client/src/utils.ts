@@ -30,10 +30,17 @@ const getBaseUrl = () => {
 export function upload<T = unknown>(
   url: string,
   formData: FormData,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal
 ): Promise<Result<T, ErrorResponse>> {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(err({ code: 'ABORTED', reason: 'Upload cancelled' }));
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
+    signal?.addEventListener('abort', () => xhr.abort());
 
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
@@ -50,6 +57,7 @@ export function upload<T = unknown>(
     };
 
     xhr.onerror = () => resolve(err({ code: 'NETWORK_ERROR', reason: 'Upload failed' }));
+    xhr.onabort = () => resolve(err({ code: 'ABORTED', reason: 'Upload cancelled' }));
 
     xhr.open('POST', `${getBaseUrl()}${url}`);
     xhr.send(formData);
