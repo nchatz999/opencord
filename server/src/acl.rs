@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use utoipa::ToSchema;
 
 use crate::channel::{Channel, ChannelType};
 use crate::group::{Group, GroupRoleRights};
+use crate::managers::{FileManager, LocalFileManager};
+use crate::message::File;
 use crate::user::User;
 
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +41,18 @@ pub trait AclTransaction: Send + Sync {
         role_id: i64,
         group_id: i64,
     ) -> Result<Vec<i64>, DatabaseError>;
+
+    async fn delete_files_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<Vec<File>, DatabaseError>;
+
+    async fn delete_files_by_user(
+        &mut self,
+        user_id: i64,
+        group_id: i64,
+    ) -> Result<Vec<File>, DatabaseError>;
 
     async fn delete_voip_participant_by_user(
         &mut self,
@@ -101,18 +116,20 @@ use crate::model::EventPayload;
 use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
 
 #[derive(Clone)]
-pub struct AclService<R: AclRepository, N: NotifierManager, G: LogManager> {
+pub struct AclService<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> {
     repository: R,
     notifier: N,
     logger: G,
+    file_manager: F,
 }
 
-impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
-    pub fn new(repository: R, notifier: N, logger: G) -> Self {
+impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclService<R, N, G, F> {
+    pub fn new(repository: R, notifier: N, logger: G, file_manager: F) -> Self {
         Self {
             repository,
             notifier,
             logger,
+            file_manager,
         }
     }
 
@@ -238,9 +255,16 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                 let deleted_participants = tx
                     .delete_voip_participants_by_role(acl.role_id, acl.group_id)
                     .await?;
+                let deleted_files = tx.delete_files_by_role(acl.role_id, acl.group_id).await?;
                 let deleted_messages = tx
                     .delete_messages_by_role(acl.role_id, acl.group_id)
                     .await?;
+
+                for file in &deleted_files {
+                    if let Err(e) = self.file_manager.delete_file(file.file_id) {
+                        warn!("Failed to delete file {} from storage: {}", file.file_id, e);
+                    }
+                }
 
                 let routing = ControlRoutingPolicy::GroupRights {
                     group_id: acl.group_id,
@@ -424,9 +448,18 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager> AclService<R, N, G> {
                 let deleted_participant = tx
                     .delete_voip_participant_by_user(target_user_id, old.group_id)
                     .await?;
+                let deleted_files = tx
+                    .delete_files_by_user(target_user_id, old.group_id)
+                    .await?;
                 let deleted_messages = tx
                     .delete_messages_by_user(target_user_id, old.group_id)
                     .await?;
+
+                for file in &deleted_files {
+                    if let Err(e) = self.file_manager.delete_file(file.file_id) {
+                        warn!("Failed to delete file {} from storage: {}", file.file_id, e);
+                    }
+                }
 
                 let routing = ControlRoutingPolicy::GroupRights {
                     group_id: old.group_id,
@@ -624,6 +657,51 @@ impl AclTransaction for PgAclTransaction {
         .await?;
 
         Ok(deleted)
+    }
+
+    async fn delete_files_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<Vec<File>, DatabaseError> {
+        let files = sqlx::query_as!(
+            File,
+            r#"DELETE FROM files
+               USING messages m, users u, channels c
+               WHERE files.message_id = m.id
+               AND m.sender_id = u.user_id
+               AND m.channel_id = c.channel_id
+               AND u.role_id = $1
+               AND c.group_id = $2
+               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.file_type, files.file_size, files.file_hash, files.created_at"#,
+            role_id,
+            group_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+        Ok(files)
+    }
+
+    async fn delete_files_by_user(
+        &mut self,
+        user_id: i64,
+        group_id: i64,
+    ) -> Result<Vec<File>, DatabaseError> {
+        let files = sqlx::query_as!(
+            File,
+            r#"DELETE FROM files
+               USING messages m, channels c
+               WHERE files.message_id = m.id
+               AND m.channel_id = c.channel_id
+               AND m.sender_id = $1
+               AND c.group_id = $2
+               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.file_type, files.file_size, files.file_hash, files.created_at"#,
+            user_id,
+            group_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+        Ok(files)
     }
 
     async fn delete_voip_participant_by_user(
@@ -870,7 +948,7 @@ pub struct UpdateUserRoleRequest {
 }
 
 pub fn acl_routes(
-    acl_service: AclService<Postgre, DefaultNotifierManager, TextLogManager>,
+    acl_service: AclService<Postgre, DefaultNotifierManager, TextLogManager, LocalFileManager>,
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
@@ -896,7 +974,9 @@ pub fn acl_routes(
 )]
 #[axum::debug_handler]
 async fn get_all_group_role_rights_handler(
-    State(service): State<AclService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        AclService<Postgre, DefaultNotifierManager, TextLogManager, LocalFileManager>,
+    >,
     Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<GroupRoleRights>>, ApiError> {
     let user_id = session.user_id;
@@ -924,7 +1004,9 @@ async fn get_all_group_role_rights_handler(
     )
 )]
 async fn set_group_role_rights_handler(
-    State(service): State<AclService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        AclService<Postgre, DefaultNotifierManager, TextLogManager, LocalFileManager>,
+    >,
     Extension(session): Extension<Session>,
     Json(payload): Json<Vec<GroupRoleRights>>,
 ) -> Result<StatusCode, ApiError> {
@@ -953,7 +1035,9 @@ async fn set_group_role_rights_handler(
     security(("api_key" = []))
 )]
 async fn update_user_role_handler(
-    State(service): State<AclService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        AclService<Postgre, DefaultNotifierManager, TextLogManager, LocalFileManager>,
+    >,
     Extension(session): Extension<Session>,
     Path(target_user_id): Path<i64>,
     Json(payload): Json<UpdateUserRoleRequest>,

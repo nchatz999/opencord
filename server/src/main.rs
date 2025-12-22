@@ -122,6 +122,7 @@ async fn main() -> Result<(), sqlx::Error> {
         postgre.clone(),
         notifier_manager.clone(),
         log_manager.clone(),
+        file_manager.clone(),
     );
     let role_service = RoleService::new(
         postgre.clone(),
