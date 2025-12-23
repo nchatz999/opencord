@@ -5,7 +5,7 @@ use crate::{
     managers::LogManager,
     model::EventPayload,
     user::{User, UserStatusType},
-    voip::{MediaType, VoipParticipant},
+    voip::{MediaType, Subscription, VoipParticipant},
 };
 use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
@@ -181,6 +181,11 @@ pub trait Repository: Send + Sync + Clone {
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
+    async fn remove_subscriptions(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError>;
+
     async fn is_subscribed_to_media(
         &self,
         user_id: i64,
@@ -292,6 +297,18 @@ impl<L: LogManager> Service<L> {
         }
 
         Ok(result)
+    }
+
+    pub async fn remove_all_subscriptions(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<Subscription>, DomainError> {
+        let mut repo = self.repository.clone();
+        let subscriptions = repo
+            .remove_subscriptions(user_id)
+            .await
+            .map_err(DomainError::from)?;
+        Ok(subscriptions)
     }
 
     pub async fn is_subscribed_to_media(
@@ -440,6 +457,22 @@ impl Repository for Postgre {
         .map_err(DatabaseError::from)?;
 
         Ok(result)
+    }
+
+    async fn remove_subscriptions(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError> {
+        let subscriptions = sqlx::query_as!(
+            Subscription,
+            r#"DELETE FROM subscriptions
+               WHERE user_id = $1 OR publisher_id = $1
+               RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(subscriptions)
     }
 
     async fn is_subscribed_to_media(
@@ -793,7 +826,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         let _ = self
             .handle_user_status_update(user_id, UserStatusType::Online)
             .await;
-        //self.handle_voip_participant_removal(user_id).await?;
+        let _ = self.handle_voip_participant_removal(user_id).await;
         Ok(())
     }
 
@@ -1078,6 +1111,30 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         &mut self,
         user_id: i64,
     ) -> Result<(), ServerError> {
+        let subscriptions = self.service.remove_all_subscriptions(user_id).await?;
+
+        for subscription in subscriptions {
+            let event = EventPayload::MediaUnsubscription {
+                subscription: subscription.clone(),
+            };
+            let _ = self
+                .route_control(
+                    event.clone(),
+                    ControlRoutingPolicy::User {
+                        user_id: subscription.user_id,
+                    },
+                )
+                .await;
+            let _ = self
+                .route_control(
+                    event,
+                    ControlRoutingPolicy::User {
+                        user_id: subscription.publisher_id,
+                    },
+                )
+                .await;
+        }
+
         if let Some(ref participant) = self.service.remove_voip_participant(user_id).await? {
             let policy = if let Some(channel_id) = participant.channel_id {
                 ControlRoutingPolicy::ChannelRights {
