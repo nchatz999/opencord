@@ -182,20 +182,16 @@ const UserSettingsModal: Component = () => {
               Status
             </h3>
             <div class="space-y-3">
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Current Status
-                </label>
-                <Select
-                  options={statusOptions.map(option => ({
-                    value: option.value,
-                    label: option.label
-                  }))}
-                  value={user().status}
-                  onChange={(value) => handleStatusChange(value as UserStatusType)}
-                  class="w-full"
-                />
-              </div>
+              <Select
+                label="Current Status"
+                options={statusOptions.map(option => ({
+                  value: option.value,
+                  label: option.label
+                }))}
+                value={user().status}
+                onChange={(value) => handleStatusChange(value as UserStatusType)}
+                class="w-full"
+              />
               <div class="flex items-center space-x-2 text-sm">
                 <Circle
                   size={12}
@@ -276,22 +272,18 @@ const UserSettingsModal: Component = () => {
             </h3>
 
             <div class="space-y-4">
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Input Device
-                </label>
-                <Select
-                  options={microphoneActions.listDevices().map((device: MediaDeviceInfo) => ({
-                    value: device.deviceId,
-                    label: device.label,
-                  }))}
-                  value={microphoneActions.getDevice()}
-                  onChange={(device) => {
-                    microphoneActions.setDevice(device as string)
-                  }}
-                  class="w-full"
-                />
-              </div>
+              <Select
+                label="Input Device"
+                options={microphoneActions.listDevices().map((device: MediaDeviceInfo) => ({
+                  value: device.deviceId,
+                  label: device.label,
+                }))}
+                value={microphoneActions.getDevice()}
+                onChange={(device) => {
+                  microphoneActions.setDevice(device as string)
+                }}
+                class="w-full"
+              />
 
 
               <div class="flex items-center space-x-2">
@@ -315,27 +307,23 @@ const UserSettingsModal: Component = () => {
             </h3>
 
             <div class="space-y-4">
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Output Device
-                </label>
-                <Select
-                  options={outputActions.getAvailableOutputs().map(
-                    (device: AudioOutputDevice) => ({
-                      value: device.deviceId,
-                      label: device.label,
-                    })
-                  )}
-                  value={outputActions.getSelectedOutput()?.deviceId || ""}
-                  onChange={(deviceId) => {
-                    const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
-                    if (device) {
-                      outputActions.setOutput(device);
-                    }
-                  }}
-                  class="w-full"
-                />
-              </div>
+              <Select
+                label="Output Device"
+                options={outputActions.getAvailableOutputs().map(
+                  (device: AudioOutputDevice) => ({
+                    value: device.deviceId,
+                    label: device.label,
+                  })
+                )}
+                value={outputActions.getSelectedOutput()?.deviceId || ""}
+                onChange={(deviceId) => {
+                  const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
+                  if (device) {
+                    outputActions.setOutput(device);
+                  }
+                }}
+                class="w-full"
+              />
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">
@@ -411,29 +399,21 @@ const UserSettingsModal: Component = () => {
             </h3>
 
             <div class="space-y-6">
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Camera Resolution
-                </label>
-                <Select
-                  options={getPresetOptions()}
-                  value={cameraActions.getPreset()}
-                  onChange={(value) => cameraActions.setPreset(value as QualityPreset)}
-                  class="w-full"
-                />
-              </div>
+              <Select
+                label="Camera Resolution"
+                options={getPresetOptions()}
+                value={cameraActions.getPreset()}
+                onChange={(value) => cameraActions.setPreset(value as QualityPreset)}
+                class="w-full"
+              />
 
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Screen Share Resolution
-                </label>
-                <Select
-                  options={getPresetOptions()}
-                  value={screenShareActions.getPreset()}
-                  onChange={(value) => screenShareActions.setPreset(value as QualityPreset)}
-                  class="w-full"
-                />
-              </div>
+              <Select
+                label="Screen Share Resolution"
+                options={getPresetOptions()}
+                value={screenShareActions.getPreset()}
+                onChange={(value) => screenShareActions.setPreset(value as QualityPreset)}
+                class="w-full"
+              />
 
               <div>
                 <label class="block mb-2 text-sm font-medium text-foreground">

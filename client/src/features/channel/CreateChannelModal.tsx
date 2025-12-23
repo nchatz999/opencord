@@ -1,84 +1,80 @@
-import type { Component } from 'solid-js'
-import { createSignal, createMemo, For, createEffect } from 'solid-js'
-import { Hash, Volume2, X } from 'lucide-solid'
-import { useToaster } from '../../components/Toaster'
-import { ChannelType, RIGHTS } from '../../model'
-import { useAcl, useGroup, useModal, useRole, useChannel } from '../../store/index'
-import Select from '../../components/Select'
-import { Input } from '../../components/Input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/Table'
-import Checkbox from '../../components/CheckBox'
-import Button from '../../components/Button'
-import { Tabs } from '../../components/Tabs'
-
-
-
-
+import type { Component } from "solid-js";
+import { createSignal, createMemo, createEffect, For } from "solid-js";
+import { Hash, Volume2, X } from "lucide-solid";
+import { ChannelType, RIGHTS } from "../../model";
+import { useAcl, useGroup, useModal, useRole, useChannel } from "../../store/index";
+import { useToaster } from "../../components/Toaster";
+import Button from "../../components/Button";
+import { Tabs } from "../../components/Tabs";
+import { Input } from "../../components/Input";
+import Select from "../../components/Select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
+import Checkbox from "../../components/CheckBox";
 
 const CreateChannelModal: Component = () => {
-  const { addToast } = useToaster()
-  const [, aclActions] = useAcl()
-  const [, groupActions] = useGroup()
-  const [, modalActions] = useModal()
-  const [, roleActions] = useRole()
-  const [, channelActions] = useChannel()
+  const { addToast } = useToaster();
+  const [, aclActions] = useAcl();
+  const [, groupActions] = useGroup();
+  const [, modalActions] = useModal();
+  const [, roleActions] = useRole();
+  const [, channelActions] = useChannel();
 
-  const [name, setName] = createSignal('')
-  const [group, setGroup] = createSignal<number | null>(null)
-  const [type, setType] = createSignal<ChannelType>(ChannelType.Text)
-
-  const [roleRights, setRoleRights] = createSignal<Record<number, number>>({})
+  const [name, setName] = createSignal("");
+  const [group, setGroup] = createSignal<number | null>(null);
+  const [type, setType] = createSignal<ChannelType>(ChannelType.Text);
+  const [roleRights, setRoleRights] = createSignal<Record<number, number>>({});
 
   createEffect(() => {
-    const groupId = group()
+    const groupId = group();
     if (groupId === null) {
-      setRoleRights({})
-      return
+      setRoleRights({});
+      return;
     }
-    setRoleRights(Object.fromEntries(
-      roleActions.list()
-        .filter((role) => role.roleId > 2)
-        .map((role) => [role.roleId,
-        aclActions.getGroupRights(groupId, role.roleId) || 0,
-        ])
-    ))
-  })
+    setRoleRights(
+      Object.fromEntries(
+        roleActions.list()
+          .filter((role) => role.roleId > 2)
+          .map((role) => [
+            role.roleId,
+            aclActions.getGroupRights(groupId, role.roleId) || 0,
+          ])
+      )
+    );
+  });
 
   const tabItems = createMemo(() => [
     {
-      id: 'settings',
-      label: 'Channel Settings',
+      id: "general",
+      label: "General",
       content: (
-        <div class="space-y-4 mt-6">
+        <div class="space-y-4 mt-4">
           <Input label="Channel Name" value={name()} onChange={setName} />
           <Select
+            label="Channel Type"
             options={[
-              { value: ChannelType.Text, label: 'Text Channel' },
-              {
-                value: ChannelType.VoIP,
-                label: 'Voice Channel',
-              },
+              { value: ChannelType.Text, label: "Text Channel" },
+              { value: ChannelType.VoIP, label: "Voice Channel" },
             ]}
             value={type()}
             onChange={(value) => setType(value as ChannelType)}
+          />
+          <Select
+            label="Group"
+            options={groupActions.list().map((g) => ({
+              value: g.groupId,
+              label: g.groupName,
+            }))}
+            value={group()}
+            onChange={(value) => setGroup(value as number)}
           />
         </div>
       ),
     },
     {
-      id: 'rights',
-      label: 'Rights',
+      id: "permissions",
+      label: "Permissions",
       content: (
-        <div class="space-y-4 mt-6">
-          <div class="flex justify-between items-center">
-            <h3 class="text-lg font-semibold">Role Permissions</h3>
-          </div>
-          <Select
-            options={groupActions.list().map((group) => ({ value: group.groupId, label: group.groupName }))}
-            value={group()}
-            onChange={(value) => setGroup(value as number)}
-          />
-
+        <div class="mt-4">
           <Table>
             <TableHead>
               <TableRow>
@@ -93,15 +89,13 @@ const CreateChannelModal: Component = () => {
                 {(role) => (
                   <TableRow>
                     <TableCell>{role.roleName}</TableCell>
-
                     <For each={Object.values(RIGHTS)}>
                       {(right) => (
                         <TableCell align="center">
                           <Checkbox
                             checked={roleRights()[role.roleId] >= right}
-                            disabled={true}
-                            onChange={(_checked) => {
-                            }}
+                            disabled
+                            onChange={() => {}}
                           />
                         </TableCell>
                       )}
@@ -114,38 +108,37 @@ const CreateChannelModal: Component = () => {
         </div>
       ),
     },
-  ])
+  ]);
 
   const handleCreate = async () => {
-    if (!name().trim()) return
+    const trimmedName = name().trim();
+    if (!trimmedName) return;
 
-    const groupId = group()
+    const groupId = group();
     if (!groupId) {
-      addToast('No group selected', 'error')
-      return
+      addToast("Please select a group", "error");
+      return;
     }
 
-    const createResult = await channelActions.create(groupId, name().trim(), type())
+    const createResult = await channelActions.create(groupId, trimmedName, type());
 
     if (createResult.isErr()) {
-      addToast(`Failed to create channel: ${createResult.error}`, 'error')
-      return
+      addToast(`Failed to create channel: ${createResult.error}`, "error");
+      return;
     }
 
-    modalActions.close()
-  }
+    modalActions.close();
+  };
+
+  const ChannelIcon = type() === ChannelType.Text ? Hash : Volume2;
 
   return (
-    <div class="fixed inset-0 text-foreground bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-2xl font-bold mb-6 flex items-center">
-            {type() === ChannelType.Text ? (
-              <Hash class="w-6 h-6 mr-2" />
-            ) : (
-              <Volume2 class="w-6 h-6 mr-2" />
-            )}
-            Create New Channel
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
+            <ChannelIcon class="w-6 h-6" />
+            Create Channel
           </h2>
           <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
@@ -154,7 +147,7 @@ const CreateChannelModal: Component = () => {
 
         <Tabs items={tabItems()} />
 
-        <div class="mt-6 flex justify-end space-x-2">
+        <div class="mt-6 flex justify-end gap-2">
           <Button onClick={() => modalActions.close()} variant="secondary">
             Cancel
           </Button>
@@ -168,7 +161,7 @@ const CreateChannelModal: Component = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default CreateChannelModal
+export default CreateChannelModal;

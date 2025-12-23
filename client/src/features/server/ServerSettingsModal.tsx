@@ -410,19 +410,15 @@ const ServerSettingsModal: Component = () => {
                     min="1"
                   />
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-secondary-text mb-1">
-                    Role
-                  </label>
-                  <Select
-                    value={newInviteRoleId()}
-                    onChange={setNewInviteRoleId}
-                    options={roleActions.list().filter((role) => role.roleId != 1).map((role) => ({
-                      value: role.roleId.toString(),
-                      label: role.roleName,
-                    }))}
-                  />
-                </div>
+                <Select
+                  label="Role"
+                  value={newInviteRoleId()}
+                  onChange={setNewInviteRoleId}
+                  options={roleActions.list().filter((role) => role.roleId != 1).map((role) => ({
+                    value: role.roleId.toString(),
+                    label: role.roleName,
+                  }))}
+                />
               </div>
               <div class="mt-4">
                 <Button

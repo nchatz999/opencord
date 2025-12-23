@@ -1,11 +1,12 @@
 import type { Component } from "solid-js";
-import { createSignal, For } from "solid-js";
-import { X } from "lucide-solid";
+import { createSignal, createMemo, For } from "solid-js";
+import { Folder, X } from "lucide-solid";
 import { RIGHTS } from "../../model";
 import { useModal, useRole, useGroup, useAcl } from "../../store/index";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import { useToaster } from "../../components/Toaster";
+import { Tabs } from "../../components/Tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
 
@@ -16,7 +17,7 @@ const CreateGroupModal: Component = () => {
   const [, aclActions] = useAcl();
   const { addToast } = useToaster();
 
-  const [name, setName] = createSignal<string>("");
+  const [name, setName] = createSignal("");
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
     Object.fromEntries(
       roleActions.list()
@@ -25,54 +26,21 @@ const CreateGroupModal: Component = () => {
     )
   );
 
-  const handleSave = async () => {
-    if (!name().trim()) {
-      addToast("Please enter a group name", "error");
-      return;
-    }
-
-    const createResult = await groupActions.create(name().trim());
-
-    if (createResult.isErr()) {
-      addToast(`Error creating group: ${createResult.error}`, "error");
-      return;
-    }
-
-    const groupId = createResult.value.groupId;
-
-    for (const [roleId, right] of Object.entries(roleRights())) {
-      const aclResult = await aclActions.grant({
-        groupId,
-        roleId: Number(roleId),
-        rights: right,
-      });
-
-      if (aclResult.isErr()) {
-        addToast(`Failed to set group permissions: ${aclResult.error}`, "error");
-        return;
-      }
-    }
-
-    modalActions.close();
-  };
-
-  return (
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-foreground text-2xl font-bold">Create Group</h2>
-          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
-            <X class="w-6 h-6" />
-          </Button>
+  const tabItems = createMemo(() => [
+    {
+      id: "general",
+      label: "General",
+      content: (
+        <div class="space-y-4 mt-4">
+          <Input label="Group Name" value={name()} onChange={setName} />
         </div>
-        <Input
-          value={name()}
-          placeholder="Group Name"
-          onChange={setName}
-          class="mb-6"
-        />
-        <h3 class="text-foreground text-lg font-semibold mb-4">Permissions</h3>
-        <div class="overflow-auto max-h-80">
+      ),
+    },
+    {
+      id: "permissions",
+      label: "Permissions",
+      content: (
+        <div class="mt-4">
           <Table>
             <TableHead>
               <TableRow>
@@ -110,11 +78,66 @@ const CreateGroupModal: Component = () => {
             </TableBody>
           </Table>
         </div>
-        <div class="mt-6 flex justify-end space-x-2">
-          <Button variant="secondary" onClick={() => modalActions.close()}>
+      ),
+    },
+  ]);
+
+  const handleCreate = async () => {
+    const trimmedName = name().trim();
+    if (!trimmedName) {
+      addToast("Please enter a group name", "error");
+      return;
+    }
+
+    const createResult = await groupActions.create(trimmedName);
+
+    if (createResult.isErr()) {
+      addToast(`Failed to create group: ${createResult.error}`, "error");
+      return;
+    }
+
+    const groupId = createResult.value.groupId;
+
+    for (const [roleId, right] of Object.entries(roleRights())) {
+      const aclResult = await aclActions.grant({
+        groupId,
+        roleId: Number(roleId),
+        rights: right,
+      });
+
+      if (aclResult.isErr()) {
+        addToast(`Failed to set permissions: ${aclResult.error}`, "error");
+        return;
+      }
+    }
+
+    modalActions.close();
+  };
+
+  return (
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Folder class="w-6 h-6" />
+            Create Group
+          </h2>
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
+            <X class="w-6 h-6" />
+          </Button>
+        </div>
+
+        <Tabs items={tabItems()} />
+
+        <div class="mt-6 flex justify-end gap-2">
+          <Button onClick={() => modalActions.close()} variant="secondary">
             Cancel
           </Button>
-          <Button onClick={handleSave}>
+          <Button
+            disabled={!name().trim()}
+            onClick={handleCreate}
+            variant="primary"
+          >
             Create Group
           </Button>
         </div>

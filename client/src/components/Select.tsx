@@ -19,9 +19,9 @@ interface SelectProps {
   value: string | number | null;
   onChange: (value: string | number | null) => void;
   placeholder?: string;
+  label?: string;
   class?: string;
   dropdownClass?: string;
-
   zIndex?: number;
   position?: "absolute" | "fixed";
   maxHeight?: string;
@@ -115,6 +115,11 @@ export default function Select(props: SelectProps) {
   return (
     <>
       <div class={cn("relative", props.class)} ref={selectRef}>
+        <Show when={props.label}>
+          <label class="block mb-2 text-sm font-medium text-foreground">
+            {props.label}
+          </label>
+        </Show>
         <div
           class={cn(
             "flex items-center justify-between px-2 gap-2 py-2 bg-input text-foreground cursor-pointer",
@@ -161,7 +166,7 @@ export default function Select(props: SelectProps) {
           <For each={props.options}>
             {(option) => (
               <div
-                class="px-3 py-2 cursor-pointer hover:bg-primary-hover hover:text-primary-foreground transition-colors"
+                class="px-3 py-2 text-foreground cursor-pointer hover:bg-primary-hover hover:text-primary-foreground transition-colors"
                 onClick={() => handleSelect(option.value)}
                 role="option"
                 aria-selected={props.value === option.value}

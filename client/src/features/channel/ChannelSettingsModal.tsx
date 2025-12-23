@@ -23,7 +23,6 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
   const [, roleActions] = useRole();
   const [, channelActions] = useChannel();
 
-
   const [name, setName] = createSignal(props.channel.channelName);
   const [roleRights, setRoleRights] = createSignal<Record<number, number>>({});
 
@@ -39,70 +38,65 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
       )
     );
   });
+
   const tabItems = createMemo(() => [
     {
       id: "general",
       label: "General",
       content: (
-        <div class="space-y-4 mt-6">
+        <div class="space-y-4 mt-4">
           <Input label="Channel Name" value={name()} onChange={setName} />
         </div>
       ),
     },
     {
-      id: 'permissions',
-      label: 'Permissions',
+      id: "permissions",
+      label: "Permissions",
       content: (
-        <div class="h-full overflow-hidden flex flex-col h-96 mt-6">
-          <div class="flex-grow overflow-auto">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableHeader>
-                    Role / Channel
-                  </TableHeader>
-                  <For each={Object.entries(RIGHTS)}>
-                    {([key]) => <TableHeader align="center">{key}</TableHeader>}
-                  </For>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <For each={roleActions.list().filter((role) => role.roleId > 2)}>
-                  {(role) => (
-                    <TableRow>
-                      <TableCell>{role.roleName}</TableCell>
-
-                      <For each={Object.values(RIGHTS)}>
-                        {(right) => (
-                          <TableCell align="center">
-                            <Checkbox
-                              checked={
-                                roleRights()[role.roleId] >= (right as number)
-                              }
-                              disabled
-                              onChange={() => { }}
-                            />
-                          </TableCell>
-                        )}
-                      </For>
-                    </TableRow>
-                  )}
+        <div class="mt-4">
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeader>Role</TableHeader>
+                <For each={Object.entries(RIGHTS)}>
+                  {([key]) => <TableHeader align="center">{key}</TableHeader>}
                 </For>
-              </TableBody>
-            </Table>
-          </div>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              <For each={roleActions.list().filter((role) => role.roleId > 2)}>
+                {(role) => (
+                  <TableRow>
+                    <TableCell>{role.roleName}</TableCell>
+                    <For each={Object.values(RIGHTS)}>
+                      {(right) => (
+                        <TableCell align="center">
+                          <Checkbox
+                            checked={roleRights()[role.roleId] >= (right as number)}
+                            disabled
+                            onChange={() => {}}
+                          />
+                        </TableCell>
+                      )}
+                    </For>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </div>
       ),
-    }
+    },
   ]);
 
   const handleSave = async () => {
-    if (!name().trim()) return;
+    const trimmedName = name().trim();
+    if (!trimmedName) return;
 
-    if (name() !== props.channel.channelName) {
+    if (trimmedName !== props.channel.channelName) {
       const renameResult = await channelActions.rename(
         props.channel.channelId,
-        name().trim()
+        trimmedName
       );
 
       if (renameResult.isErr()) {
@@ -110,13 +104,14 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
         return;
       }
     }
+
     modalActions.close();
   };
 
   const handleDelete = async () => {
     const confirmed = await confirm({
       title: "Delete Channel",
-      message: `Are you sure you want to delete the channel "${name()}"?`,
+      message: `Are you sure you want to delete the channel "${props.channel.channelName}"?`,
       confirmText: "Delete",
       variant: "danger",
     });
@@ -132,33 +127,28 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
     modalActions.close();
   };
 
-  return (
-    <div class="fixed inset-0 bg-black text-foreground bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-2xl font-bold mb-6 flex items-center">
-            {props.channel.channelType === ChannelType.Text ? (
-              <Hash class="w-6 h-6 mr-2" />
-            ) : (
-              <Volume2 class="w-6 h-6 mr-2" />
-            )}
-            {props.channel.channelType} Channel Settings
-          </h2>
+  const ChannelIcon = props.channel.channelType === ChannelType.Text ? Hash : Volume2;
 
+  return (
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
+            <ChannelIcon class="w-6 h-6" />
+            Channel Settings
+          </h2>
           <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
 
         <Tabs items={tabItems()} />
+
         <div class="mt-6 flex justify-between items-center">
-          <Button
-            onClick={handleDelete}
-            variant="destructive"
-          >
+          <Button onClick={handleDelete} variant="destructive">
             Delete Channel
           </Button>
-          <div class="flex space-x-2">
+          <div class="flex gap-2">
             <Button onClick={() => modalActions.close()} variant="secondary">
               Cancel
             </Button>
