@@ -2,6 +2,7 @@ import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
 import { AudioPlayback, createSharedAudioContext } from "../lib/AudioPlayback";
 import { VideoPlayback } from "../lib/VideoPlayback";
+import { usePreference } from "./preference";
 
 export type MediaTypeKey = "voice" | "camera" | "screen" | "screenSound";
 type PlaybackKey = `${number}-${MediaTypeKey}`;
@@ -10,7 +11,6 @@ interface PlaybackStoreState {
   audio: AudioContext;
   playbacks: Map<PlaybackKey, AudioPlayback | VideoPlayback>;
   speakingStates: Record<number, boolean>;
-  volumePrefs: Record<string, number>;
 }
 
 interface PlaybackActions {
@@ -42,11 +42,12 @@ function createPlaybackStore(): PlaybackStore {
     audio: createSharedAudioContext(),
     playbacks: new Map(),
     speakingStates: {},
-    volumePrefs: {},
   });
 
+  const [, prefActions] = usePreference();
+
   const getVolumeKey = (userId: number, mediaType: "voice" | "screenSound") =>
-    `${userId}-${mediaType}`;
+    `volume:${userId}:${mediaType}`;
 
   const actions: PlaybackActions = {
     getAudioContext() {
@@ -71,14 +72,14 @@ function createPlaybackStore(): PlaybackStore {
       switch (mediaType) {
         case "voice": {
           const pb = new AudioPlayback(ctx, 200);
-          const vol = state.volumePrefs[getVolumeKey(userId, "voice")] ?? 100;
+          const vol = prefActions.get<number>(getVolumeKey(userId, "voice")) ?? 100;
           pb.setVolume(vol);
           playback = pb;
           break;
         }
         case "screenSound": {
           const pb = new AudioPlayback(ctx, 200);
-          const vol = state.volumePrefs[getVolumeKey(userId, "screenSound")] ?? 0;
+          const vol = prefActions.get<number>(getVolumeKey(userId, "screenSound")) ?? 0;
           pb.setVolume(vol);
           playback = pb;
           break;
@@ -113,13 +114,6 @@ function createPlaybackStore(): PlaybackStore {
         actions.destroyPlayback(userId, mediaType);
       }
       actions.clearSpeakingState(userId);
-      setState(
-        "volumePrefs",
-        produce((prefs) => {
-          delete prefs[getVolumeKey(userId, "voice")];
-          delete prefs[getVolumeKey(userId, "screenSound")];
-        })
-      );
     },
 
     streamMedia(userId, mediaType, packet, timestamp) {
@@ -154,7 +148,7 @@ function createPlaybackStore(): PlaybackStore {
     },
 
     adjustVolume(userId, volume) {
-      setState("volumePrefs", getVolumeKey(userId, "voice"), volume);
+      prefActions.set(getVolumeKey(userId, "voice"), volume);
       const playback = actions.getPlayback(userId, "voice");
       if (playback) {
         (playback as AudioPlayback).setVolume(volume);
@@ -166,11 +160,11 @@ function createPlaybackStore(): PlaybackStore {
       if (playback) {
         return (playback as AudioPlayback).volume();
       }
-      return state.volumePrefs[getVolumeKey(userId, "voice")] ?? 100;
+      return prefActions.get<number>(getVolumeKey(userId, "voice")) ?? 100;
     },
 
     adjustScreenAudio(userId, volume) {
-      setState("volumePrefs", getVolumeKey(userId, "screenSound"), volume);
+      prefActions.set(getVolumeKey(userId, "screenSound"), volume);
       const playback = actions.getPlayback(userId, "screenSound");
       if (playback) {
         (playback as AudioPlayback).setVolume(volume);
@@ -182,7 +176,7 @@ function createPlaybackStore(): PlaybackStore {
       if (playback) {
         return (playback as AudioPlayback).volume();
       }
-      return state.volumePrefs[getVolumeKey(userId, "screenSound")] ?? 0;
+      return prefActions.get<number>(getVolumeKey(userId, "screenSound")) ?? 0;
     },
   };
 

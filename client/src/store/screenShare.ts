@@ -1,8 +1,7 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { useConnection, type VoipPayload } from "./connection";
-import { useAuth } from "./auth";
 import { type QualityPreset, QUALITY_PRESETS, DEFAULT_PRESET } from "../model";
+import { usePreference } from "./preference";
 
 export interface ScreenShareConstraints {
   width?: number;
@@ -144,17 +143,26 @@ function stopStreamTracks(stream: MediaStream | null): void {
 }
 
 function createScreenShareStore(): ScreenShareStore {
+  const [, pref] = usePreference();
+
+  const savedPreset = pref.get<QualityPreset>("screen:preset") ?? DEFAULT_PRESET;
+  const presetConfig = QUALITY_PRESETS[savedPreset];
+
   const [state, setState] = createStore<ScreenShareState>({
     isRecording: false,
-    quality: DEFAULT_VIDEO_BITRATE,
-    preset: DEFAULT_PRESET,
+    quality: pref.get<number>("screen:quality") ?? DEFAULT_VIDEO_BITRATE,
+    preset: savedPreset,
   });
 
   const encodedVideoDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
   const encodedAudioDataCallbacks = new Set<(chunk: EncodedAudioChunk) => void>();
   const recordingStoppedCallbacks = new Set<() => void>();
 
-  let constraints = { ...DEFAULT_CONSTRAINTS };
+  let constraints: ScreenShareConstraints = {
+    ...DEFAULT_CONSTRAINTS,
+    width: presetConfig.width,
+    height: presetConfig.height,
+  };
   let stream: MediaStream | null = null;
   let videoProcessor: MediaStreamTrackProcessor<VideoFrame> | null = null;
   let videoEncoder: VideoEncoder | null = null;
@@ -163,9 +171,6 @@ function createScreenShareStore(): ScreenShareStore {
   let audioEncoder: AudioEncoder | null = null;
   let audioReader: ReadableStreamDefaultReader<AudioData> | null = null;
   let isProcessing = false;
-
-  const connection = useConnection();
-  const [, authActions] = useAuth();
 
   function notifyEncodedVideoData(chunk: EncodedVideoChunk): void {
     encodedVideoDataCallbacks.forEach((cb) => cb(chunk));
@@ -260,6 +265,7 @@ function createScreenShareStore(): ScreenShareStore {
 
     setQuality(quality) {
       setState("quality", quality);
+      pref.set("screen:quality", quality);
 
       if (videoEncoder?.state === "configured") {
         videoEncoder.configure({ ...DEFAULT_VIDEO_ENCODER_CONFIG, bitrate: quality });
@@ -277,6 +283,7 @@ function createScreenShareStore(): ScreenShareStore {
     setPreset(preset: QualityPreset) {
       const config = QUALITY_PRESETS[preset];
       setState("preset", preset);
+      pref.set("screen:preset", preset);
       this.setConstraints({
         width: config.width,
         height: config.height,

@@ -1,6 +1,7 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 import { createVADNode } from "../lib/Vad";
+import { usePreference } from "./preference";
 
 export interface MicrophoneConstraints {
   echoCancellation?: boolean;
@@ -147,13 +148,15 @@ function clampVolume(volume: number): number {
 }
 
 function createMicrophoneStore(): MicrophoneStore {
+  const [, pref] = usePreference();
+
   const [state, setState] = createStore<MicrophoneState>({
-    volume: DEFAULT_VOLUME,
-    deviceId: "",
+    volume: pref.get<number>("mic:volume") ?? DEFAULT_VOLUME,
+    deviceId: pref.get<string>("mic:deviceId") ?? "",
     isRecording: false,
     muted: false,
     availableInputs: [],
-    quality: DEFAULT_QUALITY,
+    quality: pref.get<number>("mic:quality") ?? DEFAULT_QUALITY,
   });
 
   const encodedDataCallbacks = new Set<(chunk: EncodedAudioChunk) => void>();
@@ -238,6 +241,7 @@ function createMicrophoneStore(): MicrophoneStore {
 
     async setDevice(deviceId) {
       setState("deviceId", deviceId);
+      pref.set("mic:deviceId", deviceId);
 
       if (state.isRecording) {
         await this.stop();
@@ -250,6 +254,7 @@ function createMicrophoneStore(): MicrophoneStore {
     setVolume(volume) {
       const clampedVolume = clampVolume(volume);
       setState("volume", clampedVolume);
+      pref.set("mic:volume", clampedVolume);
 
       if (gainNode) {
         gainNode.gain.value = clampedVolume / 100;
@@ -260,6 +265,7 @@ function createMicrophoneStore(): MicrophoneStore {
 
     setQuality(quality) {
       setState("quality", quality);
+      pref.set("mic:quality", quality);
 
       if (encoder?.state === "configured") {
         encoder.configure({ ...DEFAULT_ENCODER_CONFIG, bitrate: quality } as AudioEncoderConfig);

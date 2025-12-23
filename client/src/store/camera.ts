@@ -1,8 +1,7 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { useConnection, type VoipPayload } from "./connection";
-import { useAuth } from "./auth";
 import { type QualityPreset, QUALITY_PRESETS, DEFAULT_PRESET } from "../model";
+import { usePreference } from "./preference";
 
 export interface CameraConstraints {
   width?: number;
@@ -113,23 +112,29 @@ function stopStreamTracks(stream: MediaStream | null): void {
 }
 
 function createCameraStore(): CameraStore {
+  const [, pref] = usePreference();
+
+  const savedPreset = pref.get<QualityPreset>("camera:preset") ?? DEFAULT_PRESET;
+  const presetConfig = QUALITY_PRESETS[savedPreset];
+
   const [state, setState] = createStore<CameraState>({
     isRecording: false,
-    quality: DEFAULT_BITRATE,
-    preset: DEFAULT_PRESET,
+    quality: pref.get<number>("camera:quality") ?? DEFAULT_BITRATE,
+    preset: savedPreset,
   });
 
   const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
   const recordingStoppedCallbacks = new Set<() => void>();
-  let constraints = { ...DEFAULT_CONSTRAINTS };
+  let constraints: CameraConstraints = {
+    ...DEFAULT_CONSTRAINTS,
+    width: presetConfig.width,
+    height: presetConfig.height,
+  };
   let stream: MediaStream | null = null;
   let processor: MediaStreamTrackProcessor<VideoFrame> | null = null;
   let encoder: VideoEncoder | null = null;
   let reader: ReadableStreamDefaultReader<VideoFrame> | null = null;
   let isProcessing = false;
-
-  const connection = useConnection();
-  const [, authActions] = useAuth();
 
   function notifyEncodedData(chunk: EncodedVideoChunk): void {
     encodedDataCallbacks.forEach((cb) => cb(chunk));
@@ -189,6 +194,7 @@ function createCameraStore(): CameraStore {
 
     setQuality(quality) {
       setState("quality", quality);
+      pref.set("camera:quality", quality);
 
       if (encoder?.state === "configured") {
         encoder.configure({ ...DEFAULT_ENCODER_CONFIG, bitrate: quality });
@@ -204,6 +210,7 @@ function createCameraStore(): CameraStore {
     setPreset(preset: QualityPreset) {
       const config = QUALITY_PRESETS[preset];
       setState("preset", preset);
+      pref.set("camera:preset", preset);
       this.setConstraints({
         width: config.width,
         height: config.height,
