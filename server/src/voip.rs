@@ -99,6 +99,11 @@ pub trait VoipTransaction: Send + Sync {
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
+    async fn remove_all_subscriptions(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError>;
+
     async fn set_publish_screen(
         &mut self,
         user_id: i64,
@@ -207,20 +212,13 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
 
         let mut tx = self.repository.begin().await?;
 
-        let _ = tx.remove_participant(user_id).await;
-
-        let _ = self
-            .logger
-            .log_entry(
-                format!("Left VoIP: user_id={}, session_id={}", user_id, session_id),
-                "voip".to_string(),
-            )
-            .await;
-
         let participant = tx
             .create_channel_voip_participant(user_id, channel_id, local_mute, local_deafen)
             .await
             .map_err(|e| match &e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    DomainError::BadRequest("Already in VoIP - leave first".to_string())
+                }
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
                     "channel_id" => {
                         DomainError::BadRequest(format!("Channel {} not found", channel_id))
@@ -278,20 +276,13 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
 
         let mut tx = self.repository.begin().await?;
 
-        let _ = tx.remove_participant(user_id).await;
-
-        let _ = self
-            .logger
-            .log_entry(
-                format!("Left VoIP: user_id={}, session_id={}", user_id, session_id),
-                "voip".to_string(),
-            )
-            .await;
-
         let participant = tx
             .create_private_voip_participant(user_id, recipient_user_id, local_mute, local_deafen)
             .await
             .map_err(|e| match &e {
+                DatabaseError::UniqueConstraintViolation { .. } => {
+                    DomainError::BadRequest("Already in VoIP - leave first".to_string())
+                }
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
                     "recipient_id" => {
                         DomainError::BadRequest(format!("User {} not found", recipient_user_id))
@@ -340,15 +331,38 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
     pub async fn leave_voip(&self, user_id: i64, session_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let _ = tx
-            .remove_participant(user_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!(
-                "Participant {} not found",
-                user_id
-            )))?;
+        let subscriptions = tx.remove_all_subscriptions(user_id).await?;
+        let participant = tx.remove_participant(user_id).await?;
 
         self.repository.commit(tx).await?;
+
+        if participant.is_none() {
+            return Ok(());
+        }
+
+        for subscription in subscriptions {
+            let event = EventPayload::MediaUnsubscription {
+                subscription: subscription.clone(),
+            };
+            let _ = self
+                .notifier
+                .notify(ServerMessage::Control(
+                    event.clone(),
+                    ControlRoutingPolicy::User {
+                        user_id: subscription.user_id,
+                    },
+                ))
+                .await;
+            let _ = self
+                .notifier
+                .notify(ServerMessage::Control(
+                    event,
+                    ControlRoutingPolicy::User {
+                        user_id: subscription.publisher_id,
+                    },
+                ))
+                .await;
+        }
 
         let event = EventPayload::VoipParticipantDeleted { user_id };
         let _ = self
@@ -378,13 +392,14 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
     ) -> Result<VoipParticipant, DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let participant = tx
-            .remove_participant(target_user_id)
-            .await?
-            .ok_or(DomainError::BadRequest(format!(
-                "Participant {} not found",
-                target_user_id
-            )))?;
+        let subscriptions = tx.remove_all_subscriptions(target_user_id).await?;
+        let participant =
+            tx.remove_participant(target_user_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "Participant {} not found",
+                    target_user_id
+                )))?;
 
         let channel_id = participant.channel_id.ok_or(DomainError::PermissionDenied(
             "Cannot kick from private VoIP".to_string(),
@@ -429,6 +444,30 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
         }
 
         self.repository.commit(tx).await?;
+
+        for subscription in subscriptions {
+            let event = EventPayload::MediaUnsubscription {
+                subscription: subscription.clone(),
+            };
+            let _ = self
+                .notifier
+                .notify(ServerMessage::Control(
+                    event.clone(),
+                    ControlRoutingPolicy::User {
+                        user_id: subscription.user_id,
+                    },
+                ))
+                .await;
+            let _ = self
+                .notifier
+                .notify(ServerMessage::Control(
+                    event,
+                    ControlRoutingPolicy::User {
+                        user_id: subscription.publisher_id,
+                    },
+                ))
+                .await;
+        }
 
         let event = EventPayload::VoipParticipantDeleted {
             user_id: target_user_id,
@@ -900,6 +939,23 @@ impl VoipTransaction for PgVoipTransaction {
         .await?;
 
         Ok(participant)
+    }
+
+    async fn remove_all_subscriptions(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError> {
+        let subscriptions = sqlx::query_as!(
+            Subscription,
+            r#"DELETE FROM subscriptions
+               WHERE user_id = $1 OR publisher_id = $1
+               RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
+            user_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+
+        Ok(subscriptions)
     }
 
     async fn set_publish_screen(

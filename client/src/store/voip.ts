@@ -160,6 +160,12 @@ function createVoipStore(): VoipStore {
     },
 
     async joinChannel(channelId, muted, deafened) {
+      for (const participant of state.voipState) {
+        playbackActions.cleanupForUser(participant.userId);
+      }
+
+      await request("/voip/leave", { method: "POST" });
+
       const result = await request(`/voip/channel/${channelId}/join/${muted}/${deafened}`, {
         method: "POST",
       });
@@ -170,6 +176,12 @@ function createVoipStore(): VoipStore {
     },
 
     async joinPrivate(userId, muted, deafened) {
+      for (const participant of state.voipState) {
+        playbackActions.cleanupForUser(participant.userId);
+      }
+
+      await request("/voip/leave", { method: "POST" });
+
       const result = await request(`/voip/private/${userId}/join/${muted}/${deafened}`, {
         method: "POST",
       });

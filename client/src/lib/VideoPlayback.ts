@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { MinHeap } from 'opencord-utils';
+import { MinHeap, timerManager } from 'opencord-utils';
 
 interface BufferItem {
   timestamp: number;
@@ -49,7 +49,7 @@ export class VideoPlayback {
     this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
 
-    this.bufferInterval = window.setInterval(() => {
+    this.bufferInterval = timerManager.setInterval(() => {
       this.processBuffer();
     }, 10);
   }
@@ -115,7 +115,7 @@ export class VideoPlayback {
   cleanup() {
 
     if (this.bufferInterval !== null) {
-      window.clearInterval(this.bufferInterval);
+      timerManager.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
     }
 

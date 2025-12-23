@@ -1,5 +1,5 @@
 import { createSignal, createEffect } from 'solid-js';
-import { MinHeap } from 'opencord-utils';
+import { MinHeap, timerManager } from 'opencord-utils';
 
 interface BufferItem {
   timestamp: number;
@@ -199,7 +199,7 @@ export class AudioPlayback {
       this.workletNode.connect(this.gainNode);
 
 
-      this.bufferInterval = window.setInterval(() => {
+      this.bufferInterval = timerManager.setInterval(() => {
         this.processBuffer();
       }, 10);
 
@@ -299,7 +299,7 @@ export class AudioPlayback {
 
   cleanup() {
     if (this.bufferInterval !== null) {
-      window.clearInterval(this.bufferInterval);
+      timerManager.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
     }
 

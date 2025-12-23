@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { Show } from "solid-js";
 import { Hash } from "lucide-solid";
-import { useChannel, useGroup, useUser } from "../../store/index";
+import { useAuth, useChannel, useGroup, useUser } from "../../store/index";
 import { getStatusColor } from "../../utils";
 import Avatar from "../../components/Avatar";
 
@@ -12,9 +12,11 @@ const ChatHeader: Component<{
     id: number;
   };
 }> = (props) => {
+  const [, authActions] = useAuth();
   const [, channelActions] = useChannel();
   const [, groupActions] = useGroup();
   const [, userActions] = useUser();
+  const currentUser = () => authActions.getUser();
 
   return (
     <div>
@@ -22,9 +24,7 @@ const ChatHeader: Component<{
         <Show when={userActions.findById(props.context.id)}>
           {(user) => (
             <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background shrink-0">
-              {}
               <div class="relative flex items-center">
-                {}
                 <div class="relative">
                   <Avatar
                     avatarFileId={user().avatarFileId}
@@ -37,20 +37,16 @@ const ChatHeader: Component<{
                   />
                 </div>
 
-                {}
-                <Show when={user().avatarFileId}>
-                  <div class="relative -ml-3 z-10">
-                    <Avatar
-                      avatarFileId={user().avatarFileId}
-                      alt="You"
-                      size="sm"
-                      class="border-2 border-background"
-                    />
-                  </div>
-                </Show>
+                <div class="relative -ml-3 z-10">
+                  <Avatar
+                    avatarFileId={currentUser().avatarFileId}
+                    alt="You"
+                    size="sm"
+                    class="border-2 border-background"
+                  />
+                </div>
               </div>
 
-              {}
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <h2 class="text-foreground font-semibold truncate">
@@ -61,8 +57,6 @@ const ChatHeader: Component<{
                   </span>
                 </div>
               </div>
-
-              {}
               <div class="flex items-center gap-2">
                 <div
                   class="w-2 h-2 bg-link rounded-full"
@@ -82,8 +76,6 @@ const ChatHeader: Component<{
               <div class="text-muted-foreground">
                 <Hash size={20} />
               </div>
-
-              {}
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <h2 class="text-foreground font-semibold truncate">
@@ -98,10 +90,7 @@ const ChatHeader: Component<{
                   </Show>
                 </div>
               </div>
-
-              {}
               <div class="flex items-center gap-2">
-                {}
               </div>
             </div>
           )}
