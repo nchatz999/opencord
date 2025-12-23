@@ -106,7 +106,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
               <TableRow>
                 <TableHeader>Role</TableHeader>
                 <For each={Object.entries(RIGHTS)}>
-                  {([key]) => <TableHeader>{key}</TableHeader>}
+                  {([key]) => <TableHeader align="center">{key}</TableHeader>}
                 </For>
               </TableRow>
             </TableHead>
@@ -117,7 +117,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
                     <TableCell>{role.roleName}</TableCell>
                     <For each={Object.values(RIGHTS)}>
                       {(right) => (
-                        <TableCell>
+                        <TableCell align="center">
                           <Checkbox
                             checked={roleRights()[role.roleId] >= (right as number)}
                             onChange={(checked) => {

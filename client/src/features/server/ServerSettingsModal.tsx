@@ -303,15 +303,15 @@ const ServerSettingsModal: Component = () => {
               <TableHead>
                 <TableRow>
                   <TableHeader>User</TableHeader>
-                  <TableHeader>Role</TableHeader>
-                  <TableHeader class="text-center">Actions</TableHeader>
+                  <TableHeader align="center">Role</TableHeader>
+                  <TableHeader align="center">Actions</TableHeader>
                 </TableRow>
               </TableHead>
               <TableBody>
                 <For each={filteredUsers()}>
                   {(user) => (
                     <TableRow class="hover:bg-muted">
-                      <TableCell class="text-center">
+                      <TableCell>
                         <div class="flex items-center space-x-3">
                           <img
                             src={`/user/${user.avatarFileId}/avatar`}
@@ -321,7 +321,7 @@ const ServerSettingsModal: Component = () => {
                           <span class="font-medium">{user.username}</span>
                         </div>
                       </TableCell>
-                      <TableCell class="text-center">
+                      <TableCell align="center">
                         <Select
                           value={user.roleId}
                           onChange={async (roleId) => {
@@ -337,7 +337,7 @@ const ServerSettingsModal: Component = () => {
                           class="min-w-[120px]"
                         />
                       </TableCell>
-                      <TableCell class="text-center">
+                      <TableCell align="center">
                         <Button
                           variant="destructive"
                           disabled={user.roleId === 1 || !isAdmin()}
@@ -457,10 +457,10 @@ const ServerSettingsModal: Component = () => {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableHeader class="text-center">Code</TableHeader>
-                      <TableHeader class="text-center">Uses Left</TableHeader>
-                      <TableHeader class="text-center">Role</TableHeader>
-                      <TableHeader class="text-center">Actions</TableHeader>
+                      <TableHeader>Code</TableHeader>
+                      <TableHeader align="center">Uses Left</TableHeader>
+                      <TableHeader align="center">Role</TableHeader>
+                      <TableHeader align="center">Actions</TableHeader>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -481,7 +481,7 @@ const ServerSettingsModal: Component = () => {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell class="text-center">
+                          <TableCell align="center">
                             <span class={`px-2 py-1 rounded text-xs font-medium ${invite.availableRegistrations > 0
                               ? 'bg-success/20 text-success'
                               : 'bg-destructive/20 text-destructive'
@@ -489,12 +489,12 @@ const ServerSettingsModal: Component = () => {
                               {invite.availableRegistrations}
                             </span>
                           </TableCell>
-                          <TableCell class="text-center">
+                          <TableCell align="center">
                             <span class="px-2 py-1 rounded text-xs font-medium bg-link/20 text-link">
                               {roleActions.findById(invite.roleId)?.roleName || 'Unknown'}
                             </span>
                           </TableCell>
-                          <TableCell class="text-center">
+                          <TableCell align="center">
                             <Button
                               onClick={() => deleteInvite(invite.inviteId)}
                               variant='destructive'

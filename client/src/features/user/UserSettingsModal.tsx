@@ -510,7 +510,7 @@ const UserSettingsModal: Component = () => {
                     <TableHeader>Session</TableHeader>
                     <TableHeader>Created</TableHeader>
                     <TableHeader>Expires</TableHeader>
-                    <TableHeader >Actions</TableHeader>
+                    <TableHeader align="center">Actions</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -543,7 +543,7 @@ const UserSettingsModal: Component = () => {
                             {formatDate(session.expiresAt)}
                           </Show>
                         </TableCell>
-                        <TableCell >
+                        <TableCell align="center">
                           <button
                             onClick={() => terminateSession(session.sessionToken)}
                             disabled={isCurrentSession(session.sessionToken)}

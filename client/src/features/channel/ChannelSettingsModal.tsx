@@ -58,11 +58,11 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableHeader class="sticky left-0 z-20">
+                  <TableHeader>
                     Role / Channel
                   </TableHeader>
                   <For each={Object.entries(RIGHTS)}>
-                    {([key]) => <TableHeader>{key}</TableHeader>}
+                    {([key]) => <TableHeader align="center">{key}</TableHeader>}
                   </For>
                 </TableRow>
               </TableHead>
@@ -74,7 +74,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
 
                       <For each={Object.values(RIGHTS)}>
                         {(right) => (
-                          <TableCell>
+                          <TableCell align="center">
                             <Checkbox
                               checked={
                                 roleRights()[role.roleId] >= (right as number)

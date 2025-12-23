@@ -38,9 +38,9 @@ const CreateRoleModal: Component = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableHeader>group</TableHeader>
+                <TableHeader>Group</TableHeader>
                 <For each={Object.keys(RIGHTS)}>
-                  {(right) => <TableHeader>{right}</TableHeader>}
+                  {(right) => <TableHeader align="center">{right}</TableHeader>}
                 </For>
               </TableRow>
             </TableHead>
@@ -52,7 +52,7 @@ const CreateRoleModal: Component = () => {
 
                     <For each={Object.values(RIGHTS)}>
                       {(right) => (
-                        <TableCell>
+                        <TableCell align="center">
                           <Checkbox
                             checked={
                               groupRights()[group.groupId] >= (right as number)

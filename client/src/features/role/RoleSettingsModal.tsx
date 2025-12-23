@@ -98,7 +98,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
                 <TableRow>
                   <TableHeader>Group</TableHeader>
                   <For each={Object.keys(RIGHTS)}>
-                    {(right) => <TableHeader>{right}</TableHeader>}
+                    {(right) => <TableHeader align="center">{right}</TableHeader>}
                   </For>
                 </TableRow>
               </TableHead>
@@ -110,7 +110,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
 
                       <For each={Object.values(RIGHTS)}>
                         {(right) => (
-                          <TableCell>
+                          <TableCell align="center">
                             <Checkbox
                               disabled={true}
                               checked={

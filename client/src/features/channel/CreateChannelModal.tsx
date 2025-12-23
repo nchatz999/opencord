@@ -84,7 +84,7 @@ const CreateChannelModal: Component = () => {
               <TableRow>
                 <TableHeader>Role</TableHeader>
                 <For each={Object.keys(RIGHTS)}>
-                  {(right) => <TableHeader>{right}</TableHeader>}
+                  {(right) => <TableHeader align="center">{right}</TableHeader>}
                 </For>
               </TableRow>
             </TableHead>
@@ -96,7 +96,7 @@ const CreateChannelModal: Component = () => {
 
                     <For each={Object.values(RIGHTS)}>
                       {(right) => (
-                        <TableCell>
+                        <TableCell align="center">
                           <Checkbox
                             checked={roleRights()[role.roleId] >= right}
                             disabled={true}
