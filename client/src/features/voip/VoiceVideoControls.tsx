@@ -104,12 +104,10 @@ const VoiceVideoControls: Component = () => {
         <Show when={currentVoip()}>
           {(voip) => (
             <Button
-              variant='ghost'
+              variant={voip().publishScreen ? "success" : "secondary"}
+              size="sm"
+              class="p-2"
               onClick={() => handleScreenShare(voip().publishScreen)}
-              class={`p-2 rounded transition-colors ${voip().publishScreen
-                ? 'bg-action-positive hover:bg-action-positive-hover text-primary-foreground'
-                : 'bg-muted hover:bg-accent text-foreground'
-                }`}
               title={voip().publishScreen ? 'Stop Screen Share' : 'Share Screen'}
             >
               <Show when={voip().publishScreen} fallback={<MonitorOff size={16} />}>
@@ -123,30 +121,31 @@ const VoiceVideoControls: Component = () => {
       <Show when={isChromiumBased()}>
         <Show when={currentVoip()}>
           {(voip) => (
-            <button
+            <Button
+              variant={voip().publishCamera ? "success" : "secondary"}
+              size="sm"
+              class="p-2"
               onClick={() => handleCamera(voip().publishCamera)}
-              class={`p-2 rounded transition-colors ${voip().publishCamera
-                ? 'bg-action-positive hover:bg-action-positive-hover text-primary-foreground'
-                : 'bg-muted hover:bg-accent text-foreground'
-                }`}
               title={voip().publishCamera ? 'Turn Off Camera' : 'Turn On Camera'}
             >
               <Show when={voip().publishCamera} fallback={<VideoOff size={16} />}>
                 <Video size={16} />
               </Show>
-            </button>
+            </Button>
           )}
         </Show>
       </Show>
 
       <Show when={currentVoip()}>
-        <button
+        <Button
           onClick={handleLeaveCall}
-          class="p-2 bg-destructive hover:bg-destructive-hover text-destructive-foreground rounded transition-colors"
+          variant="destructive"
+          size="sm"
+          class="p-2"
           title="Leave Voice Channel"
         >
           <PhoneOff size={16} />
-        </button>
+        </Button>
       </Show>
     </div>
   )

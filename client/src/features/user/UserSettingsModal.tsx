@@ -218,13 +218,14 @@ const UserSettingsModal: Component = () => {
                   alt="Avatar"
                   size="xl"
                 />
-                <button
-                  type="button"
+                <Button
                   onClick={() => fileInputRef?.click()}
-                  class="absolute bottom-0 right-0 bg-primary p-2 rounded-full hover:bg-primary-hover transition-colors"
+                  variant="primary"
+                  size="sm"
+                  class="absolute bottom-0 right-0 p-2 rounded-full"
                 >
-                  <Upload class="w-4 h-4 text-primary-foreground" />
-                </button>
+                  <Upload class="w-4 h-4" />
+                </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -525,14 +526,16 @@ const UserSettingsModal: Component = () => {
                           </Show>
                         </TableCell>
                         <TableCell align="center">
-                          <button
+                          <Button
                             onClick={() => terminateSession(session.sessionToken)}
                             disabled={isCurrentSession(session.sessionToken)}
-                            class="p-2 hover:bg-destructive/20 text-destructive hover:text-destructive rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            variant="ghost"
+                            size="sm"
+                            class="p-2 hover:bg-destructive/20 text-destructive hover:text-destructive"
                             title={isCurrentSession(session.sessionToken) ? "Cannot terminate current session" : "Terminate session"}
                           >
                             <Trash2 class="w-4 h-4" />
-                          </button>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )}
@@ -557,16 +560,16 @@ const UserSettingsModal: Component = () => {
   ]);
 
   return (
-    <div class="fixed inset-0 bg-black text-foreground bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-popover rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-popover text-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
           <h2 class="text-2xl font-bold">User Settings</h2>
           <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />
           </Button>
         </div>
         <Tabs items={tabItems()} />
-        <div class="mt-6 flex justify-end space-x-2">
+        <div class="mt-6 flex justify-end gap-2">
           <Button onClick={async () => {
             await microphoneActions.stop();
             await cameraActions.stop();

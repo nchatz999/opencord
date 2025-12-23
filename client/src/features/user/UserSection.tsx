@@ -2,6 +2,7 @@ import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, HeadphoneOff, Settings, Circle } from 'lucide-solid'
 import Avatar from '../../components/Avatar'
+import Button from '../../components/Button'
 import { useAuth, useVoip, useModal, useMicrophone, useOutput } from '../../store/index'
 import { getStatusColor } from '../../utils'
 
@@ -55,40 +56,40 @@ const UserSection: Component = () => {
       </div>
 
       <div class="flex items-center gap-1">
-        <button
+        <Button
           onClick={handleMuteToggle}
-          class={`p-2 rounded transition-colors ${microphoneActions.getMuted()
-            ? 'bg-destructive hover:bg-destructive-hover text-destructive-foreground'
-            : 'bg-muted hover:bg-accent text-foreground'
-            }`}
+          variant={microphoneActions.getMuted() ? "destructive" : "secondary"}
+          size="sm"
+          class="p-2"
           title={microphoneActions.getMuted() ? 'Unmute' : 'Mute'}
         >
           <Show when={microphoneActions.getMuted()} fallback={<Mic size={16} />}>
             <MicOff size={16} />
           </Show>
-        </button>
+        </Button>
 
-        <button
+        <Button
           onClick={handleDeafenToggle}
-          class={`p-2 rounded transition-colors ${outputActions.getDeafened()
-            ? 'bg-destructive hover:bg-destructive-hover text-destructive-foreground'
-            : 'bg-muted hover:bg-accent text-foreground'
-            }`}
+          variant={outputActions.getDeafened() ? "destructive" : "secondary"}
+          size="sm"
+          class="p-2"
           title={outputActions.getDeafened() ? 'Undeafen' : 'Deafen'}
         >
           <Show when={outputActions.getDeafened()} fallback={<Headphones size={16} />}>
             <HeadphoneOff size={16} />
           </Show>
-        </button>
+        </Button>
       </div>
 
-      <button
+      <Button
         onClick={handleUserSettings}
-        class="p-2 bg-muted hover:bg-accent text-foreground rounded transition-colors"
+        variant="secondary"
+        size="sm"
+        class="p-2"
         title="User Settings"
       >
         <Settings size={16} />
-      </button>
+      </Button>
     </div>
   )
 }

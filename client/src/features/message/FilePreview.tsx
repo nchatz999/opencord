@@ -1,6 +1,7 @@
 import type { Component } from "solid-js";
 import { createSignal, createEffect, onCleanup } from "solid-js";
 import { Trash2, FileText, Video } from "lucide-solid";
+import Button from "../../components/Button";
 
 interface FilePreviewProps {
   file: File;
@@ -31,14 +32,16 @@ const FilePreview: Component<FilePreviewProps> = (props) => {
 
   return (
     <div class="relative bg-sidebar rounded-lg overflow-hidden group">
-      <button
-        class="absolute top-2 right-2 z-10 p-1.5 bg-background rounded opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+      <Button
+        variant="ghost"
+        size="sm"
+        class="absolute top-2 right-2 z-10 p-1.5 bg-background opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={props.onRemove}
         disabled={props.disabled}
         title="Remove file"
       >
         <Trash2 class="text-destructive" size={16} />
-      </button>
+      </Button>
 
       {isImage() && imageUrl() ? (
         <div class="w-44 h-44 relative">

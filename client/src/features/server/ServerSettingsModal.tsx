@@ -252,12 +252,14 @@ const ServerSettingsModal: Component = () => {
                     )}
                   </Show>
                   <Show when={isAdmin()}>
-                    <button
+                    <Button
                       onClick={() => avatarInputRef?.click()}
-                      class="absolute bottom-0 right-0 bg-primary hover:bg-primary-hover rounded-full p-1.5 transition-colors disabled:opacity-50"
+                      variant="primary"
+                      size="sm"
+                      class="absolute bottom-0 right-0 rounded-full p-1.5"
                     >
-                      <Upload class="w-4 h-4 text-primary-foreground" />
-                    </button>
+                      <Upload class="w-4 h-4" />
+                    </Button>
                   </Show>
                   <input
                     ref={avatarInputRef}
@@ -629,9 +631,9 @@ const ServerSettingsModal: Component = () => {
   setTimeout(() => handleModalOpen(), 100);
 
   return (
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div class="bg-popover text-primary-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-center mb-6">
           <h2 class="text-2xl font-bold">Server Settings</h2>
           <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
             <X class="w-6 h-6" />

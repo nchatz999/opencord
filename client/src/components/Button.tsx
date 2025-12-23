@@ -2,7 +2,7 @@ import { mergeProps, createSignal, Show, type Component, type JSX } from "solid-
 import { cn } from "../utils";
 
 interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "destructive";
+  variant?: "primary" | "secondary" | "ghost" | "destructive" | "success";
   children: JSX.Element;
   size?: "sm" | "md" | "lg";
   fullWidth?: boolean;
@@ -37,6 +37,7 @@ const Button: Component<ButtonProps> = (props) => {
     secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover focus:ring-secondary",
     ghost: "bg-transparent text-foreground hover:bg-secondary hover:text-primary-foreground focus:ring-secondary",
     destructive: "bg-destructive text-destructive-foreground hover:bg-destructive-hover focus:ring-destructive",
+    success: "bg-action-positive text-primary-foreground hover:bg-action-positive-hover focus:ring-action-positive",
   };
 
   const sizeStyles = {

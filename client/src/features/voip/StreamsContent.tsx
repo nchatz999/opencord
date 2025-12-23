@@ -181,20 +181,24 @@ const StreamsContent: Component = () => {
                   {stream().mediaType === MediaType.Camera ? "Camera" : "Screen Share"}
                 </span>
                 <div class="flex items-center gap-2">
-                  <button
-                    class="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="p-1.5 text-muted-foreground hover:text-foreground"
                     onClick={() => setIsModalFullscreen((prev) => !prev)}
                     title={isModalFullscreen() ? "Exit fullscreen" : "Fullscreen"}
                   >
                     {isModalFullscreen() ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                  </button>
-                  <button
-                    class="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="p-1.5 text-muted-foreground hover:text-foreground"
                     onClick={closeStreamModal}
                     title="Close"
                   >
                     <X size={18} />
-                  </button>
+                  </Button>
                 </div>
               </div>
 

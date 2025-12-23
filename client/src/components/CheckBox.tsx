@@ -49,7 +49,7 @@ export const Checkbox: Component<CheckboxProps> = (props) => {
       <Show when={merged.label}>
         <span
           class={cn(
-            "ml-2 text-sm font-medium text-dis-white",
+            "ml-2 text-sm font-medium text-foreground",
             merged.disabled && "opacity-50"
           )}
         >
