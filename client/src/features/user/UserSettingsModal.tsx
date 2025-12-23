@@ -28,6 +28,7 @@ import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
 import Slider from "../../components/Slider";
+import Avatar from "../../components/Avatar";
 import { Tabs } from "../../components/Tabs";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../components/Table";
 import { UserStatusType, type Session } from "../../model";
@@ -212,10 +213,10 @@ const UserSettingsModal: Component = () => {
             </h3>
             <div class="flex flex-col items-center space-y-3">
               <div class="relative w-24 h-24">
-                <img
-                  src={`/user/${user().avatarFileId}/avatar`}
+                <Avatar
+                  avatarFileId={user().avatarFileId}
                   alt="Avatar"
-                  class="w-24 h-24 rounded-full object-cover"
+                  size="xl"
                 />
                 <button
                   type="button"

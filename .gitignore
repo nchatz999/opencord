@@ -47,9 +47,8 @@ target/
 .sqlx/
 **/.sqlx/
 
-# Uploads and user data (except default avatar)
-server/avatars/*
-!server/avatars/1
+# Uploads and user data
+server/avatars/
 server/files/
 
 # Certificates (generated)

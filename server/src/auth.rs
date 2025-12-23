@@ -577,7 +577,7 @@ impl AuthTransaction for PgAuthTransaction {
         let result = sqlx::query_as!(
             User,
             r#"INSERT INTO users (username, avatar_file_id, role_id)
-               VALUES ($1, 1, $2)
+               VALUES ($1, NULL, $2)
                RETURNING
                    user_id,
                    username,

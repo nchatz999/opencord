@@ -1,5 +1,6 @@
 import { type Component } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
+import Avatar from "../../components/Avatar";
 import { UserStatusType, type User } from "../../model";
 import { useVoip, usePlayback, useContext, useAuth, useMicrophone, useScreenShare, useCamera } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
@@ -82,12 +83,11 @@ export const UserEntry: Component<{ user: User; }> = (
         }`}
     >
       <div class="relative shrink-0">
-        <img
-          src={`/user/${props.user.avatarFileId}/avatar`}
+        <Avatar
+          avatarFileId={props.user.avatarFileId}
           alt={props.user.username}
-          class="w-8 h-8 rounded-full"
+          size="sm"
         />
-
         <div
           class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-sidebar ${statusColors[props.user.status || UserStatusType.Offline] ||
             "bg-status-offline"

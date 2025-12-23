@@ -10,6 +10,7 @@ import Button from "../../components/Button";
 import { Tabs } from "../../components/Tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
+import Avatar from "../../components/Avatar";
 
 interface RoleSettingsModalProps {
   role: Role;
@@ -69,10 +70,10 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
             <For each={filteredUsers()}>
               {(user) => (
                 <li class="flex items-center gap-2 bg-muted p-2 rounded">
-                  <img
-                    src={`/user/${user.avatarFileId}/avatar`}
+                  <Avatar
+                    avatarFileId={user.avatarFileId}
                     alt={user.username}
-                    class="w-8 h-8 rounded-full"
+                    size="sm"
                   />
                   <span class="text-foreground">{user.username}</span>
                 </li>

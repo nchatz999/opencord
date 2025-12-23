@@ -2,6 +2,7 @@ import type { Component } from "solid-js";
 import { createSignal, createMemo, Show, For } from "solid-js";
 import FileItem from "./File";
 import { Edit2Icon, ReplyIcon, Trash2Icon, CopyIcon } from "lucide-solid";
+import Avatar from "../../components/Avatar";
 import { ContentEditable } from "@bigmistqke/solid-contenteditable";
 import type { Message } from "../../model";
 import { useToaster } from "../../components/Toaster";
@@ -80,12 +81,10 @@ const MessageComponent: Component<MessageProps> = (props) => {
         <div class={`flex p-2 ${isOwner() ? "justify-end" : "justify-start"}`}>
           <div class={`flex flex-col group max-w-[70%] ${isOwner() ? "items-end" : "items-start"}`}>
             <div class={`flex gap-3 ${isOwner() ? "flex-row-reverse" : "flex-row"}`}>
-              <img
-                class="w-10 h-10 rounded-full flex-shrink-0"
-                src={`/user/${user().avatarFileId}/avatar`}
+              <Avatar
+                avatarFileId={user().avatarFileId}
                 alt={`${user().username}'s avatar`}
-                width={40}
-                height={40}
+                size="md"
               />
 
               <div class={`flex flex-col min-w-0 ${isOwner() ? "items-end" : "items-start"}`}>

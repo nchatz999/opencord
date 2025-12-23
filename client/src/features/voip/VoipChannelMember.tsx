@@ -13,6 +13,7 @@ import { useAcl, useAuth, usePlayback, useUser, useVoip } from "../../store/inde
 import type { ContextMenuItem } from "../../components/ContextMenu";
 import Slider from "../../components/Slider";
 import ContextMenu from "../../components/ContextMenu";
+import Avatar from "../../components/Avatar";
 
 
 const KickUserIcon: Component = () => (
@@ -132,10 +133,10 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
           <div class="flex items-center gap-2 px-2 py-1 text-muted-foreground hover:bg-muted rounded transition-all">
             <div class="relative shrink-0">
               <div class={`rounded-full p-0.5 transition-all duration-200 ${isSpeaking() ? 'bg-success shadow-lg shadow-success/50' : ''}`}>
-                <img
-                  src={`/user/${u().avatarFileId}/avatar`}
+                <Avatar
+                  avatarFileId={u().avatarFileId}
                   alt={u().username}
-                  class="w-6 h-6 rounded-full"
+                  size="xs"
                 />
               </div>
               <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar bg-status-online" />

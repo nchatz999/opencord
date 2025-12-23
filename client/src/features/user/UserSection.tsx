@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, HeadphoneOff, Settings, Circle } from 'lucide-solid'
+import Avatar from '../../components/Avatar'
 import { useAuth, useVoip, useModal, useMicrophone, useOutput } from '../../store/index'
 import { getStatusColor } from '../../utils'
 
@@ -33,13 +34,11 @@ const UserSection: Component = () => {
   return (
     <div class="flex items-center gap-2">
       <div class="flex items-center gap-2 flex-1 min-w-0">
-        <div class="relative">
-          <img
-            src={`/user/${currentUser().avatarFileId}/avatar`}
-            alt={currentUser().username}
-            class="w-8 h-8 rounded-full object-cover"
-          />
-        </div>
+        <Avatar
+          avatarFileId={currentUser().avatarFileId}
+          alt={currentUser().username}
+          size="sm"
+        />
 
         <div class="flex-1 min-w-0">
           <div class="text-sm text-foreground font-medium truncate">

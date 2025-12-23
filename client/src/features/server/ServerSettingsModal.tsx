@@ -11,6 +11,7 @@ import Select from '../../components/Select'
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table'
 import { request } from '../../utils'
 import type { User } from '../../model'
+import Avatar from '../../components/Avatar'
 
 
 interface Invite {
@@ -313,10 +314,10 @@ const ServerSettingsModal: Component = () => {
                     <TableRow class="hover:bg-muted">
                       <TableCell>
                         <div class="flex items-center space-x-3">
-                          <img
-                            src={`/user/${user.avatarFileId}/avatar`}
+                          <Avatar
+                            avatarFileId={user.avatarFileId}
                             alt={user.username}
-                            class="w-8 h-8 rounded-full"
+                            size="sm"
                           />
                           <span class="font-medium">{user.username}</span>
                         </div>

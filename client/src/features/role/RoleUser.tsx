@@ -1,5 +1,6 @@
 import type { Component } from "solid-js";
 import { UserStatusType, type User } from "../../model";
+import Avatar from "../../components/Avatar";
 
 interface RoleUserProps {
   user: User;
@@ -20,12 +21,10 @@ const RoleUser: Component<RoleUserProps> = (props) => {
     <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted transition-all group cursor-pointer">
       {}
       <div class="relative shrink-0">
-        <img
-          class="w-6 h-6 rounded-full"
-          src={`/user/${props.user.avatarFileId}/avatar`}
+        <Avatar
+          avatarFileId={props.user.avatarFileId}
           alt={`${props.user.username} avatar`}
-          width={24}
-          height={24}
+          size="xs"
         />
         <div
           class={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar ${statusColor()}`}

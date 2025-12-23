@@ -32,7 +32,7 @@ CREATE TABLE users (
     user_id BIGSERIAL PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    avatar_file_id BIGINT DEFAULT 1,
+    avatar_file_id BIGINT DEFAULT NULL,
     role_id BIGINT NOT NULL DEFAULT 3,
     status user_status_type NOT NULL DEFAULT 'Offline',
     manual_status user_status_type DEFAULT NULL,

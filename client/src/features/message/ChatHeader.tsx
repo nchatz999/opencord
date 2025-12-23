@@ -3,6 +3,7 @@ import { Show } from "solid-js";
 import { Hash } from "lucide-solid";
 import { useChannel, useGroup, useUser } from "../../store/index";
 import { getStatusColor } from "../../utils";
+import Avatar from "../../components/Avatar";
 
 
 const ChatHeader: Component<{
@@ -25,10 +26,11 @@ const ChatHeader: Component<{
               <div class="relative flex items-center">
                 {}
                 <div class="relative">
-                  <img
-                    src={`/user/${user().avatarFileId}/avatar`}
+                  <Avatar
+                    avatarFileId={user().avatarFileId}
                     alt={user().username}
-                    class="w-10 h-10 rounded-full object-cover border-2 border-background"
+                    size="md"
+                    class="border-2 border-background"
                   />
                   <div
                     class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${getStatusColor(user().status, "bg")}`}
@@ -38,10 +40,11 @@ const ChatHeader: Component<{
                 {}
                 <Show when={user().avatarFileId}>
                   <div class="relative -ml-3 z-10">
-                    <img
-                      src={`/user/${user().avatarFileId}/avatar`}
+                    <Avatar
+                      avatarFileId={user().avatarFileId}
                       alt="You"
-                      class="w-8 h-8 rounded-full object-cover border-2 border-background"
+                      size="sm"
+                      class="border-2 border-background"
                     />
                   </div>
                 </Show>

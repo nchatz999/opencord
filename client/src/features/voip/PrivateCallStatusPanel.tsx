@@ -2,6 +2,7 @@ import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { MicOff, Headphones, Video, Monitor } from 'lucide-solid'
 import { useAuth, useUser, useVoip } from '../../store/index'
+import Avatar from '../../components/Avatar'
 
 const PrivateCallStatusPanel: Component = () => {
   const [, authActions] = useAuth()
@@ -38,17 +39,19 @@ const PrivateCallStatusPanel: Component = () => {
         <div class="bg-sidebar rounded-lg p-2 flex items-center gap-2">
           <div class="flex -space-x-2">
             <div class="relative z-10">
-              <img
-                src={`/user/${info().currentUser.avatarFileId}/avatar`}
+              <Avatar
+                avatarFileId={info().currentUser.avatarFileId}
                 alt={info().currentUser.username}
-                class="w-6 h-6 rounded-full border-2 border-sidebar"
+                size="xs"
+                class="border-2 border-sidebar"
               />
             </div>
             <div class="relative">
-              <img
-                src={`/user/${info().otherUser.avatarFileId}/avatar`}
+              <Avatar
+                avatarFileId={info().otherUser.avatarFileId}
                 alt={info().otherUser.username}
-                class="w-6 h-6 rounded-full border-2 border-sidebar"
+                size="xs"
+                class="border-2 border-sidebar"
               />
               <div class={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-sidebar ${info().otherUserConnected ? 'bg-status-online' : 'bg-status-away'}`} />
             </div>
