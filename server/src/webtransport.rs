@@ -72,6 +72,7 @@ pub enum CommandPayload {
     Connect(i64, mpsc::Sender<SubscriberMessage>, String, String),
     Timeout(i64, String),
     Disconnect(i64, String),
+    DisconnectUser(i64),
 }
 
 pub enum ServerMessage {
@@ -818,6 +819,15 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         Ok(())
     }
 
+    async fn handle_disconnect_user(&mut self, user_id: i64) -> Result<(), ServerError> {
+        for o in self.observers.iter().filter(|o| o.user_id() == user_id) {
+            o.send(SubscriberMessage::Close("User deleted".to_string()))
+                .await;
+        }
+        self.observers.retain(|subscriber| subscriber.user_id() != user_id);
+        Ok(())
+    }
+
     async fn handle_voip(
         &self,
         payload: VoipPayload,
@@ -959,6 +969,9 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             }
             CommandPayload::Disconnect(user_id, session_token) => {
                 self.handle_disconnect(user_id, session_token).await?
+            }
+            CommandPayload::DisconnectUser(user_id) => {
+                self.handle_disconnect_user(user_id).await?
             }
         }
         Ok(())

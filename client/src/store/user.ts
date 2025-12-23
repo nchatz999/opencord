@@ -20,6 +20,7 @@ interface UserActions {
   remove: (id: number) => void;
   updateStatus: (userId: number, status: UserStatusType) => Promise<Result<void, string>>;
   updateAvatar: (fileName: string, contentType: string, base64Data: string) => Promise<Result<void, string>>;
+  deleteUser: (userId: number) => Promise<Result<void, string>>;
 }
 
 export type UserStore = [UserState, UserActions];
@@ -114,6 +115,16 @@ function createUserStore(): UserStore {
       const result = await request("/user/avatar", {
         method: "PUT",
         body: { fileName, contentType, data: base64Data },
+      });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      return ok(undefined);
+    },
+
+    async deleteUser(userId) {
+      const result = await request(`/user/${userId}`, {
+        method: "DELETE",
       });
       if (result.isErr()) {
         return err(result.error.reason);

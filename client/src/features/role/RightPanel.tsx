@@ -21,9 +21,6 @@ const RightPanel: Component<RightPanelProps> = (props) => {
   };
 
   const handleRoleClick = (role: Role) => {
-
-    if (role.roleId === 1 || role.roleId === 2) return;
-
     modalActions.open({ type: "roleSettings", roleId: role.roleId })
   };
 

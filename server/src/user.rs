@@ -67,6 +67,9 @@ pub enum DomainError {
     FileDecodeError,
 }
 
+use crate::message::{File, Message};
+use crate::voip::VoipParticipant;
+
 pub trait UserTransaction: Send + Sync {
     async fn create_avatar(
         &mut self,
@@ -88,6 +91,20 @@ pub trait UserTransaction: Send + Sync {
         user_id: i64,
         manual_status: UserStatusType,
     ) -> Result<Option<User>, DatabaseError>;
+
+    async fn delete_all_files_by_user(&mut self, user_id: i64) -> Result<Vec<File>, DatabaseError>;
+
+    async fn delete_all_messages_by_user(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Message>, DatabaseError>;
+
+    async fn delete_voip_participant_by_user(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
+
+    async fn delete_user(&mut self, user_id: i64) -> Result<Option<User>, DatabaseError>;
 }
 
 pub trait UserRepository: Send + Sync + Clone {
@@ -108,20 +125,27 @@ pub trait UserRepository: Send + Sync + Clone {
 
 use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::model::EventPayload;
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use crate::webtransport::{CommandPayload, ControlRoutingPolicy, ServerMessage};
 use base64::{Engine as _, engine::general_purpose};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct UserService<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager> {
+pub struct UserService<
+    R: UserRepository,
+    F: FileManager + Clone + Send,
+    N: NotifierManager,
+    G: LogManager,
+> {
     repository: R,
     file_manager: F,
     notifier: N,
     logger: G,
 }
 
-impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager> UserService<R, F, N, G> {
+impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: LogManager>
+    UserService<R, F, N, G>
+{
     pub fn new(repository: R, file_manager: F, notifier: N, logger: G) -> Self {
         Self {
             repository,
@@ -187,10 +211,16 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("User avatar updated: user_id={}, session_id={}, avatar_file_id={}", requester_id, session_id, avatar_file.file_id),
-            "user".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "User avatar updated: user_id={}, session_id={}, avatar_file_id={}",
+                    requester_id, session_id, avatar_file.file_id
+                ),
+                "user".to_string(),
+            )
+            .await;
 
         Ok(updated_user)
     }
@@ -254,10 +284,16 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("User status updated: user_id={}, session_id={}, status={:?}", requester_user_id, session_id, manual_status),
-            "user".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "User status updated: user_id={}, session_id={}, status={:?}",
+                    requester_user_id, session_id, manual_status
+                ),
+                "user".to_string(),
+            )
+            .await;
 
         Ok(())
     }
@@ -265,6 +301,155 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
     pub async fn get_all_users(&self) -> Result<Vec<User>, DomainError> {
         let users = self.repository.find_all_users().await?;
         Ok(users)
+    }
+
+    pub async fn delete_user(
+        &self,
+        target_user_id: i64,
+        requester_user_id: i64,
+        session_id: i64,
+    ) -> Result<(), DomainError> {
+        let mut repo = self.repository.clone();
+
+        let requester_role = repo
+            .find_user_role(requester_user_id)
+            .await?
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
+
+        let target_role =
+            repo.find_user_role(target_user_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "User {} not found",
+                    target_user_id
+                )))?;
+
+        if target_role == 1 {
+            return Err(DomainError::PermissionDenied(
+                "Cannot delete owner".to_string(),
+            ));
+        }
+
+        if requester_role > 2 {
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to delete user".to_string(),
+            ));
+        }
+
+        if requester_role != 1 && target_role == 2 {
+            return Err(DomainError::PermissionDenied(
+                "Only owner can delete admin".to_string(),
+            ));
+        }
+
+        let mut tx = self.repository.begin().await?;
+
+        let deleted_files = tx.delete_all_files_by_user(target_user_id).await?;
+        let deleted_messages = tx.delete_all_messages_by_user(target_user_id).await?;
+        let deleted_voip = tx.delete_voip_participant_by_user(target_user_id).await?;
+        let _deleted_user =
+            tx.delete_user(target_user_id)
+                .await?
+                .ok_or(DomainError::BadRequest(format!(
+                    "User {} not found",
+                    target_user_id
+                )))?;
+
+        self.repository.commit(tx).await?;
+
+        for file in &deleted_files {
+            let _ = self.file_manager.delete_file(file.file_id);
+        }
+
+        for message in &deleted_messages {
+            let event = EventPayload::MessageDeleted {
+                message_id: message.id,
+            };
+
+            if let Some(channel_id) = message.channel_id {
+                let _ = self
+                    .notifier
+                    .notify(ServerMessage::Control(
+                        event,
+                        ControlRoutingPolicy::ChannelRights {
+                            channel_id,
+                            minimun_rights: 2,
+                        },
+                    ))
+                    .await;
+            } else if let Some(recipient_id) = message.recipient_id {
+                let _ = self
+                    .notifier
+                    .notify(ServerMessage::Control(
+                        event,
+                        ControlRoutingPolicy::User {
+                            user_id: recipient_id,
+                        },
+                    ))
+                    .await;
+            }
+        }
+
+        if let Some(voip) = deleted_voip {
+            let event = EventPayload::VoipParticipantDeleted {
+                user_id: target_user_id,
+            };
+
+            if let Some(channel_id) = voip.channel_id {
+                let _ = self
+                    .notifier
+                    .notify(ServerMessage::Control(
+                        event,
+                        ControlRoutingPolicy::ChannelRights {
+                            channel_id,
+                            minimun_rights: 1,
+                        },
+                    ))
+                    .await;
+            } else if let Some(recipient_id) = voip.recipient_id {
+                let _ = self
+                    .notifier
+                    .notify(ServerMessage::Control(
+                        event,
+                        ControlRoutingPolicy::User {
+                            user_id: recipient_id,
+                        },
+                    ))
+                    .await;
+            }
+        }
+
+        let user_deleted_event = EventPayload::UserDeleted {
+            user_id: target_user_id,
+        };
+
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Command(CommandPayload::DisconnectUser(
+                target_user_id,
+            )))
+            .await;
+
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                user_deleted_event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "User deleted: requester_user_id={}, session_id={}, target_user_id={}",
+                    requester_user_id, session_id, target_user_id
+                ),
+                "user".to_string(),
+            )
+            .await;
+
+        Ok(())
     }
 }
 
@@ -365,6 +550,74 @@ impl UserTransaction for PgUserTransaction {
         .fetch_optional(&mut *self.transaction)
         .await?;
         Ok(result)
+    }
+
+    async fn delete_all_files_by_user(&mut self, user_id: i64) -> Result<Vec<File>, DatabaseError> {
+        let files = sqlx::query_as!(
+            File,
+            r#"DELETE FROM files
+               USING messages m
+               WHERE files.message_id = m.id
+               AND m.sender_id = $1
+               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.file_type, files.file_size, files.file_hash, files.created_at"#,
+            user_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+        Ok(files)
+    }
+
+    async fn delete_all_messages_by_user(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Message>, DatabaseError> {
+        let messages = sqlx::query_as!(
+            Message,
+            r#"DELETE FROM messages
+               WHERE sender_id = $1
+               RETURNING id, sender_id, channel_id, recipient_id, message_text, created_at, modified_at, reply_to_message_id"#,
+            user_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+        Ok(messages)
+    }
+
+    async fn delete_voip_participant_by_user(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
+        let participant = sqlx::query_as!(
+            VoipParticipant,
+            r#"DELETE FROM voip_participants
+               WHERE user_id = $1
+               RETURNING user_id, channel_id, recipient_id, local_deafen, local_mute, publish_screen, publish_camera, created_at"#,
+            user_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+        Ok(participant)
+    }
+
+    async fn delete_user(&mut self, user_id: i64) -> Result<Option<User>, DatabaseError> {
+        let user = sqlx::query_as!(
+            User,
+            r#"DELETE FROM users
+               WHERE user_id = $1
+               RETURNING
+                   user_id,
+                   username,
+                   created_at,
+                   avatar_file_id,
+                   role_id,
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
+                   server_mute,
+                   server_deafen"#,
+            user_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+        Ok(user)
     }
 }
 
@@ -468,6 +721,7 @@ impl From<DomainError> for ApiError {
             DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
+                println!("Database error: {}", db_err);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
             DomainError::FileManagerError(file_err) => {
@@ -484,6 +738,7 @@ impl From<DomainError> for ApiError {
 use axum::{
     Json,
     extract::{Extension, Path, State},
+    http::StatusCode,
     middleware::from_fn_with_state,
     response::IntoResponse,
 };
@@ -498,6 +753,7 @@ pub fn user_routes(
         .routes(routes!(get_user_avatar_handler))
         .routes(routes!(update_manual_user_status_handler))
         .routes(routes!(get_all_users_handler))
+        .routes(routes!(delete_user_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(user_service)
 }
@@ -519,12 +775,19 @@ pub fn user_routes(
     security(("api_key" = []))
 )]
 async fn update_user_avatar_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
+    >,
     Extension(session): Extension<Session>,
     Json(payload): Json<NewAvatarRequest>,
 ) -> Result<Json<User>, ApiError> {
     let updated_user = service
-        .update_user_avatar(session.user_id, session.user_id, session.session_id, payload)
+        .update_user_avatar(
+            session.user_id,
+            session.user_id,
+            session.session_id,
+            payload,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(Json(updated_user))
@@ -545,7 +808,9 @@ async fn update_user_avatar_handler(
     security(("api_key" = []))
 )]
 async fn get_user_avatar_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
+    >,
     Extension(_session): Extension<Session>,
     Path(avatar_id): Path<i64>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -582,13 +847,20 @@ async fn get_user_avatar_handler(
     security(("api_key" = []))
 )]
 async fn update_manual_user_status_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
+    >,
     Extension(session): Extension<Session>,
     Path(user_id): Path<i64>,
     Json(payload): Json<UpdateManualUserStatusRequest>,
 ) -> Result<(), ApiError> {
     service
-        .update_manual_user_status(user_id, session.user_id, session.session_id, payload.manual_status)
+        .update_manual_user_status(
+            user_id,
+            session.user_id,
+            session.session_id,
+            payload.manual_status,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(())
@@ -606,9 +878,40 @@ async fn update_manual_user_status_handler(
     security(("api_key" = []))
 )]
 async fn get_all_users_handler(
-    State(service): State<UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>>,
+    State(service): State<
+        UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
+    >,
     Extension(_session): Extension<Session>,
 ) -> Result<Json<Vec<User>>, ApiError> {
     let users = service.get_all_users().await.map_err(ApiError::from)?;
     Ok(Json(users))
+}
+
+#[utoipa::path(
+    delete,
+    tag = "user",
+    path = "/{user_id}",
+    params(
+        ("user_id", Path, description = "The ID of the user to delete"),
+    ),
+    responses(
+        (status = 204, description = "User deleted successfully"),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 404, description = "User not found", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn delete_user_handler(
+    State(service): State<
+        UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
+    >,
+    Extension(session): Extension<Session>,
+    Path(target_user_id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    service
+        .delete_user(target_user_id, session.user_id, session.session_id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(StatusCode::NO_CONTENT)
 }

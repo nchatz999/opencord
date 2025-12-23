@@ -20,6 +20,7 @@ interface RoleActions {
   remove: (id: number) => void;
   create: (name: string) => Promise<Result<{ roleId: number }, string>>;
   delete: (roleId: number) => Promise<Result<void, string>>;
+  rename: (roleId: number, name: string) => Promise<Result<void, string>>;
 }
 
 export type RoleStore = [RoleState, RoleActions];
@@ -113,6 +114,17 @@ function createRoleStore(): RoleStore {
     async delete(roleId) {
       const result = await request(`/role/${roleId}`, {
         method: "DELETE",
+      });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      return ok(undefined);
+    },
+
+    async rename(roleId, name) {
+      const result = await request(`/role/${roleId}`, {
+        method: "PUT",
+        body: { name },
       });
       if (result.isErr()) {
         return err(result.error.reason);

@@ -92,8 +92,8 @@ CREATE TABLE channels (
 CREATE TABLE messages (
     id BIGSERIAL PRIMARY KEY,
     sender_id BIGINT NOT NULL,
-    channel_id BIGINT REFERENCES channels(channel_id),
-    recipient_id BIGINT REFERENCES users(user_id),
+    channel_id BIGINT REFERENCES channels(channel_id) ON DELETE CASCADE,
+    recipient_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     message_text TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -151,7 +151,7 @@ CREATE TABLE sessions (
     user_id BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ,
-    FOREIGN KEY(user_id) REFERENCES users(user_id)
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 -- ============================================
@@ -162,8 +162,8 @@ CREATE TABLE sessions (
 -- VoIP participants - unified table for both channel and private VoIP
 CREATE TABLE voip_participants (
     user_id BIGINT PRIMARY KEY,
-    channel_id BIGINT REFERENCES channels(channel_id),
-    recipient_id BIGINT REFERENCES users(user_id),
+    channel_id BIGINT REFERENCES channels(channel_id) ON DELETE CASCADE,
+    recipient_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     local_deafen BOOLEAN NOT NULL DEFAULT FALSE,
     local_mute BOOLEAN NOT NULL DEFAULT FALSE,
     publish_screen BOOLEAN NOT NULL DEFAULT FALSE,

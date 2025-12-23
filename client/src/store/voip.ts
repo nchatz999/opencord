@@ -33,6 +33,7 @@ interface VoipActions {
   setDeafened: (deafened: boolean) => Promise<Result<void, string>>;
   publishScreen: (publish: boolean) => Promise<Result<void, string>>;
   publishCamera: (publish: boolean) => Promise<Result<void, string>>;
+  kick: (targetUserId: number) => Promise<Result<void, string>>;
 }
 
 export type VoipStore = [VoipState, VoipActions];
@@ -223,6 +224,16 @@ function createVoipStore(): VoipStore {
       const result = await request("/voip/camera/publish", {
         method: "PUT",
         body: { publish },
+      });
+      if (result.isErr()) {
+        return err(result.error.reason);
+      }
+      return ok(undefined);
+    },
+
+    async kick(targetUserId) {
+      const result = await request(`/voip/kick/${targetUserId}`, {
+        method: "POST",
       });
       if (result.isErr()) {
         return err(result.error.reason);

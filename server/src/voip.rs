@@ -370,6 +370,95 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
         Ok(())
     }
 
+    pub async fn kick_participant(
+        &self,
+        requester_user_id: i64,
+        session_id: i64,
+        target_user_id: i64,
+    ) -> Result<VoipParticipant, DomainError> {
+        let mut tx = self.repository.begin().await?;
+
+        let participant = tx
+            .remove_participant(target_user_id)
+            .await?
+            .ok_or(DomainError::BadRequest(format!(
+                "Participant {} not found",
+                target_user_id
+            )))?;
+
+        let channel_id = participant.channel_id.ok_or(DomainError::PermissionDenied(
+            "Cannot kick from private VoIP".to_string(),
+        ))?;
+
+        let rights = self
+            .repository
+            .find_user_channel_rights(channel_id, requester_user_id)
+            .await?
+            .unwrap_or(0);
+
+        if rights < 8 {
+            self.repository.rollback(tx).await?;
+            return Err(DomainError::PermissionDenied(
+                "Insufficient permissions to kick".to_string(),
+            ));
+        }
+
+        let requester_role = self
+            .repository
+            .find_user_role(requester_user_id)
+            .await?
+            .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
+
+        let target_role = self
+            .repository
+            .find_user_role(target_user_id)
+            .await?
+            .ok_or(DomainError::BadRequest("Target user not found".to_string()))?;
+
+        if target_role == 1 && requester_role > 1 {
+            self.repository.rollback(tx).await?;
+            return Err(DomainError::PermissionDenied(
+                "Only owner can kick owner".to_string(),
+            ));
+        }
+        if target_role == 2 && requester_role > 2 {
+            self.repository.rollback(tx).await?;
+            return Err(DomainError::PermissionDenied(
+                "Only owner or admin can kick admin".to_string(),
+            ));
+        }
+
+        self.repository.commit(tx).await?;
+
+        let event = EventPayload::VoipParticipantDeleted {
+            user_id: target_user_id,
+        };
+
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::ChannelRights {
+                    channel_id,
+                    minimun_rights: 1,
+                },
+            ))
+            .await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "VoIP kick: requester_user_id={}, session_id={}, target_user_id={}",
+                    requester_user_id, session_id, target_user_id
+                ),
+                "voip".to_string(),
+            )
+            .await;
+
+        Ok(participant)
+    }
+
     pub async fn set_local_mute(
         &self,
         user_id: i64,
@@ -1014,6 +1103,7 @@ pub fn voip_routes(
         .routes(routes!(subscribe_to_media_handler))
         .routes(routes!(unsubscribe_from_media_handler))
         .routes(routes!(get_voip_subscriptions_handler))
+        .routes(routes!(kick_participant_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(voip_service)
 }
@@ -1297,4 +1387,31 @@ async fn get_voip_subscriptions_handler(
         .await
         .map_err(ApiError::from)?;
     Ok(Json(subscriptions))
+}
+
+#[utoipa::path(
+    post,
+    tag = "voip",
+    path = "/kick/{target_user_id}",
+    params(
+        ("target_user_id", Path, description = "The ID of the user to kick"),
+    ),
+    responses(
+        (status = 200, description = "Successfully kicked participant", body = VoipParticipant),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 404, description = "Participant not found", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn kick_participant_handler(
+    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
+    Extension(session): Extension<Session>,
+    Path(target_user_id): Path<i64>,
+) -> Result<Json<VoipParticipant>, ApiError> {
+    let participant = service
+        .kick_participant(session.user_id, session.session_id, target_user_id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(participant))
 }

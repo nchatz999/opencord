@@ -74,7 +74,12 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
         }
     }
 
-    pub async fn create_role(&self, name: String, user_id: i64, session_id: i64) -> Result<Role, DomainError> {
+    pub async fn create_role(
+        &self,
+        name: String,
+        user_id: i64,
+        session_id: i64,
+    ) -> Result<Role, DomainError> {
         let role_id = self
             .repository
             .find_user_role(user_id)
@@ -117,10 +122,16 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("Role created: user_id={}, session_id={}, role_id={}", user_id, session_id, role.role_id),
-            "role".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Role created: user_id={}, session_id={}, role_id={}",
+                    user_id, session_id, role.role_id
+                ),
+                "role".to_string(),
+            )
+            .await;
 
         Ok(role)
     }
@@ -157,15 +168,21 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
             .await?
             .ok_or(DomainError::PermissionDenied("User not found".to_string()))?;
 
-        if user_role_id != 1 && user_role_id != 2 {
+        if user_role_id > 2 {
             return Err(DomainError::PermissionDenied(
                 "Insufficient permissions to update role".to_string(),
             ));
         }
 
-        if role_id == 1 || (role_id == 2 && user_role_id != 1) {
+        if role_id == 1 && user_role_id != 1 {
             return Err(DomainError::PermissionDenied(
-                "Cannot modify system role".to_string(),
+                "Only owner can rename owner role".to_string(),
+            ));
+        }
+
+        if role_id == 2 && user_role_id != 1 {
+            return Err(DomainError::PermissionDenied(
+                "Only owner can rename admin role".to_string(),
             ));
         }
 
@@ -206,10 +223,16 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("Role name updated: user_id={}, session_id={}, role_id={}", user_id, session_id, role_id),
-            "role".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Role name updated: user_id={}, session_id={}, role_id={}",
+                    user_id, session_id, role_id
+                ),
+                "role".to_string(),
+            )
+            .await;
 
         Ok(())
     }
@@ -232,7 +255,7 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
             ));
         }
 
-        if role_id == 1 || role_id == 2 {
+        if role_id == 1 || role_id == 2 || role_id == 3 {
             return Err(DomainError::PermissionDenied(
                 "Cannot modify system role".to_string(),
             ));
@@ -261,10 +284,16 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
             ))
             .await;
 
-        let _ = self.logger.log_entry(
-            format!("Role deleted: user_id={}, session_id={}, role_id={}", user_id, session_id, role_id),
-            "role".to_string(),
-        ).await;
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Role deleted: user_id={}, session_id={}, role_id={}",
+                    user_id, session_id, role_id
+                ),
+                "role".to_string(),
+            )
+            .await;
 
         Ok(Some(deleted))
     }
@@ -528,7 +557,12 @@ async fn update_role_name_handler(
     Json(payload): Json<UpdateRoleRequest>,
 ) -> Result<StatusCode, ApiError> {
     service
-        .update_role_name(id, payload.name.clone(), session.user_id, session.session_id)
+        .update_role_name(
+            id,
+            payload.name.clone(),
+            session.user_id,
+            session.session_id,
+        )
         .await
         .map_err(ApiError::from)?;
 

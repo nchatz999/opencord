@@ -2,6 +2,7 @@ import type { Component } from 'solid-js'
 import { createSignal, createMemo, For, Show } from 'solid-js'
 import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw, Upload } from 'lucide-solid'
 import { useToaster } from '../../components/Toaster'
+import { useConfirm } from '../../components/ConfirmDialog'
 import Button from '../../components/Button'
 import { Tabs } from '../../components/Tabs'
 import { useAcl, useAuth, useModal, useRole, useServer, useUser } from '../../store/index'
@@ -49,6 +50,7 @@ const ServerSettingsModal: Component = () => {
   const [logSearchTerm, setLogSearchTerm] = createSignal('')
 
   const { addToast } = useToaster()
+  const confirm = useConfirm()
 
   const filteredUsers = createMemo(() =>
     userActions.list().filter((user: User) =>
@@ -338,8 +340,24 @@ const ServerSettingsModal: Component = () => {
                       <TableCell class="text-center">
                         <Button
                           variant="destructive"
-                          disabled={user.roleId === 1}
+                          disabled={user.roleId === 1 || !isAdmin()}
                           title={user.roleId === 1 ? "Cannot delete owner" : "Delete user"}
+                          onClick={async () => {
+                            const confirmed = await confirm({
+                              title: "Delete User",
+                              message: `Are you sure you want to delete "${user.username}"? This will remove all their messages and files.`,
+                              confirmText: "Delete",
+                              variant: "danger",
+                            });
+                            if (!confirmed) return;
+
+                            const result = await userActions.deleteUser(user.userId);
+                            if (result.isErr()) {
+                              addToast(result.error, "error");
+                            } else {
+                              addToast(`User "${user.username}" deleted`, "success");
+                            }
+                          }}
                         >
                           <Trash2 class="w-4 h-4" />
                         </Button>

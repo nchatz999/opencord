@@ -9,7 +9,7 @@ import {
 } from "lucide-solid";
 import type { VoipParticipant } from "../../model";
 import { useToaster } from "../../components/Toaster";
-import { useAcl, usePlayback, useUser } from "../../store/index";
+import { useAcl, useAuth, usePlayback, useUser, useVoip } from "../../store/index";
 import type { ContextMenuItem } from "../../components/ContextMenu";
 import Slider from "../../components/Slider";
 import ContextMenu from "../../components/ContextMenu";
@@ -50,64 +50,80 @@ const VolumeIcon: Component<{ volume: number }> = (props) => (
 
 export const VoipChannelMember: Component<{ participant: VoipParticipant; channelId: number }> = (props) => {
   const [, aclActions] = useAcl();
+  const [, authActions] = useAuth();
   const [, playbackActions] = usePlayback();
   const [, userActions] = useUser();
+  const [, voipActions] = useVoip();
 
   const user = () => userActions.findById(props.participant.userId);
+  const currentUser = () => authActions.getUser();
   const volume = () => Math.round(playbackActions.getVolume(props.participant.userId));
   const isSpeaking = () => playbackActions.getSpeakingState(props.participant.userId);
 
-  const { addToast } = useToaster();
-  const contextMenuItems = (): ContextMenuItem[] => {
+  const canKick = () => {
+    const myRights = aclActions.getChannelRights(props.channelId, currentUser().roleId);
+    if (myRights < 8) return false;
 
+    const targetRole = user()?.roleId ?? 999;
+    const myRole = currentUser().roleId;
 
-    return [
-      {
-        id: "volume",
-        label: `Volume: ${volume()}%`,
-        onClick: () => { },
-        customContent: (
-          <div class="flex flex-col gap-2">
-            <div class="flex items-center gap-2 text-sm text-foreground">
-              <VolumeIcon volume={volume()} />
-              <span>Volume: {volume()}%</span>
-            </div>
-            <Slider
-              value={volume()}
-              min={0}
-              max={200}
-              onChange={(value) => {
-                playbackActions.adjustVolume(props.participant.userId, value)
-              }}
-            />
-          </div>
-        ),
-      },
-      {
-        id: "mute-toggle",
-        label: volume() === 0 ? "Unmute" : "Mute",
-        icon: volume() === 0 ? <Volume2 size={14} /> : <VolumeX size={14} />,
-        onClick: () => {
-          playbackActions.adjustVolume(props.participant.userId, volume() === 0 ? 100 : 0);
-        },
-      },
-      {
-        id: "separator-1",
-        label: "",
-        separator: true,
-        onClick: () => { },
-      },
-      {
-        id: "kick",
-        label: "Kick from Channel",
-        icon: <KickUserIcon />,
-        danger: true,
-        onClick: () => {
-          addToast("Kick from channel feature coming soon", "success");
-        },
-      },
-    ];
+    if (targetRole === 1 && myRole > 1) return false;
+    if (targetRole === 2 && myRole > 2) return false;
+
+    return true;
   };
+
+  const { addToast } = useToaster();
+  const contextMenuItems = (): ContextMenuItem[] => [
+    {
+      id: "volume",
+      label: `Volume: ${volume()}%`,
+      onClick: () => { },
+      customContent: (
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2 text-sm text-foreground">
+            <VolumeIcon volume={volume()} />
+            <span>Volume: {volume()}%</span>
+          </div>
+          <Slider
+            value={volume()}
+            min={0}
+            max={200}
+            onChange={(value) => {
+              playbackActions.adjustVolume(props.participant.userId, value)
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      id: "mute-toggle",
+      label: volume() === 0 ? "Unmute" : "Mute",
+      icon: volume() === 0 ? <Volume2 size={14} /> : <VolumeX size={14} />,
+      onClick: () => {
+        playbackActions.adjustVolume(props.participant.userId, volume() === 0 ? 100 : 0);
+      },
+    },
+    {
+      id: "separator-1",
+      label: "",
+      separator: true,
+      onClick: () => { },
+    },
+    {
+      id: "kick",
+      label: "Kick from Channel",
+      icon: <KickUserIcon />,
+      danger: true,
+      disabled: !canKick(),
+      onClick: async () => {
+        const result = await voipActions.kick(props.participant.userId);
+        if (result.isErr()) {
+          addToast(result.error, "error");
+        }
+      },
+    },
+  ];
 
   return (
     <Show when={user()}>
