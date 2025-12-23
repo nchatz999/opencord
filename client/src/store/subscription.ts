@@ -1,10 +1,12 @@
 import { createStore, produce } from "solid-js/store";
 import { createRoot } from "solid-js";
-import type { Subscription, MediaType } from "../model";
+import { MediaType, type Subscription } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { request } from "../utils";
 import { useConnection } from "./connection";
+import { usePlayback } from "./playback";
+import { useAuth } from "./auth";
 
 interface SubscriptionState {
   subscriptions: Subscription[];
@@ -30,6 +32,8 @@ function createSubscriptionStore(): SubscriptionStore {
   });
 
   const connection = useConnection();
+  const [, playbackActions] = usePlayback();
+  const [, authActions] = useAuth();
   let cleanupFn: (() => void) | null = null;
 
   const actions: SubscriptionActions = {
@@ -50,6 +54,15 @@ function createSubscriptionStore(): SubscriptionStore {
         } else if (event.type === "mediaUnsubscription") {
           const sub = event.subscription as Subscription;
           actions.remove(sub.userId, sub.publisherId, sub.mediaType);
+
+          if (sub.userId === authActions.getUser().userId) {
+            if (sub.mediaType === MediaType.Screen) {
+              playbackActions.destroyPlayback(sub.publisherId, "screen");
+              playbackActions.destroyPlayback(sub.publisherId, "screenSound");
+            } else if (sub.mediaType === MediaType.Camera) {
+              playbackActions.destroyPlayback(sub.publisherId, "camera");
+            }
+          }
         }
       });
 

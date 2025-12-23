@@ -100,10 +100,6 @@ function createVoipStore(): VoipStore {
 
     replaceAll(participants) {
       setState("voipState", participants);
-      const [, playbackActions] = usePlayback();
-      for (const participant of participants) {
-        playbackActions.initializeForUser(participant.userId);
-      }
     },
 
     update(participant) {
@@ -118,8 +114,14 @@ function createVoipStore(): VoipStore {
           }
         })
       );
-      const [, playbackActions] = usePlayback();
-      playbackActions.initializeForUser(participant.userId);
+
+      if (!participant.publishScreen) {
+        playbackActions.destroyPlayback(participant.userId, "screen");
+        playbackActions.destroyPlayback(participant.userId, "screenSound");
+      }
+      if (!participant.publishCamera) {
+        playbackActions.destroyPlayback(participant.userId, "camera");
+      }
     },
 
     remove(userId) {
@@ -132,7 +134,6 @@ function createVoipStore(): VoipStore {
           }
         })
       );
-      const [, playbackActions] = usePlayback();
       playbackActions.cleanupForUser(userId);
     },
 

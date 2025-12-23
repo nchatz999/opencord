@@ -4,6 +4,7 @@ import { Show, createEffect, createMemo } from "solid-js";
 import { Camera, Monitor, Volume2, Eye, EyeOff } from "lucide-solid";
 import { useAuth, useSubscription, usePlayback, useUser } from "../../store/index";
 import { MediaType } from "../../model";
+import type { VideoPlayback } from "../../lib/VideoPlayback";
 import ContextMenu from "../../components/ContextMenu";
 import type { ContextMenuItem } from "../../components/ContextMenu";
 import Slider from "../../components/Slider";
@@ -35,23 +36,23 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
 
   const screenVolume = createMemo(() => playbackActions.getScreenAudioVolume(props.publisherId));
 
-  const currentFps = createMemo(
-    () => playbackActions.getPlaybackState(props.publisherId)?.screenPlayback?.getFPS()() ?? 0
-  );
+  const mediaPlayback = () => {
+    const type = isCamera() ? "camera" : "screen";
+    return playbackActions.getPlayback(props.publisherId, type) as VideoPlayback | undefined;
+  };
+
+  const currentFps = createMemo(() => mediaPlayback()?.getFPS()() ?? 0);
 
   createEffect(() => {
     if (!videoRef) return;
 
-    const playbackState = playbackActions.getPlaybackState(props.publisherId);
-    const mediaPlayback = isCamera() ? playbackState?.cameraPlayback : playbackState?.screenPlayback;
+    const playback = mediaPlayback();
 
-    if (isSubscribed()) {
-      if (mediaPlayback) {
-        videoRef.srcObject = mediaPlayback.getStream();
-      }
+    if (isSubscribed() && playback) {
+      videoRef.srcObject = playback.getStream();
     } else {
       videoRef.srcObject = null;
-      mediaPlayback?.resetTimestamps();
+      playback?.resetTimestamps();
     }
   });
 

@@ -150,8 +150,8 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
                 </Show>
 
                 <Show when={volume() === 0}>
-                  <div class="p-0.5 bg-action-warning rounded-full" title="Locally muted">
-                    <Volume2 size={8} class="text-primary-foreground" />
+                  <div class="p-0.5 bg-destructive rounded-full" title="Locally muted">
+                    <VolumeX size={8} class="text-destructive-foreground" />
                   </div>
                 </Show>
 

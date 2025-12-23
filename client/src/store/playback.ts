@@ -3,28 +3,26 @@ import { createRoot } from "solid-js";
 import { AudioPlayback, createSharedAudioContext } from "../lib/AudioPlayback";
 import { VideoPlayback } from "../lib/VideoPlayback";
 
-export interface PlaybackState {
-  playback: AudioPlayback;
-  screenPlayback: VideoPlayback;
-  cameraPlayback: VideoPlayback;
-  screenSoundPlayback: AudioPlayback;
-}
+export type MediaTypeKey = "voice" | "camera" | "screen" | "screenSound";
+type PlaybackKey = `${number}-${MediaTypeKey}`;
 
 interface PlaybackStoreState {
   audio: AudioContext;
-  playbackStates: Record<number, PlaybackState>;
+  playbacks: Map<PlaybackKey, AudioPlayback | VideoPlayback>;
   speakingStates: Record<number, boolean>;
+  volumePrefs: Record<string, number>;
 }
 
 interface PlaybackActions {
   getAudioContext: () => AudioContext;
   resume: () => Promise<void>;
-  getPlaybackState: (userId: number) => PlaybackState | undefined;
-  initializeForUser: (userId: number) => void;
+  getPlayback: (userId: number, mediaType: MediaTypeKey) => AudioPlayback | VideoPlayback | undefined;
+  createPlayback: (userId: number, mediaType: MediaTypeKey) => AudioPlayback | VideoPlayback;
+  destroyPlayback: (userId: number, mediaType: MediaTypeKey) => void;
   cleanupForUser: (userId: number) => void;
   streamMedia: (
     userId: number,
-    mediaType: "voice" | "screen" | "camera" | "screenSound",
+    mediaType: MediaTypeKey,
     packet: EncodedAudioChunk | EncodedVideoChunk,
     timestamp: number
   ) => void;
@@ -42,9 +40,13 @@ export type PlaybackStore = [PlaybackStoreState, PlaybackActions];
 function createPlaybackStore(): PlaybackStore {
   const [state, setState] = createStore<PlaybackStoreState>({
     audio: createSharedAudioContext(),
-    playbackStates: {},
+    playbacks: new Map(),
     speakingStates: {},
+    volumePrefs: {},
   });
+
+  const getVolumeKey = (userId: number, mediaType: "voice" | "screenSound") =>
+    `${userId}-${mediaType}`;
 
   const actions: PlaybackActions = {
     getAudioContext() {
@@ -55,51 +57,82 @@ function createPlaybackStore(): PlaybackStore {
       await state.audio.resume();
     },
 
-    getPlaybackState(userId) {
-      return state.playbackStates[userId];
+    getPlayback(userId, mediaType) {
+      const key: PlaybackKey = `${userId}-${mediaType}`;
+      return state.playbacks.get(key);
     },
 
-    initializeForUser(userId) {
-      if (state.playbackStates[userId]) return;
+    createPlayback(userId, mediaType) {
+      const key: PlaybackKey = `${userId}-${mediaType}`;
+      const ctx = state.audio;
 
-      const playbackState: PlaybackState = {
-        playback: new AudioPlayback(actions.getAudioContext(), 200),
-        screenPlayback: new VideoPlayback(200),
-        cameraPlayback: new VideoPlayback(200),
-        screenSoundPlayback: new AudioPlayback(actions.getAudioContext(), 200),
-      };
-      playbackState.screenSoundPlayback.setVolume(0);
+      let playback: AudioPlayback | VideoPlayback;
 
-      setState("playbackStates", userId, playbackState);
+      switch (mediaType) {
+        case "voice": {
+          const pb = new AudioPlayback(ctx, 200);
+          const vol = state.volumePrefs[getVolumeKey(userId, "voice")] ?? 100;
+          pb.setVolume(vol);
+          playback = pb;
+          break;
+        }
+        case "screenSound": {
+          const pb = new AudioPlayback(ctx, 200);
+          const vol = state.volumePrefs[getVolumeKey(userId, "screenSound")] ?? 0;
+          pb.setVolume(vol);
+          playback = pb;
+          break;
+        }
+        case "camera":
+        case "screen":
+          playback = new VideoPlayback(200);
+          break;
+      }
+
+      setState("playbacks", (map) => new Map(map).set(key, playback));
+      return playback;
+    },
+
+    destroyPlayback(userId, mediaType) {
+      const key: PlaybackKey = `${userId}-${mediaType}`;
+      const playback = state.playbacks.get(key);
+      if (!playback) return;
+
+      playback.cleanup();
+
+      setState("playbacks", (map) => {
+        const newMap = new Map(map);
+        newMap.delete(key);
+        return newMap;
+      });
     },
 
     cleanupForUser(userId) {
+      const mediaTypes: MediaTypeKey[] = ["voice", "camera", "screen", "screenSound"];
+      for (const mediaType of mediaTypes) {
+        actions.destroyPlayback(userId, mediaType);
+      }
+      actions.clearSpeakingState(userId);
       setState(
-        "playbackStates",
-        produce((states) => {
-          delete states[userId];
+        "volumePrefs",
+        produce((prefs) => {
+          delete prefs[getVolumeKey(userId, "voice")];
+          delete prefs[getVolumeKey(userId, "screenSound")];
         })
       );
-      actions.clearSpeakingState(userId);
     },
 
     streamMedia(userId, mediaType, packet, timestamp) {
-      const playbackState = actions.getPlaybackState(userId);
-      if (!playbackState) return;
+      let playback = actions.getPlayback(userId, mediaType);
 
-      switch (mediaType) {
-        case "voice":
-          playbackState.playback.pushChunk(packet as EncodedAudioChunk, timestamp);
-          break;
-        case "screen":
-          playbackState.screenPlayback.pushFrame(packet as EncodedVideoChunk, timestamp);
-          break;
-        case "camera":
-          playbackState.cameraPlayback.pushFrame(packet as EncodedVideoChunk, timestamp);
-          break;
-        case "screenSound":
-          playbackState.screenSoundPlayback.pushChunk(packet as EncodedAudioChunk, timestamp);
-          break;
+      if (!playback) {
+        playback = actions.createPlayback(userId, mediaType);
+      }
+
+      if (mediaType === "voice" || mediaType === "screenSound") {
+        (playback as AudioPlayback).pushChunk(packet as EncodedAudioChunk, timestamp);
+      } else {
+        (playback as VideoPlayback).pushFrame(packet as EncodedVideoChunk, timestamp);
       }
     },
 
@@ -121,33 +154,35 @@ function createPlaybackStore(): PlaybackStore {
     },
 
     adjustVolume(userId, volume) {
-      const playbackState = actions.getPlaybackState(userId);
-      if (playbackState?.playback) {
-        playbackState.playback.setVolume(volume);
+      setState("volumePrefs", getVolumeKey(userId, "voice"), volume);
+      const playback = actions.getPlayback(userId, "voice");
+      if (playback) {
+        (playback as AudioPlayback).setVolume(volume);
       }
     },
 
     getVolume(userId) {
-      const playbackState = actions.getPlaybackState(userId);
-      if (playbackState?.playback) {
-        return playbackState.playback.volume();
+      const playback = actions.getPlayback(userId, "voice");
+      if (playback) {
+        return (playback as AudioPlayback).volume();
       }
-      return 100;
+      return state.volumePrefs[getVolumeKey(userId, "voice")] ?? 100;
     },
 
     adjustScreenAudio(userId, volume) {
-      const playbackState = actions.getPlaybackState(userId);
-      if (playbackState?.screenSoundPlayback) {
-        playbackState.screenSoundPlayback.setVolume(volume);
+      setState("volumePrefs", getVolumeKey(userId, "screenSound"), volume);
+      const playback = actions.getPlayback(userId, "screenSound");
+      if (playback) {
+        (playback as AudioPlayback).setVolume(volume);
       }
     },
 
     getScreenAudioVolume(userId) {
-      const playbackState = actions.getPlaybackState(userId);
-      if (playbackState?.screenSoundPlayback) {
-        return playbackState.screenSoundPlayback.volume();
+      const playback = actions.getPlayback(userId, "screenSound");
+      if (playback) {
+        return (playback as AudioPlayback).volume();
       }
-      return 100;
+      return state.volumePrefs[getVolumeKey(userId, "screenSound")] ?? 0;
     },
   };
 

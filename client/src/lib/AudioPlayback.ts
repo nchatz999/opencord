@@ -298,13 +298,16 @@ export class AudioPlayback {
   }
 
   cleanup() {
-
     if (this.bufferInterval !== null) {
       window.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
     }
 
     this.clearBuffer();
+
+    if (this.decoder.state !== 'closed') {
+      this.decoder.close();
+    }
 
     this.workletNode?.disconnect();
     this.gainNode.disconnect();

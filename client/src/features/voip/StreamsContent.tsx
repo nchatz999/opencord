@@ -5,6 +5,7 @@ import { Users, Video, X, Maximize2, Minimize2, Expand } from "lucide-solid";
 import { useAuth, useVoip, useContext } from "../../store/index";
 import { type VoipParticipant, MediaType } from "../../model";
 import VideoStream from "./VideoStream";
+import Button from "../../components/Button";
 
 type FocusedStream = { publisherId: number; mediaType: MediaType } | null;
 
@@ -117,34 +118,36 @@ const StreamsContent: Component = () => {
                 {(participant) => (
                   <>
                     <Show when={participant.publishCamera}>
-                      <div
-                        class="relative cursor-pointer group"
-                        onClick={() => openStreamModal(participant.userId, MediaType.Camera)}
-                      >
+                      <div class="relative group">
                         <VideoStream
                           publisherId={participant.userId}
                           mediaType={MediaType.Camera}
                         />
-                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div class="p-3 rounded-full bg-background/60">
-                            <Expand size={24} class="text-foreground" />
-                          </div>
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          <Button
+                            variant="ghost"
+                            class="p-3 rounded-full bg-background/60 pointer-events-auto"
+                            onClick={() => openStreamModal(participant.userId, MediaType.Camera)}
+                          >
+                            <Expand size={24} />
+                          </Button>
                         </div>
                       </div>
                     </Show>
                     <Show when={participant.publishScreen}>
-                      <div
-                        class="relative cursor-pointer group"
-                        onClick={() => openStreamModal(participant.userId, MediaType.Screen)}
-                      >
+                      <div class="relative group">
                         <VideoStream
                           publisherId={participant.userId}
                           mediaType={MediaType.Screen}
                         />
-                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div class="p-3 rounded-full bg-background/60">
-                            <Expand size={24} class="text-foreground" />
-                          </div>
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          <Button
+                            variant="ghost"
+                            class="p-3 rounded-full bg-background/60 pointer-events-auto"
+                            onClick={() => openStreamModal(participant.userId, MediaType.Screen)}
+                          >
+                            <Expand size={24} />
+                          </Button>
                         </div>
                       </div>
                     </Show>
