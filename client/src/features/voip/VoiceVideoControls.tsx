@@ -100,40 +100,42 @@ const VoiceVideoControls: Component = () => {
 
   return (
     <div class="flex items-center gap-1">
-      <Show when={isChromiumBased()}>
-        <Show when={currentVoip()}>
-          {(voip) => (
-            <Button
-              variant={voip().publishScreen ? "success" : "secondary"}
-              size="sm"
-              class="p-2"
-              onClick={() => handleScreenShare(voip().publishScreen)}
-              title={voip().publishScreen ? 'Stop Screen Share' : 'Share Screen'}
-            >
-              <Show when={voip().publishScreen} fallback={<MonitorOff size={16} />}>
-                <Monitor size={16} />
-              </Show>
-            </Button>
-          )}
-        </Show>
+      <Show when={currentVoip()}>
+        {(voip) => (
+          <Button
+            variant={voip().publishScreen ? "success" : "secondary"}
+            size="sm"
+            class="p-2"
+            onClick={() => handleScreenShare(voip().publishScreen)}
+            disabled={!isChromiumBased()}
+            title={isChromiumBased()
+              ? (voip().publishScreen ? 'Stop Screen Share' : 'Share Screen')
+              : 'Screen sharing requires a Chromium-based browser'}
+          >
+            <Show when={voip().publishScreen} fallback={<MonitorOff size={16} />}>
+              <Monitor size={16} />
+            </Show>
+          </Button>
+        )}
       </Show>
 
-      <Show when={isChromiumBased()}>
-        <Show when={currentVoip()}>
-          {(voip) => (
-            <Button
-              variant={voip().publishCamera ? "success" : "secondary"}
-              size="sm"
-              class="p-2"
-              onClick={() => handleCamera(voip().publishCamera)}
-              title={voip().publishCamera ? 'Turn Off Camera' : 'Turn On Camera'}
-            >
-              <Show when={voip().publishCamera} fallback={<VideoOff size={16} />}>
-                <Video size={16} />
-              </Show>
-            </Button>
-          )}
-        </Show>
+      <Show when={currentVoip()}>
+        {(voip) => (
+          <Button
+            variant={voip().publishCamera ? "success" : "secondary"}
+            size="sm"
+            class="p-2"
+            onClick={() => handleCamera(voip().publishCamera)}
+            disabled={!isChromiumBased()}
+            title={isChromiumBased()
+              ? (voip().publishCamera ? 'Turn Off Camera' : 'Turn On Camera')
+              : 'Camera requires a Chromium-based browser'}
+          >
+            <Show when={voip().publishCamera} fallback={<VideoOff size={16} />}>
+              <Video size={16} />
+            </Show>
+          </Button>
+        )}
       </Show>
 
       <Show when={currentVoip()}>

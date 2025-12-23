@@ -11,6 +11,7 @@ use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
+use tokio::time::{Duration, interval};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -824,7 +825,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             o.send(SubscriberMessage::Close("User deleted".to_string()))
                 .await;
         }
-        self.observers.retain(|subscriber| subscriber.user_id() != user_id);
+        self.observers
+            .retain(|subscriber| subscriber.user_id() != user_id);
         Ok(())
     }
 
@@ -970,9 +972,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             CommandPayload::Disconnect(user_id, session_token) => {
                 self.handle_disconnect(user_id, session_token).await?
             }
-            CommandPayload::DisconnectUser(user_id) => {
-                self.handle_disconnect_user(user_id).await?
-            }
+            CommandPayload::DisconnectUser(user_id) => self.handle_disconnect_user(user_id).await?,
         }
         Ok(())
     }
@@ -1028,6 +1028,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         .expect("Failed to start server");
 
         let sender = self.subscribe_channel().await;
+        let mut session_check_interval = interval(Duration::from_secs(5));
+
         loop {
             tokio::select! {
                 Some(msg)= self.receiver.recv() => {
@@ -1045,6 +1047,9 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                             RealtimeServer::handle_subscriber_session(conn, service, tx).await;
                         });
                     }
+                }
+                _ = session_check_interval.tick() => {
+                    let _ = self.check_expired_sessions().await;
                 }
             }
         }
@@ -1092,6 +1097,35 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             )
             .await?;
         }
+        Ok(())
+    }
+
+    async fn check_expired_sessions(&mut self) -> Result<(), ServerError> {
+        let mut expired_sessions: Vec<(i64, String)> = Vec::new();
+
+        for observer in &self.observers {
+            let session = self
+                .service
+                .authenticate_session(&observer.session_token)
+                .await?;
+
+            if let None = session {
+                expired_sessions.push((observer.user_id, observer.session_token.clone()));
+            }
+        }
+
+        for (user_id, session_token) in expired_sessions {
+            let _ = self
+                .service
+                .logger
+                .log_entry(
+                    format!("Session expired for user {}", user_id),
+                    "webtransport".to_string(),
+                )
+                .await;
+            self.handle_disconnect(user_id, session_token).await?;
+        }
+
         Ok(())
     }
 

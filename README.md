@@ -106,6 +106,65 @@ opencord/
 └── Makefile         # Build automation
 ```
 
+## Permissions System
+
+Opencord uses a role-based permission system where users belong to roles, and roles have specific rights for each group/channel.
+
+### Rights Levels
+
+| Level | Name | Description |
+|-------|------|-------------|
+| 0 | Hidden | No access - group/channel is invisible |
+| 1 | Ack | Can see the group/channel exists |
+| 2 | Read | Can read messages and listen to voice |
+| 4 | Write | Can send messages and speak in voice |
+| 8 | ACL | Full control - manage permissions, kick users, delete messages |
+
+### Special Roles
+
+| Role ID | Name | Description |
+|---------|------|-------------|
+| 1 | Owner | Absolute authority over the server |
+| 2 | Admin | Maximum rights everywhere, can do everything except modify Owner |
+| 3 | Default | The role new users are assigned when they register |
+
+### Who Can Do What
+
+| Action | Required Right | Notes |
+|--------|---------------|-------|
+| See a group/channel | Ack (1) | |
+| Read messages | Read (2) | |
+| Listen to voice | Read (2) | |
+| Send messages | Write (4) | |
+| Speak in voice | Write (4) | |
+| Join voice channel | Read (2) | |
+| Share screen/camera | Write (4) | Chromium browsers only |
+| Delete any message | ACL (8) | |
+| Kick users from voice | ACL (8) | Cannot kick Owner/Admin unless you are Owner |
+| Modify permissions | ACL (8) | Only Owner/Admin can grant/remove ACL rights |
+| Create groups/channels/roles | Owner/Admin | |
+| Delete normal users | Owner/Admin | |
+| Delete Admin users | Owner only | |
+| Assign role to normal user | Owner/Admin | Change which role a user belongs to |
+| Assign role to Admin user | Owner only | Change which role an Admin belongs to |
+
+### Permission Hierarchy
+
+- Channels inherit permissions from their parent group
+- Owner can moderate anyone
+- Admin can moderate anyone except Owner
+- Users with ACL can only moderate non-Owner, non-Admin users
+- **ACL rights for non-Owner/Admin users are local to each group** - a user may have ACL in one group but not others
+
+### User Management Rules
+
+- Only Owner or Admin can create groups, channels, and roles
+- Owner or Admin can delete any normal user (role 3+)
+- Only Owner can delete Admin users
+- Owner or Admin can assign any role to normal users
+- Only Owner can assign a different role to Admin users
+- Owner's role cannot be changed
+
 ## License
 
 AGPL-3.0

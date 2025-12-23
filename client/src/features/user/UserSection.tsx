@@ -79,17 +79,17 @@ const UserSection: Component = () => {
             <HeadphoneOff size={16} />
           </Show>
         </Button>
-      </div>
 
-      <Button
-        onClick={handleUserSettings}
-        variant="secondary"
-        size="sm"
-        class="p-2"
-        title="User Settings"
-      >
-        <Settings size={16} />
-      </Button>
+        <Button
+          onClick={handleUserSettings}
+          variant="secondary"
+          size="sm"
+          class="p-2"
+          title="User Settings"
+        >
+          <Settings size={16} />
+        </Button>
+      </div>
     </div>
   )
 }

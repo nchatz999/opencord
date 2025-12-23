@@ -49,6 +49,8 @@ pub trait RoleRepository: Send + Sync + Clone {
     async fn list_all(&self) -> Result<Vec<Role>, DatabaseError>;
 
     async fn find_user_role(&self, user_id: i64) -> Result<Option<i64>, DatabaseError>;
+
+    async fn count_users_with_role(&self, role_id: i64) -> Result<i64, DatabaseError>;
 }
 
 use crate::auth::Session;
@@ -261,6 +263,14 @@ impl<R: RoleRepository, N: NotifierManager, G: LogManager> RoleService<R, N, G> 
             ));
         }
 
+        let user_count = self.repository.count_users_with_role(role_id).await?;
+        if user_count > 0 {
+            return Err(DomainError::BadRequest(format!(
+                "Cannot delete role with {} member(s). Reassign users first.",
+                user_count
+            )));
+        }
+
         let mut tx = self.repository.begin().await?;
 
         let deleted = tx
@@ -395,6 +405,16 @@ impl RoleRepository for Postgre {
             .fetch_optional(&self.pool)
             .await?;
         Ok(result)
+    }
+
+    async fn count_users_with_role(&self, role_id: i64) -> Result<i64, DatabaseError> {
+        let result = sqlx::query_scalar!(
+            "SELECT COUNT(*) as count FROM users WHERE role_id = $1",
+            role_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(result.unwrap_or(0))
     }
 }
 

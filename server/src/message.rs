@@ -272,15 +272,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
     ) -> Result<(Message, Vec<File>), DomainError> {
-        let recipient_role = self.repository.find_user_role(recipient_id).await?;
-
-        if recipient_role.is_none() {
-            return Err(DomainError::BadRequest(format!(
-                "Recipient {} not found",
-                recipient_id
-            )));
-        }
-
         let mut db_tx = self.repository.begin().await?;
 
         let message = db_tx
@@ -306,7 +297,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
             })?;
 
         let file_attachments = self.process_files(&mut db_tx, message.id, files).await?;
-
         self.repository.commit(db_tx).await?;
 
         let event = EventPayload::MessageCreated {
