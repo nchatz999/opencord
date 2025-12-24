@@ -10,8 +10,8 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "electron-vite dev",
-    "build": "vite build",
-    "build:electron": "electron-vite build && electron-builder",
+    "build": "electron-vite build",
+    "build:web": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {

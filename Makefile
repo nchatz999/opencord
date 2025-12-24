@@ -12,10 +12,10 @@ install: check-node
 	npm install
 
 build-client: check-node
-	cd client && npm run build
+	cd client && npm run build:web
 
 build-electron: check-node
-	cd client && npm run build:electron
+	cd client && npm run build && npx electron-builder
 
 build: check-node check-rust install
 	sqlx database create

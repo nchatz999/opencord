@@ -33,9 +33,9 @@ A modern real-time communication platform built with Rust and SolidJS.
 |---------|-------------|
 | `make install` | Install npm dependencies |
 | `make build` | Build everything (client + server) |
-| `make build-client` | Build client only |
-| `make build-electron` | Build Electron app |
-| `make server` | Build server |
+| `make build-client` | Build web client for server |
+| `make build-electron` | Build Electron desktop app |
+| `make server` | Build server only |
 | `make run` | Run server |
 | `make stop` | Stop server |
 | `make clean` | Remove build artifacts |
