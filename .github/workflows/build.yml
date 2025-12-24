@@ -32,3 +32,4 @@ jobs:
           package_root: client
           github_token: ${{ secrets.GITHUB_TOKEN }}
           release: true
+          skip_package_manager_install: true
