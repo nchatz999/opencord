@@ -2,6 +2,7 @@
   "name": "opencord-client",
   "description": "Opencord desktop client",
   "author": "nchatz999@gmail.com",
+  "repository": "github:nchatz999/opencord",
   "private": true,
   "version": "0.1.0",
   "type": "module",
