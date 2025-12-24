@@ -1,6 +1,8 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, desktopCapturer, ipcMain } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
 
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
@@ -21,6 +23,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      preload: join(__dirname, 'preload.mjs'),
     },
   });
 
@@ -41,6 +44,42 @@ function createWindow(): void {
     });
   });
 
+  ipcMain.handle('get-screen-sources', async () => {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+    return sources.map(source => ({
+      id: source.id,
+      name: source.name,
+    }));
+  });
+
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: true,
+    });
+
+    mainWindow?.webContents.send('show-screen-picker', sources.map(s => ({
+      id: s.id,
+      name: s.name,
+      thumbnail: s.thumbnail.toDataURL(),
+      appIcon: s.appIcon?.toDataURL() || null,
+    })));
+
+    ipcMain.once('screen-selected', (_event, sourceId: string | null) => {
+      if (!sourceId) {
+        callback(null);
+        return;
+      }
+      const source = sources.find(s => s.id === sourceId);
+      if (source) {
+        callback({ video: source, audio: 'loopback' });
+      } else {
+        callback(null);
+      }
+    });
+  });
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
   } else {
@@ -56,6 +95,8 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  autoUpdater.checkForUpdatesAndNotify();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -20,6 +20,7 @@
     "@tanstack/solid-virtual": "^3.13.13",
     "@types/dom-mediacapture-transform": "^0.1.11",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.6.2",
     "lucide-solid": "^0.523.0",
     "opencord-transport": "workspace:*",
     "opencord-utils": "workspace:*",

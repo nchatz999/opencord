@@ -15,6 +15,18 @@ export default defineConfig({
       },
     },
   },
+  preload: {
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      outDir: 'dist-electron/main',
+      emptyOutDir: false,
+      rollupOptions: {
+        input: {
+          preload: resolve(__dirname, 'electron/preload.ts'),
+        },
+      },
+    },
+  },
   renderer: {
     root: '.',
     build: {
