@@ -37,7 +37,7 @@ const [, microphoneActions] = useMicrophone();
 const [, cameraActions] = useCamera();
 const [, screenShareActions] = useScreenShare();
 
-microphoneActions.onEncodedData(async (chunk) => {
+microphoneActions.onEncodedData(async (chunk, sequence) => {
   const user = authActions.getUser();
   if (!user) return;
   const session = voipActions.findById(user.userId);
@@ -51,6 +51,7 @@ microphoneActions.onEncodedData(async (chunk) => {
     timestamp: Date.now(),
     realTimestamp: Math.trunc(chunk.timestamp),
     key: chunk.type,
+    sequence,
   };
   await connection.sendVoip(payload);
 });
@@ -67,7 +68,7 @@ microphoneActions.onSpeech(async (isSpeaking) => {
   await connection.sendVoip(payload);
 });
 
-cameraActions.onEncodedData(async (chunk) => {
+cameraActions.onEncodedData(async (chunk, sequence) => {
   const user = authActions.getUser();
   if (!user) return;
   const session = voipActions.findById(user.userId);
@@ -81,6 +82,7 @@ cameraActions.onEncodedData(async (chunk) => {
     timestamp: Date.now(),
     realTimestamp: Math.trunc(chunk.timestamp),
     key: chunk.type,
+    sequence,
   };
   await connection.sendVoip(payload);
 });
@@ -89,7 +91,7 @@ cameraActions.onRecordingStopped(async () => {
   await voipActions.publishCamera(false);
 });
 
-screenShareActions.onEncodedVideoData(async (chunk) => {
+screenShareActions.onEncodedVideoData(async (chunk, sequence) => {
   const user = authActions.getUser();
   if (!user) return;
   const session = voipActions.findById(user.userId);
@@ -103,11 +105,12 @@ screenShareActions.onEncodedVideoData(async (chunk) => {
     timestamp: Date.now(),
     realTimestamp: Math.trunc(chunk.timestamp),
     key: chunk.type,
+    sequence,
   };
   await connection.sendVoip(payload);
 });
 
-screenShareActions.onEncodedAudioData(async (chunk) => {
+screenShareActions.onEncodedAudioData(async (chunk, sequence) => {
   const user = authActions.getUser();
   if (!user) return;
   const session = voipActions.findById(user.userId);
@@ -121,6 +124,7 @@ screenShareActions.onEncodedAudioData(async (chunk) => {
     timestamp: Date.now(),
     realTimestamp: Math.trunc(chunk.timestamp),
     key: chunk.type,
+    sequence,
   };
   await connection.sendVoip(payload);
 });
@@ -139,7 +143,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "voice", packet, frame.timestamp);
+        playbackActions.streamMedia(frame.userId, "voice", packet, frame.timestamp, frame.sequence);
         break;
       }
       case "camera": {
@@ -149,7 +153,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "camera", videoPacket, frame.timestamp);
+        playbackActions.streamMedia(frame.userId, "camera", videoPacket, frame.timestamp, frame.sequence);
         break;
       }
       case "screen": {
@@ -159,7 +163,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "screen", videoPacket, frame.timestamp);
+        playbackActions.streamMedia(frame.userId, "screen", videoPacket, frame.timestamp, frame.sequence);
         break;
       }
       case "screenSound": {
@@ -169,7 +173,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "screenSound", audioPacket, frame.timestamp);
+        playbackActions.streamMedia(frame.userId, "screenSound", audioPacket, frame.timestamp, frame.sequence);
         break;
       }
     }

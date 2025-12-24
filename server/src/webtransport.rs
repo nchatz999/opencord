@@ -145,6 +145,7 @@ pub enum VoipPayload {
         timestamp: u64,
         real_timestamp: u64,
         key: KeyType,
+        sequence: u64,
     },
 }
 

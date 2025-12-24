@@ -1,7 +1,6 @@
-import { ok } from 'opencord-utils';
+import { ok, err, timerManager } from 'opencord-utils';
 import { PacketSerializer, FECEncoder } from './packet';
-import type { Result } from 'opencord-utils'
-import { err } from 'opencord-utils';
+import type { Result } from 'opencord-utils';
 export enum PacketType {
   PING = 0x01,
   PONG = 0x02,
@@ -277,7 +276,7 @@ export class MediaTransport {
   public cancelRetransmission(sequence: bigint) {
     const packet = this.retransmission.get(sequence);
     if (packet) {
-      clearTimeout(packet.timer);
+      timerManager.clearTimeout(packet.timer);
       this.retransmission.delete(sequence);
     }
   }
@@ -297,7 +296,7 @@ export class MediaTransport {
       return;
     }
     let time = packet.count == 1 ? 20 : this.rto;
-    packet.timer = window.setTimeout(async () => {
+    packet.timer = timerManager.setTimeout(async () => {
       if (this.writer) {
         await this.writer.write(PacketSerializer.serialize(packet.packet));
         this.scheduleRetransmission(nack);
@@ -321,7 +320,7 @@ export class MediaTransport {
     if (!ping) {
       return;
     }
-    clearTimeout(ping.timer);
+    timerManager.clearTimeout(ping.timer);
     this.pings = this.pings.filter((p) => p.timestamp !== packet.timestamp);
     const rtt = Number(BigInt(Date.now()) - ping.timestamp);
     this.updateRTT(rtt)
@@ -403,7 +402,7 @@ export class MediaTransport {
   }
 
   public runPingInterval(interval: number) {
-    this.pingIntervalId = window.setInterval(async () => {
+    this.pingIntervalId = timerManager.setInterval(async () => {
       if (this.missedPongs >= 5) {
         this.onDisconnect("Connection timed out");
         await this.disconnect()
@@ -423,7 +422,7 @@ export class MediaTransport {
       } catch (e) {
       }
       this.pings.push({
-        timer: window.setTimeout(() => {
+        timer: timerManager.setTimeout(() => {
           this.missedPongs++;
         }, 1000),
         timestamp: currentTime,
@@ -507,7 +506,7 @@ export class MediaTransport {
   }
 
   public async runCleaner() {
-    this.cleanerIntervalId = window.setInterval(() => {
+    this.cleanerIntervalId = timerManager.setInterval(() => {
       if (this.closed) return;
       let now = Date.now();
 
@@ -542,17 +541,17 @@ export class MediaTransport {
       this.closed = true;
 
       if (this.pingIntervalId !== null) {
-        clearInterval(this.pingIntervalId);
+        timerManager.clearInterval(this.pingIntervalId);
         this.pingIntervalId = null;
       }
 
       if (this.cleanerIntervalId !== null) {
-        clearInterval(this.cleanerIntervalId);
+        timerManager.clearInterval(this.cleanerIntervalId);
         this.cleanerIntervalId = null;
       }
 
-      this.retransmission.forEach(({ timer }) => clearTimeout(timer));
-      this.pings.forEach(({ timer }) => clearTimeout(timer));
+      this.retransmission.forEach(({ timer }) => timerManager.clearTimeout(timer));
+      this.pings.forEach(({ timer }) => timerManager.clearTimeout(timer));
 
       try {
         if (this.reader) await this.reader.cancel();
@@ -576,19 +575,19 @@ export class MediaTransport {
     this.closed = true;
 
     if (this.pingIntervalId !== null) {
-      clearInterval(this.pingIntervalId);
+      timerManager.clearInterval(this.pingIntervalId);
       this.pingIntervalId = null;
     }
 
     if (this.cleanerIntervalId !== null) {
-      clearInterval(this.cleanerIntervalId);
+      timerManager.clearInterval(this.cleanerIntervalId);
       this.cleanerIntervalId = null;
     }
 
-    this.retransmission.forEach(({ timer }) => clearTimeout(timer));
+    this.retransmission.forEach(({ timer }) => timerManager.clearTimeout(timer));
     this.retransmission.clear();
 
-    this.pings.forEach(({ timer }) => clearTimeout(timer));
+    this.pings.forEach(({ timer }) => timerManager.clearTimeout(timer));
     this.pings = [];
     this.missedPongs = 0;
 

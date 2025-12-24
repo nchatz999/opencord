@@ -24,7 +24,8 @@ interface PlaybackActions {
     userId: number,
     mediaType: MediaTypeKey,
     packet: EncodedAudioChunk | EncodedVideoChunk,
-    timestamp: number
+    timestamp: number,
+    sequence: number
   ) => void;
   updateSpeakingState: (userId: number, isSpeaking: boolean) => void;
   getSpeakingState: (userId: number) => boolean;
@@ -116,7 +117,7 @@ function createPlaybackStore(): PlaybackStore {
       actions.clearSpeakingState(userId);
     },
 
-    streamMedia(userId, mediaType, packet, timestamp) {
+    streamMedia(userId, mediaType, packet, timestamp, sequence) {
       let playback = actions.getPlayback(userId, mediaType);
 
       if (!playback) {
@@ -126,7 +127,7 @@ function createPlaybackStore(): PlaybackStore {
       if (mediaType === "voice" || mediaType === "screenSound") {
         (playback as AudioPlayback).pushChunk(packet as EncodedAudioChunk, timestamp);
       } else {
-        (playback as VideoPlayback).pushFrame(packet as EncodedVideoChunk, timestamp);
+        (playback as VideoPlayback).pushFrame(packet as EncodedVideoChunk, timestamp, sequence);
       }
     },
 

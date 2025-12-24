@@ -41,7 +41,7 @@ export interface MicrophoneActions {
   isRecording: () => boolean;
   setConstraints: (constraints: Partial<MicrophoneConstraints>) => void;
   getConstraints: () => MicrophoneConstraints;
-  onEncodedData: (callback: (chunk: EncodedAudioChunk) => void) => () => void;
+  onEncodedData: (callback: (chunk: EncodedAudioChunk, sequence: number) => void) => () => void;
   onSpeech: (callback: (isSpeech: boolean) => void) => () => void;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -159,8 +159,9 @@ function createMicrophoneStore(): MicrophoneStore {
     quality: pref.get<number>("mic:quality") ?? DEFAULT_QUALITY,
   });
 
-  const encodedDataCallbacks = new Set<(chunk: EncodedAudioChunk) => void>();
+  const encodedDataCallbacks = new Set<(chunk: EncodedAudioChunk, sequence: number) => void>();
   const speechCallbacks = new Set<(isSpeech: boolean) => void>();
+  let sequence = 0;
 
   let constraints = { ...DEFAULT_CONSTRAINTS };
   let stream: MediaStream | null = null;
@@ -173,7 +174,7 @@ function createMicrophoneStore(): MicrophoneStore {
 
 
   function notifyEncodedData(chunk: EncodedAudioChunk): void {
-    encodedDataCallbacks.forEach((cb) => cb(chunk));
+    encodedDataCallbacks.forEach((cb) => cb(chunk, sequence++));
   }
 
   function notifySpeech(isSpeech: boolean): void {
@@ -229,6 +230,7 @@ function createMicrophoneStore(): MicrophoneStore {
 
     gainNode = null;
     processor = null;
+    sequence = 0;
   }
 
   updateAvailableDevices();

@@ -27,8 +27,8 @@ export interface ScreenShareActions {
   getConstraints: () => ScreenShareConstraints;
   getPreset: () => QualityPreset;
   setPreset: (preset: QualityPreset) => void;
-  onEncodedVideoData: (callback: (chunk: EncodedVideoChunk) => void) => () => void;
-  onEncodedAudioData: (callback: (chunk: EncodedAudioChunk) => void) => () => void;
+  onEncodedVideoData: (callback: (chunk: EncodedVideoChunk, sequence: number) => void) => () => void;
+  onEncodedAudioData: (callback: (chunk: EncodedAudioChunk, sequence: number) => void) => () => void;
   onRecordingStopped: (callback: () => void) => () => void;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -154,9 +154,11 @@ function createScreenShareStore(): ScreenShareStore {
     preset: savedPreset,
   });
 
-  const encodedVideoDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
-  const encodedAudioDataCallbacks = new Set<(chunk: EncodedAudioChunk) => void>();
+  const encodedVideoDataCallbacks = new Set<(chunk: EncodedVideoChunk, sequence: number) => void>();
+  const encodedAudioDataCallbacks = new Set<(chunk: EncodedAudioChunk, sequence: number) => void>();
   const recordingStoppedCallbacks = new Set<() => void>();
+  let videoSequence = 0;
+  let audioSequence = 0;
 
   let constraints: ScreenShareConstraints = {
     ...DEFAULT_CONSTRAINTS,
@@ -173,11 +175,11 @@ function createScreenShareStore(): ScreenShareStore {
   let isProcessing = false;
 
   function notifyEncodedVideoData(chunk: EncodedVideoChunk): void {
-    encodedVideoDataCallbacks.forEach((cb) => cb(chunk));
+    encodedVideoDataCallbacks.forEach((cb) => cb(chunk, videoSequence++));
   }
 
   function notifyEncodedAudioData(chunk: EncodedAudioChunk): void {
-    encodedAudioDataCallbacks.forEach((cb) => cb(chunk));
+    encodedAudioDataCallbacks.forEach((cb) => cb(chunk, audioSequence++));
   }
 
   function notifyRecordingStopped(): void {
@@ -249,6 +251,9 @@ function createScreenShareStore(): ScreenShareStore {
 
     stopStreamTracks(stream);
     stream = null;
+
+    videoSequence = 0;
+    audioSequence = 0;
   }
 
   async function handleVideoTrackEnded() {

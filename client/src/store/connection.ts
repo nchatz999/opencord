@@ -56,6 +56,7 @@ export type VoipPayload =
     timestamp: number;
     realTimestamp: number;
     key: "key" | "delta";
+    sequence: number;
   };
 
 export type EventPayload =

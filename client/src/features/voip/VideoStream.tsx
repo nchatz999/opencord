@@ -42,6 +42,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
   };
 
   const currentFps = createMemo(() => mediaPlayback()?.getFPS()() ?? 0);
+  const dropRate = createMemo(() => mediaPlayback()?.getDropRate()() ?? 0);
 
   createEffect(() => {
     if (!videoRef) return;
@@ -117,10 +118,15 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
   );
 
   const renderFpsIndicator = (): JSX.Element => (
-    <div class="absolute top-2 right-2">
+    <div class="absolute top-2 right-2 flex flex-col gap-1">
       <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-white font-mono">
         {currentFps()} FPS
       </div>
+      <Show when={dropRate() > 0}>
+        <div class="bg-black bg-opacity-60 rounded px-2 py-1 text-xs text-danger font-mono">
+          {dropRate()}% loss
+        </div>
+      </Show>
     </div>
   );
 

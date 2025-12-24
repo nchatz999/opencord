@@ -4,6 +4,7 @@ import { MinHeap, timerManager } from 'opencord-utils';
 interface BufferItem {
   timestamp: number;
   frame: EncodedVideoChunk;
+  sequence: number;
 }
 
 const DEFAULT_DECODER_CONFIG: VideoDecoderConfig = {
@@ -21,8 +22,14 @@ export class VideoPlayback {
   private frameCount: number = 0;
   private lastFpsTime: number = Date.now();
 
+  private lastSequence: number = -1;
+  private droppedFrames: number = 0;
+  private receivedFrames: number = 0;
+
   private getFpsSignal: () => number;
   private setFpsSignal: (value: number) => number;
+  private getDropRateSignal: () => number;
+  private setDropRateSignal: (value: number) => number;
 
 
   constructor(
@@ -32,6 +39,10 @@ export class VideoPlayback {
     const [getFps, setFps] = createSignal<number>(0);
     this.getFpsSignal = getFps;
     this.setFpsSignal = setFps;
+
+    const [getDropRate, setDropRate] = createSignal<number>(0);
+    this.getDropRateSignal = getDropRate;
+    this.setDropRateSignal = setDropRate;
 
     this.delay = delay;
     this.decoder = new VideoDecoder({
@@ -54,9 +65,13 @@ export class VideoPlayback {
     }, 10);
   }
 
-  pushFrame(frame: EncodedVideoChunk, timestamp: number) {
+  pushFrame(frame: EncodedVideoChunk, timestamp: number, sequence: number) {
     const presentationTime = timestamp + this.delay;
-    this.buffer.insert({ timestamp: presentationTime, frame });
+    this.buffer.insert({ timestamp: presentationTime, frame, sequence });
+  }
+
+  getDropRate() {
+    return this.getDropRateSignal;
   }
 
   processBuffer() {
@@ -67,6 +82,14 @@ export class VideoPlayback {
       if (!nextItem || nextItem.timestamp > now) break;
 
       const item = this.buffer.extractMin()!;
+
+      this.receivedFrames++;
+      if (this.lastSequence >= 0 && item.sequence > this.lastSequence + 1) {
+        this.droppedFrames += item.sequence - this.lastSequence - 1;
+      }
+      this.lastSequence = item.sequence;
+      this.updateDropRate();
+
       try {
         if (item.frame.type == "key") this.hasReceivedKeyFrame = true
         if (this.hasReceivedKeyFrame && this.decoder.state === 'configured') {
@@ -78,6 +101,12 @@ export class VideoPlayback {
         console.error('Failed to decode video frame:', error);
       }
     }
+  }
+
+  private updateDropRate() {
+    const total = this.receivedFrames + this.droppedFrames;
+    const dropRate = total > 0 ? Math.round((this.droppedFrames / total) * 100) : 0;
+    this.setDropRateSignal(dropRate);
   }
 
   private updateFPS() {
@@ -96,7 +125,11 @@ export class VideoPlayback {
     this.hasReceivedKeyFrame = false;
     this.frameCount = 0;
     this.lastFpsTime = Date.now();
+    this.lastSequence = -1;
+    this.droppedFrames = 0;
+    this.receivedFrames = 0;
     this.setFpsSignal(0);
+    this.setDropRateSignal(0);
   }
 
   clearBuffer() {

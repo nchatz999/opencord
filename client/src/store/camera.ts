@@ -33,7 +33,7 @@ export interface CameraActions {
   setConstraints: (constraints: Partial<CameraConstraints>) => void;
   getPreset: () => QualityPreset;
   setPreset: (preset: QualityPreset) => void;
-  onEncodedData: (callback: (chunk: EncodedVideoChunk) => void) => () => void;
+  onEncodedData: (callback: (chunk: EncodedVideoChunk, sequence: number) => void) => () => void;
   onRecordingStopped: (callback: () => void) => () => void;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -123,8 +123,9 @@ function createCameraStore(): CameraStore {
     preset: savedPreset,
   });
 
-  const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk) => void>();
+  const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk, sequence: number) => void>();
   const recordingStoppedCallbacks = new Set<() => void>();
+  let sequence = 0;
   let constraints: CameraConstraints = {
     ...DEFAULT_CONSTRAINTS,
     width: presetConfig.width,
@@ -137,7 +138,7 @@ function createCameraStore(): CameraStore {
   let isProcessing = false;
 
   function notifyEncodedData(chunk: EncodedVideoChunk): void {
-    encodedDataCallbacks.forEach((cb) => cb(chunk));
+    encodedDataCallbacks.forEach((cb) => cb(chunk, sequence++));
   }
 
   function notifyRecordingStopped(): void {
@@ -178,6 +179,7 @@ function createCameraStore(): CameraStore {
     stream = null;
 
     processor = null;
+    sequence = 0;
   }
 
   async function handleTrackEnded() {
