@@ -1,0 +1,31 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and release
+        uses: samuelmeuli/action-electron-builder@v1
+        with:
+          package_root: client
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release: true
