@@ -27,7 +27,7 @@ server: check-rust
 	cd server && cargo build --release
 
 run:
-	cd server && cargo run --release
+	cargo run --release -p opencord-server &
 
 stop:
 	pkill -x server || true
