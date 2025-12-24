@@ -9,13 +9,6 @@ import {
 import { Portal } from "solid-js/web";
 import Button from "./Button";
 
-interface ScreenSource {
-  id: string;
-  name: string;
-  thumbnail: string;
-  appIcon: string | null;
-}
-
 const [sources, setSources] = createSignal<ScreenSource[] | null>(null);
 
 export const DevicePickerProvider: Component<{ children: JSX.Element }> = (props) => {
