@@ -1,6 +1,9 @@
 pub mod packet;
+pub mod fec;
+
 use bytes::Bytes;
 use packet::{FrameBuffer, Packet, PacketSerializer, PingBody};
+use fec::{LossEstimator, FecController, AdaptiveFecEncoder};
 
 use std::{
     collections::HashMap,
@@ -110,6 +113,9 @@ impl Connection {
             srtt: 0.0,
             rttvar: 0.0,
             rto: 1000,
+            loss_estimator: LossEstimator::new(),
+            fec_controller: FecController::new(),
+            adaptive_fec_encoder: AdaptiveFecEncoder::new(),
         };
 
         tokio::spawn(runner.run());
@@ -205,6 +211,9 @@ struct ConnectionRunner {
     srtt: f64,
     rttvar: f64,
     pub rto: u64,
+    loss_estimator: LossEstimator,
+    fec_controller: FecController,
+    adaptive_fec_encoder: AdaptiveFecEncoder,
 }
 
 impl ConnectionRunner {
@@ -425,6 +434,7 @@ impl ConnectionRunner {
                     }
                     self.nacks
                         .retain(|item| item.packet.missing_sequence != sec);
+                    self.loss_estimator.record_packet_received(body.sequence_number);
                     self.received_rackets.insert(body.sequence_number, body);
 
                     if sec > self.in_seq {
@@ -488,6 +498,7 @@ impl ConnectionRunner {
                         }
                         self.nacks
                             .retain(|item| item.packet.missing_sequence != p.sequence_number);
+                        self.loss_estimator.record_packet_recovered(p.sequence_number);
                         self.received_rackets.insert(p.sequence_number, p);
                     }
                 }
@@ -509,7 +520,6 @@ impl ConnectionRunner {
             .unwrap()
             .as_millis() as u64;
 
-        let mut fec_group = vec![];
         let mut fragment_number = 0u16;
 
         while !data.is_empty() {
@@ -534,24 +544,35 @@ impl ConnectionRunner {
                 self.send_packets
                     .insert(rtp_packet.sequence_number, rtp_packet.clone());
             }
+            self.loss_estimator.record_packet_sent(rtp_packet.sequence_number);
+
             if let Err(e) = self.session.send_datagram(encoded) {
                 error!("Failed to send RTP packet: {}", e);
             }
 
-            fec_group.push(rtp_packet);
-            if fec_group.len() == 4 {
-                if let Some(fec) = FecEncoder::generate_fec_packet(&fec_group) {
-                    if let Err(e) = self
-                        .session
-                        .send_datagram(PacketSerializer::serialize(&Packet::Fec(fec)))
-                    {
-                        error!("Failed to send RTP packet: {}", e);
-                    }
+            if let Some(fec) = self.adaptive_fec_encoder.process_packet(
+                rtp_packet,
+                &self.loss_estimator,
+                &mut self.fec_controller,
+            ) {
+                if let Err(e) = self
+                    .session
+                    .send_datagram(PacketSerializer::serialize(&Packet::Fec(fec)))
+                {
+                    error!("Failed to send FEC packet: {}", e);
                 }
-                fec_group = vec![];
             }
 
             fragment_number += 1;
+        }
+
+        for fec in self.adaptive_fec_encoder.flush() {
+            if let Err(e) = self
+                .session
+                .send_datagram(PacketSerializer::serialize(&Packet::Fec(fec)))
+            {
+                error!("Failed to send FEC packet: {}", e);
+            }
         }
     }
 }

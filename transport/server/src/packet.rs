@@ -380,7 +380,7 @@ impl FecEncoder {
     }
 
     pub fn recover_packet(fec_packet: &FecBody, available_packets: &[RtpBody]) -> Option<RtpBody> {
-        if available_packets.len() != 3 {
+        if available_packets.len() < fec_packet.protected_sequences.len() - 1 {
             return None;
         }
 

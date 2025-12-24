@@ -20,6 +20,7 @@ interface MessageActions {
   findByChannel: (channelId: number) => Message[];
   findByRecipient: (recipientId: number) => Message[];
   getAttachments: (messageId: number) => StoredFile[];
+  getLastActivity: (userId: number) => number;
   insert: (message: Message) => void;
   update: (message: Message) => void;
   remove: (id: number) => void;
@@ -148,6 +149,13 @@ function createMessageStore(): MessageStore {
     getAttachments(messageId) {
       const [fileState] = useFile();
       return fileState.files.filter((f) => f.messageId === messageId);
+    },
+
+    getLastActivity(userId) {
+      const msg = state.messages
+        .filter(m => m.senderId === userId || m.recipientId === userId)
+        .at(-1);
+      return msg ? new Date(msg.createdAt).getTime() : 0;
     },
 
     insert(newMessage) {

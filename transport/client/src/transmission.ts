@@ -1,5 +1,6 @@
 import { ok, err, timerManager } from 'opencord-utils';
 import { PacketSerializer, FECEncoder } from './packet';
+import { LossEstimator, FECController, AdaptiveFECEncoder } from './fec';
 import type { Result } from 'opencord-utils';
 export enum PacketType {
   PING = 0x01,
@@ -127,6 +128,9 @@ export class MediaTransport {
   private closed: boolean = true;
   private pingIntervalId: number | null = null;
   private cleanerIntervalId: number | null = null;
+  private lossEstimator: LossEstimator;
+  private fecController: FECController;
+  private adaptiveFecEncoder: AdaptiveFECEncoder;
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
   onDisconnect: (error: string) => void;
@@ -144,6 +148,9 @@ export class MediaTransport {
     this.sendPackets = new Map();
     this.receivedPackets = new Map<bigint, RTPPacket>;
     this.duplicatePackets = 0;
+    this.lossEstimator = new LossEstimator();
+    this.fecController = new FECController(this.lossEstimator);
+    this.adaptiveFecEncoder = new AdaptiveFECEncoder(this.fecController);
     this.onFrameComplete = onFrameConplete;
     this.onSafeDataComplete = onSafeDataComplete;
     this.onDisconnect = onDisconnect;
@@ -192,7 +199,6 @@ export class MediaTransport {
 
     const mtu = this.mtu - 200;
     let currentTime = BigInt(Date.now());
-    let fecGroup: RTPPacket[] = [];
     const frameId = this.outFrame++;
 
     for (let i = 0; i < data.length; i += mtu) {
@@ -209,6 +215,7 @@ export class MediaTransport {
         data: chunk,
       };
       this.sendPackets.set(packet.sequenceNumber, packet);
+      this.lossEstimator.recordPacketSent(packet.sequenceNumber);
 
       try {
         await this.outWriter.write(PacketSerializer.serialize(packet));
@@ -216,15 +223,21 @@ export class MediaTransport {
         return;
       }
 
-      fecGroup.push(packet);
-      if (fecGroup.length == 4) {
-        const fecPacket = FECEncoder.generateFECPacket(fecGroup);
+      const fecPacket = this.adaptiveFecEncoder.processPacket(packet);
+      if (fecPacket) {
         try {
           await this.outWriter.write(PacketSerializer.serialize(fecPacket));
         } catch {
           return;
         }
-        fecGroup = [];
+      }
+    }
+
+    for (const fecPacket of this.adaptiveFecEncoder.flush()) {
+      try {
+        await this.outWriter.write(PacketSerializer.serialize(fecPacket));
+      } catch {
+        return;
       }
     }
   }
@@ -342,6 +355,7 @@ export class MediaTransport {
       this.deliverFrame(frame);
       this.cancelRetransmission(recoveredPacket.sequenceNumber);
       this.receivedPackets.set(recoveredPacket.sequenceNumber, recoveredPacket);
+      this.lossEstimator.recordPacketRecovered(recoveredPacket.sequenceNumber);
     }
   }
 
@@ -364,6 +378,7 @@ export class MediaTransport {
     if (this.receivedPackets.has(packet.sequenceNumber)) this.duplicatePackets++;
     this.cancelRetransmission(packet.sequenceNumber);
     this.receivedPackets.set(packet.sequenceNumber, packet);
+    this.lossEstimator.recordPacketReceived(packet.sequenceNumber);
     this.deliverFrame(frame)
 
     if (packet.sequenceNumber > this.inSeq) {
@@ -594,6 +609,10 @@ export class MediaTransport {
     this.sendPackets.clear();
     this.receivedPackets.clear();
     this.buffers.clear();
+
+    this.lossEstimator.reset();
+    this.fecController.reset();
+    this.adaptiveFecEncoder.reset();
 
     try {
       if (this.reader) await this.reader.cancel();

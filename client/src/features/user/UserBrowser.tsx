@@ -3,10 +3,17 @@ import { For } from "solid-js";
 
 import { UserEntry } from "./UserEntry";
 import type { User } from "../../model";
+import { useMessage } from "../../store/message";
 
 export const UserBrowser: Component<{
   users: User[];
 }> = (props) => {
+  const [, messageActions] = useMessage();
+
+  const sorted = () => [...props.users].sort((a, b) =>
+    messageActions.getLastActivity(b.userId) - messageActions.getLastActivity(a.userId)
+  );
+
   return (
     <div class="p-2">
       <div class="flex items-center justify-between px-2 py-1 mb-2">
@@ -15,7 +22,7 @@ export const UserBrowser: Component<{
         </h3>
       </div>
 
-      <For each={props.users}>
+      <For each={sorted()}>
         {(user) => (
           <UserEntry user={user} />
         )}
