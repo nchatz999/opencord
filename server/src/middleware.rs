@@ -39,17 +39,11 @@ impl<T: AuthRepository> AuthorizeService<T> {
     }
 
     pub fn extract_session_from_headers(&self, headers: &HeaderMap) -> Option<String> {
-        if let Some(cookie_header) = headers.get("Cookie") {
-            if let Ok(cookie_str) = cookie_header.to_str() {
-                for cookie in cookie_str.split(';') {
-                    let cookie = cookie.trim();
-                    if let Some(value) = cookie.strip_prefix("session_token=") {
-                        return Some(value.to_string());
-                    }
-                }
-            }
-        }
-        None
+        headers
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .map(|t| t.to_string())
     }
 }
 

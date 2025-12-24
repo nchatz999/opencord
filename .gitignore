@@ -6,6 +6,10 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+dist-electron/
+**/dist-electron/
+out/
+**/out/
 build/
 **/build/
 coverage/

@@ -1,0 +1,23 @@
+appId: com.opencord
+productName: Opencord
+directories:
+  output: out
+  buildResources: build
+files:
+  - dist-electron/**/*
+  - dist/**/*
+asar: true
+
+linux:
+  target:
+    - AppImage
+  category: Network
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.social-networking
+
+win:
+  target:
+    - nsis

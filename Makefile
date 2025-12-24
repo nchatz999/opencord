@@ -1,30 +1,37 @@
-check-requirements:
-	@echo "Checking system requirements..."
-	@command -v node >/dev/null 2>&1 || { echo "Node.js is not installed. Please install Node.js"; exit 1; }
-	@command -v npm >/dev/null 2>&1 || { echo "npm is not installed. Please install npm"; exit 1; }
-	@command -v cargo >/dev/null 2>&1 || { echo "Rust/Cargo is not installed. Please install Rust"; exit 1; }
-	@command -v sqlx >/dev/null 2>&1 || { echo "sqlx-cli is not installed. Please install with: cargo install sqlx-cli"; exit 1; }
-	@test -f .env || { echo ".env file not found. Please copy .env.example to .env"; exit 1; }
-	@echo "All requirements satisfied!"
+.PHONY: check-node check-rust install build build-client build-electron server run stop clean
 
-install:
+check-node:
+	@command -v node >/dev/null 2>&1 || { echo "Node.js is not installed"; exit 1; }
+	@command -v npm >/dev/null 2>&1 || { echo "npm is not installed"; exit 1; }
+
+check-rust:
+	@command -v cargo >/dev/null 2>&1 || { echo "Rust/Cargo is not installed"; exit 1; }
+	@command -v sqlx >/dev/null 2>&1 || { echo "sqlx-cli is not installed. Run: cargo install sqlx-cli"; exit 1; }
+
+install: check-node
 	npm install
 
-build: check-requirements install
+build-client: check-node
+	cd client && npm run build
+
+build-electron: check-node
+	cd client && npm run build:electron
+
+build: check-node check-rust install
 	sqlx database create
 	cd server && sqlx migrate run
-	npm run build
-	cargo build --release
+	$(MAKE) build-client
+	cd server && cargo build --release
+
+server: check-rust
+	cd server && cargo build --release
 
 run:
-	./target/release/server &
-
-dev:
-	cargo run -p opencord-server
+	cd server && cargo run --release
 
 stop:
 	pkill -x server || true
 
 clean:
-	rm -rf client/dist
-	cargo clean
+	rm -rf client/dist client/dist-electron
+	cd server && cargo clean

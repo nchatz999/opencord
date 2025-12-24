@@ -23,20 +23,20 @@ const Root = () => {
       <ConfirmProvider>
         <ContextMenuProvider>
           <Switch>
-          <Match when={app.view === "loading"}>
-            <LoadingPage />
-          </Match>
-          <Match when={app.view === "unauthenticated"}>
-            <LoginPage />
-          </Match>
-          <Match when={app.view === "error"}>
-            <ErrorPage />
-          </Match>
-          <Match when={app.view === "app"}>
-            <Show when={auth.session}>
-              <App />
-            </Show>
-          </Match>
+            <Match when={app.view === "loading"}>
+              <LoadingPage />
+            </Match>
+            <Match when={app.view === "unauthenticated"}>
+              <LoginPage />
+            </Match>
+            <Match when={app.view === "error"}>
+              <ErrorPage />
+            </Match>
+            <Match when={app.view === "app"}>
+              <Show when={auth.session}>
+                <App />
+              </Show>
+            </Match>
           </Switch>
         </ContextMenuProvider>
       </ConfirmProvider>

@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
-import { createSignal, createEffect } from "solid-js";
 import type { File } from "../../model";
 import { useFile } from "../../store/index";
+import Image from "../../components/Image";
 
 interface FileProps {
   file: File;
@@ -9,19 +9,6 @@ interface FileProps {
 
 const FileItem: Component<FileProps> = (props) => {
   const [, fileActions] = useFile();
-  const [imageUrl, setImageUrl] = createSignal<string>("");
-
-  createEffect(async () => {
-    if (props.file.fileType.startsWith("image/")) {
-      const result = await fileActions.downloadFile(props.file.fileId);
-
-      if (result.isErr()) return;
-
-      const blob = new Blob([result.value], { type: props.file.fileType });
-      const url = URL.createObjectURL(blob);
-      setImageUrl(url);
-    }
-  });
 
   const handleDownload = async (e: MouseEvent) => {
     e.preventDefault();
@@ -43,7 +30,7 @@ const FileItem: Component<FileProps> = (props) => {
   return (
     <div>
       {props.file.fileType.startsWith("image/") ? (
-        <img
+        <Image
           class="rounded-lg max-w-sm max-h-96 object-contain"
           src={`/message/files/${props.file.fileId}`}
           alt="File preview"

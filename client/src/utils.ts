@@ -27,6 +27,18 @@ const getBaseUrl = () => {
   return getServerUrlOrDefault();
 };
 
+const SESSION_KEY = "opencord_session";
+
+export function getSessionToken(): string | null {
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored).sessionToken || null;
+  } catch {
+    return null;
+  }
+}
+
 export function upload<T = unknown>(
   url: string,
   formData: FormData,
@@ -60,6 +72,10 @@ export function upload<T = unknown>(
     xhr.onabort = () => resolve(err({ code: 'ABORTED', reason: 'Upload cancelled' }));
 
     xhr.open('POST', `${getBaseUrl()}${url}`);
+    const token = getSessionToken();
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
     xhr.send(formData);
   });
 }
@@ -86,9 +102,15 @@ export async function request<T = unknown>(
   }
 
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = getSessionToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(finalUrl, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
     });
 

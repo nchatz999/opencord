@@ -17,14 +17,28 @@ A modern real-time communication platform built with Rust and SolidJS.
 - File sharing
 - Modern web interface
 
-## Browser Compatibility
+## Compatibility
 
-| Browser | Support |
-|---------|---------|
+| Platform | Support |
+|----------|---------|
+| Electron | Full support |
 | Chrome/Chromium | Full support |
 | Edge | Full support |
 | Firefox | No screen share or camera support |
 | Safari | Not supported |
+
+### Make Commands
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install npm dependencies |
+| `make build` | Build everything (client + server) |
+| `make build-client` | Build client only |
+| `make build-electron` | Build Electron app |
+| `make server` | Build server |
+| `make run` | Run server |
+| `make stop` | Stop server |
+| `make clean` | Remove build artifacts |
 
 ## Local Development
 
@@ -40,23 +54,30 @@ A modern real-time communication platform built with Rust and SolidJS.
 ### Setup
 
 ```bash
-# Clone and setup
 git clone <repository-url>
 cd opencord
 cp .env.example .env
 # Edit .env with your DATABASE_URL
-
-# Generate dev certificates 
 ./generate-dev-certs
+```
 
-# Build and run
-make build
+### Running
+
+```bash
+make build-client  # Required for server to serve the client
 make run
 ```
 
 Access at `https://localhost:3000`
 
 The first user should register using the invite code `OWNER_INVITE_2024` to become the server owner.
+
+### Electron
+
+```bash
+make build-electron
+cd client && npm run dev:electron
+```
 
 ## Production Deployment
 

@@ -8,34 +8,33 @@ import type { User, Session } from "../model";
 import { useUser } from "./user";
 import { useConnection } from "./connection";
 import { useApp } from "./app";
+import { clearImageCache } from "../components/Image";
 
 interface AuthSession {
   userId: number;
   sessionToken: string;
 }
 
+const SESSION_KEY = "opencord_session";
+
 const saveSession = (token: string, id: number) => {
-  const secure = location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `session_token=${token}; path=/; SameSite=Strict${secure}`;
-  document.cookie = `user_id=${id}; path=/; SameSite=Strict${secure}`;
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ sessionToken: token, userId: id }));
 };
 
 const loadSession = (): Result<AuthSession, Error> => {
-  let userId: number | undefined;
-  let sessionToken: string | undefined;
-  const cookies = document.cookie.split(";");
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split("=");
-    if (name === "session_token") sessionToken = value;
-    if (name === "user_id") userId = parseInt(value);
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (!stored) return err(new Error("No session"));
+  try {
+    const session = JSON.parse(stored) as AuthSession;
+    if (session.userId && session.sessionToken) return ok(session);
+    return err(new Error("Invalid session"));
+  } catch {
+    return err(new Error("Parse error"));
   }
-  if (userId && sessionToken) return ok({ sessionToken, userId });
-  return err(new Error("No session"));
 };
 
 const clearSession = () => {
-  document.cookie = `session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-  document.cookie = `user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  localStorage.removeItem(SESSION_KEY);
 };
 
 export interface AuthState {
@@ -139,6 +138,7 @@ function createAuthStore(): AuthStore {
     async logout() {
       if (!state.session) {
         clearSession();
+        clearImageCache();
         setState("session", null);
         return ok(undefined);
       }
@@ -149,6 +149,7 @@ function createAuthStore(): AuthStore {
       });
 
       clearSession();
+      clearImageCache();
       setState("session", null);
 
       if (result.isErr()) {
@@ -186,6 +187,7 @@ function createAuthStore(): AuthStore {
 
   connection.onConnectionClosed(() => {
     clearSession();
+    clearImageCache();
     setState("session", null);
     appActions.setView("unauthenticated");
   });
