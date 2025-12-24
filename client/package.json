@@ -21,8 +21,8 @@
     "@types/dom-mediacapture-transform": "^0.1.11",
     "clsx": "^2.1.1",
     "lucide-solid": "^0.523.0",
-    "opencord-transport": "*",
-    "opencord-utils": "*",
+    "opencord-transport": "workspace:*",
+    "opencord-utils": "workspace:*",
     "solid-js": "^1.9.7",
     "tailwind-merge": "^3.3.1"
   },

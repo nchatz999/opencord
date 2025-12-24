@@ -2,20 +2,20 @@
 
 check-node:
 	@command -v node >/dev/null 2>&1 || { echo "Node.js is not installed"; exit 1; }
-	@command -v npm >/dev/null 2>&1 || { echo "npm is not installed"; exit 1; }
+	@command -v pnpm >/dev/null 2>&1 || { echo "pnpm is not installed. Run: npm install -g pnpm"; exit 1; }
 
 check-rust:
 	@command -v cargo >/dev/null 2>&1 || { echo "Rust/Cargo is not installed"; exit 1; }
 	@command -v sqlx >/dev/null 2>&1 || { echo "sqlx-cli is not installed. Run: cargo install sqlx-cli"; exit 1; }
 
 install: check-node
-	npm install
+	pnpm install
 
 build-client: check-node
-	cd client && npm run build:web
+	pnpm --filter opencord-client run build:web
 
 build-electron: check-node
-	cd client && npm run build && npx electron-builder
+	cd client && pnpm run build && pnpm exec electron-builder
 
 build: check-node check-rust install
 	sqlx database create

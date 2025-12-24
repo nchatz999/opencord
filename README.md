@@ -45,6 +45,7 @@ A modern real-time communication platform built with Rust and SolidJS.
 ### Prerequisites
 
 - Node.js 20.19+
+- pnpm (`npm install -g pnpm`)
 - Rust 1.85+
 - PostgreSQL
 - OpenSSL
@@ -84,6 +85,7 @@ cd client && npm run dev:electron
 ### Prerequisites
 
 - Node.js 20.19+
+- pnpm (`npm install -g pnpm`)
 - Rust 1.85+
 - PostgreSQL
 - sqlx-cli (`cargo install sqlx-cli`)

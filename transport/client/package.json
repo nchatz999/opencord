@@ -13,7 +13,7 @@
     "node": ">=20.19.0"
   },
   "dependencies": {
-    "opencord-utils": "*"
+    "opencord-utils": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.19.9",

@@ -19,23 +19,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
-
-      - name: Rebuild native modules
-        working-directory: client
-        run: npm rebuild
+        run: pnpm install
 
       - name: Build
         working-directory: client
-        run: npm run build
+        run: pnpm run build
 
       - name: Package and release
         working-directory: client
-        run: npx electron-builder --publish always
+        run: pnpm exec electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
