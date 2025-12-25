@@ -47,7 +47,11 @@ export class VideoPlayback {
     this.delay = delay;
     this.decoder = new VideoDecoder({
       output: async (frame) => {
-        await this.writer.write(frame);
+        try {
+          await this.writer.write(frame);
+        } catch {
+          frame.close();
+        }
       },
       error: (e) => console.error('Video decoder error:', e)
     });

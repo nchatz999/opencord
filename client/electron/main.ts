@@ -5,6 +5,11 @@ import pkg from 'electron-updater';
 const { autoUpdater } = pkg;
 
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
+app.commandLine.appendSwitch('enable-webrtc-hw-encoding');
+app.commandLine.appendSwitch('enable-webrtc-hw-decoding');
 
 if (is.dev) {
   app.commandLine.appendSwitch('ignore-certificate-errors');

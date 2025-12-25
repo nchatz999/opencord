@@ -46,7 +46,7 @@ export type { AuthStore, AuthState, AuthActions } from "./auth";
 export { useMicrophone } from "./microphone";
 export type { MicrophoneStore } from "./microphone";
 
-export { useCamera } from "./camera";
+export { useCamera, MAX_VIDEO_BITRATE } from "./camera";
 export type { CameraStore } from "./camera";
 
 export { useScreenShare } from "./screenShare";

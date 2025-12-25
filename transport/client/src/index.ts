@@ -1,6 +1,6 @@
-export { FECEncoder } from "./packet";
-
 export { FrameBuffer } from "./transmission";
+
+export { AdaptiveFECEncoder } from "./fec";
 
 export { MediaTransport } from "./transmission";
 

@@ -1,19 +1,30 @@
 use super::fec_controller::{FecController, FecDecision};
 use super::loss_estimator::LossEstimator;
-use crate::packet::{FecBody, RtpBody};
+use crate::packet::{FecBody, ProtectedPacketMeta, RtpBody};
+
+const DEFAULT_INTERLEAVE_DEPTH: usize = 3;
 
 pub struct AdaptiveFecEncoder {
-    pending_packets: Vec<RtpBody>,
+    slots: Vec<Vec<RtpBody>>,
+    current_slot: usize,
+    group_size: usize,
+    interleave_depth: usize,
     last_decision: FecDecision,
-    current_frame_id: Option<u64>,
 }
 
 impl AdaptiveFecEncoder {
     pub fn new() -> Self {
+        Self::with_depth(DEFAULT_INTERLEAVE_DEPTH)
+    }
+
+    pub fn with_depth(depth: usize) -> Self {
+        let depth = depth.max(1);
         Self {
-            pending_packets: Vec::new(),
-            last_decision: FecDecision { ratio: 4 },
-            current_frame_id: None,
+            slots: (0..depth).map(|_| Vec::new()).collect(),
+            current_slot: 0,
+            group_size: depth,
+            interleave_depth: depth,
+            last_decision: FecDecision { ratio: depth as u8 },
         }
     }
 
@@ -22,45 +33,52 @@ impl AdaptiveFecEncoder {
         packet: RtpBody,
         loss_estimator: &LossEstimator,
         fec_controller: &mut FecController,
-    ) -> Option<FecBody> {
-        if self
-            .current_frame_id
-            .is_some_and(|fid| fid != packet.frame_id)
-        {
-            let flushed = if self.pending_packets.len() > 1 {
-                Self::generate_fec_packet(&self.pending_packets)
-            } else {
-                None
-            };
-            self.pending_packets = vec![packet];
-            self.current_frame_id = Some(self.pending_packets[0].frame_id);
-            return flushed;
-        }
-        self.current_frame_id = Some(packet.frame_id);
-        let decision = fec_controller.decide(loss_estimator);
-        self.last_decision = decision.clone();
-        self.pending_packets.push(packet);
-
-        if self.pending_packets.len() >= decision.ratio as usize {
-            let fec_packet = Self::generate_fec_packet(&self.pending_packets);
-            self.pending_packets.clear();
-            return fec_packet;
-        }
-
-        None
-    }
-
-    pub fn flush(&mut self) -> Vec<FecBody> {
+    ) -> Vec<FecBody> {
         let mut fec_packets = Vec::new();
 
-        if self.pending_packets.len() > 1 {
-            if let Some(fec) = Self::generate_fec_packet(&self.pending_packets) {
-                fec_packets.push(fec);
+        let decision = fec_controller.decide(loss_estimator);
+
+        if decision.ratio as usize != self.group_size {
+            fec_packets.extend(self.flush_all());
+            self.group_size = (decision.ratio as usize).max(2);
+        }
+
+        self.last_decision = decision.clone();
+
+        self.slots[self.current_slot].push(packet);
+        self.current_slot = (self.current_slot + 1) % self.interleave_depth;
+
+        for slot in &mut self.slots {
+            if slot.len() >= self.group_size {
+                if let Some(fec) = Self::generate_fec_packet(slot) {
+                    fec_packets.push(fec);
+                }
+                slot.clear();
             }
-            self.pending_packets.clear();
         }
 
         fec_packets
+    }
+
+    fn flush_all(&mut self) -> Vec<FecBody> {
+        let mut fec_packets = Vec::new();
+
+        for slot in &mut self.slots {
+            if slot.len() > 1 {
+                if let Some(fec) = Self::generate_fec_packet(slot) {
+                    fec_packets.push(fec);
+                }
+            }
+            slot.clear();
+        }
+
+        fec_packets
+    }
+
+    pub fn flush(&mut self) -> Vec<FecBody> {
+        let result = self.flush_all();
+        self.current_slot = 0;
+        result
     }
 
     fn generate_fec_packet(packets: &[RtpBody]) -> Option<FecBody> {
@@ -74,12 +92,17 @@ impl AdaptiveFecEncoder {
         }
 
         let mut fec_data = vec![0u8; max_len];
-        let mut protected_sequences = Vec::with_capacity(packets.len());
-        let mut protected_lengths = Vec::with_capacity(packets.len());
+        let mut protected_packets = Vec::with_capacity(packets.len());
 
         for packet in packets {
-            protected_sequences.push(packet.sequence_number);
-            protected_lengths.push(packet.data.len() as u16);
+            protected_packets.push(ProtectedPacketMeta {
+                sequence_number: packet.sequence_number,
+                timestamp: packet.timestamp,
+                frame_id: packet.frame_id,
+                fragment_number: packet.fragment_number,
+                total_fragments: packet.total_fragments,
+                data_length: packet.data.len() as u16,
+            });
             for (i, &byte) in packet.data.iter().enumerate() {
                 fec_data[i] ^= byte;
             }
@@ -89,8 +112,7 @@ impl AdaptiveFecEncoder {
 
         Some(FecBody {
             timestamp,
-            protected_sequences,
-            protected_lengths,
+            protected_packets,
             fec_data,
         })
     }
@@ -100,12 +122,46 @@ impl AdaptiveFecEncoder {
     }
 
     pub fn get_pending_count(&self) -> usize {
-        self.pending_packets.len()
+        self.slots.iter().map(|s| s.len()).sum()
     }
 
     pub fn reset(&mut self) {
-        self.pending_packets.clear();
-        self.current_frame_id = None;
+        for slot in &mut self.slots {
+            slot.clear();
+        }
+        self.current_slot = 0;
+    }
+
+    pub fn recover_packet(fec_packet: &FecBody, available_packets: &[RtpBody]) -> Option<RtpBody> {
+        if available_packets.len() != fec_packet.protected_packets.len() - 1 {
+            return None;
+        }
+
+        let missing_meta = fec_packet.protected_packets.iter().find(|meta| {
+            !available_packets
+                .iter()
+                .any(|p| p.sequence_number == meta.sequence_number)
+        })?;
+
+        let mut recovered_data = fec_packet.fec_data.clone();
+        for packet in available_packets {
+            for (i, &byte) in packet.data.iter().enumerate() {
+                if i < recovered_data.len() {
+                    recovered_data[i] ^= byte;
+                }
+            }
+        }
+
+        recovered_data.truncate(missing_meta.data_length as usize);
+
+        Some(RtpBody {
+            timestamp: missing_meta.timestamp,
+            sequence_number: missing_meta.sequence_number,
+            frame_id: missing_meta.frame_id,
+            fragment_number: missing_meta.fragment_number,
+            total_fragments: missing_meta.total_fragments,
+            data: recovered_data.into(),
+        })
     }
 }
 

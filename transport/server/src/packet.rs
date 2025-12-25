@@ -30,10 +30,19 @@ pub struct NackBody {
 }
 
 #[derive(Debug, Clone)]
+pub struct ProtectedPacketMeta {
+    pub sequence_number: u64,
+    pub timestamp: u64,
+    pub frame_id: u64,
+    pub fragment_number: u16,
+    pub total_fragments: u16,
+    pub data_length: u16,
+}
+
+#[derive(Debug, Clone)]
 pub struct FecBody {
     pub timestamp: u64,
-    pub protected_sequences: Vec<u64>,
-    pub protected_lengths: Vec<u16>,
+    pub protected_packets: Vec<ProtectedPacketMeta>,
     pub fec_data: Vec<u8>,
 }
 
@@ -44,7 +53,6 @@ pub struct RtpBody {
     pub frame_id: u64,
     pub fragment_number: u16,
     pub total_fragments: u16,
-    pub marker_bit: bool,
     pub data: Bytes,
 }
 
@@ -143,18 +151,19 @@ impl PacketSerializer {
                 buffer.extend_from_slice(&body.frame_id.to_be_bytes());
                 buffer.extend_from_slice(&body.total_fragments.to_be_bytes());
                 buffer.extend_from_slice(&body.fragment_number.to_be_bytes());
-                buffer.push(if body.marker_bit { 1 } else { 0 });
                 buffer.extend_from_slice(&body.data);
             }
             Packet::Fec(body) => {
                 buffer.push(PacketType::Fec as u8);
                 buffer.extend_from_slice(&body.timestamp.to_be_bytes());
-                buffer.push(body.protected_sequences.len() as u8);
-                for seq in &body.protected_sequences {
-                    buffer.extend_from_slice(&seq.to_be_bytes());
-                }
-                for len in &body.protected_lengths {
-                    buffer.extend_from_slice(&len.to_be_bytes());
+                buffer.push(body.protected_packets.len() as u8);
+                for meta in &body.protected_packets {
+                    buffer.extend_from_slice(&meta.sequence_number.to_be_bytes());
+                    buffer.extend_from_slice(&meta.timestamp.to_be_bytes());
+                    buffer.extend_from_slice(&meta.frame_id.to_be_bytes());
+                    buffer.extend_from_slice(&meta.fragment_number.to_be_bytes());
+                    buffer.extend_from_slice(&meta.total_fragments.to_be_bytes());
+                    buffer.extend_from_slice(&meta.data_length.to_be_bytes());
                 }
                 buffer.extend_from_slice(&body.fec_data);
             }
@@ -187,7 +196,7 @@ impl PacketSerializer {
 
         match packet_type {
             PacketType::Rtp => {
-                if buffer.len() < 30 {
+                if buffer.len() < 29 {
                     return None;
                 }
                 let sequence_number = u64::from_be_bytes([
@@ -227,8 +236,6 @@ impl PacketSerializer {
                 offset += 2;
                 let fragment_number = u16::from_be_bytes([buffer[offset], buffer[offset + 1]]);
                 offset += 2;
-                let marker_bit = buffer[offset] == 1;
-                offset += 1;
                 let data = Bytes::copy_from_slice(&buffer[offset..]);
 
                 Some(Packet::Rtp(RtpBody {
@@ -237,7 +244,6 @@ impl PacketSerializer {
                     frame_id,
                     fragment_number,
                     total_fragments,
-                    marker_bit,
                     data,
                 }))
             }
@@ -256,18 +262,18 @@ impl PacketSerializer {
                     buffer[offset + 7],
                 ]);
                 offset += 8;
-                let protected_sequences_count = buffer[offset] as usize;
+                let protected_count = buffer[offset] as usize;
                 offset += 1;
 
-                // sequences (8 bytes each) + lengths (2 bytes each)
-                let metadata_size = protected_sequences_count * 8 + protected_sequences_count * 2;
+                // 30 bytes per protected packet: seq(8) + ts(8) + frame_id(8) + frag(2) + total(2) + len(2)
+                let metadata_size = protected_count * 30;
                 if buffer.len() < 10 + metadata_size {
                     return None;
                 }
 
-                let mut protected_sequences = Vec::with_capacity(protected_sequences_count);
-                for _ in 0..protected_sequences_count {
-                    protected_sequences.push(u64::from_be_bytes([
+                let mut protected_packets = Vec::with_capacity(protected_count);
+                for _ in 0..protected_count {
+                    let sequence_number = u64::from_be_bytes([
                         buffer[offset],
                         buffer[offset + 1],
                         buffer[offset + 2],
@@ -276,23 +282,52 @@ impl PacketSerializer {
                         buffer[offset + 5],
                         buffer[offset + 6],
                         buffer[offset + 7],
-                    ]));
+                    ]);
                     offset += 8;
-                }
-
-                let mut protected_lengths = Vec::with_capacity(protected_sequences_count);
-                for _ in 0..protected_sequences_count {
-                    protected_lengths
-                        .push(u16::from_be_bytes([buffer[offset], buffer[offset + 1]]));
+                    let pkt_timestamp = u64::from_be_bytes([
+                        buffer[offset],
+                        buffer[offset + 1],
+                        buffer[offset + 2],
+                        buffer[offset + 3],
+                        buffer[offset + 4],
+                        buffer[offset + 5],
+                        buffer[offset + 6],
+                        buffer[offset + 7],
+                    ]);
+                    offset += 8;
+                    let frame_id = u64::from_be_bytes([
+                        buffer[offset],
+                        buffer[offset + 1],
+                        buffer[offset + 2],
+                        buffer[offset + 3],
+                        buffer[offset + 4],
+                        buffer[offset + 5],
+                        buffer[offset + 6],
+                        buffer[offset + 7],
+                    ]);
+                    offset += 8;
+                    let fragment_number = u16::from_be_bytes([buffer[offset], buffer[offset + 1]]);
                     offset += 2;
+                    let total_fragments = u16::from_be_bytes([buffer[offset], buffer[offset + 1]]);
+                    offset += 2;
+                    let data_length = u16::from_be_bytes([buffer[offset], buffer[offset + 1]]);
+                    offset += 2;
+
+                    protected_packets.push(ProtectedPacketMeta {
+                        sequence_number,
+                        timestamp: pkt_timestamp,
+                        frame_id,
+                        fragment_number,
+                        total_fragments,
+                        data_length,
+                    });
                 }
 
                 let fec_data = buffer[offset..].to_vec();
 
                 Some(Packet::Fec(FecBody {
                     timestamp,
-                    protected_sequences,
-                    protected_lengths,
+                    protected_packets,
                     fec_data,
                 }))
             }
@@ -337,99 +372,5 @@ impl PacketSerializer {
                 }
             }
         }
-    }
-}
-
-pub struct FecEncoder;
-
-impl FecEncoder {
-    pub fn generate_fec_packet(packets: &[RtpBody]) -> Option<FecBody> {
-        if packets.is_empty() {
-            return None;
-        }
-
-        let max_len = match packets.iter().map(|p| p.data.len()).max() {
-            Some(len) => len,
-            None => return None,
-        };
-
-        if max_len == 0 {
-            return None;
-        }
-
-        let mut fec_data = vec![0u8; max_len];
-        let mut protected_sequences = Vec::with_capacity(packets.len());
-        let mut protected_lengths = Vec::with_capacity(packets.len());
-
-        for packet in packets {
-            protected_sequences.push(packet.sequence_number);
-            protected_lengths.push(packet.data.len() as u16);
-            for (i, &byte) in packet.data.iter().enumerate() {
-                fec_data[i] ^= byte;
-            }
-        }
-
-        let timestamp = packets[0].timestamp;
-
-        Some(FecBody {
-            timestamp,
-            protected_sequences,
-            protected_lengths,
-            fec_data,
-        })
-    }
-
-    pub fn recover_packet(fec_packet: &FecBody, available_packets: &[RtpBody]) -> Option<RtpBody> {
-        if available_packets.len() < fec_packet.protected_sequences.len() - 1 {
-            return None;
-        }
-
-        let ref_packet = match available_packets.first() {
-            Some(p) => p,
-            None => return None,
-        };
-
-        let (missing_index, missing_sequence_number) = fec_packet
-            .protected_sequences
-            .iter()
-            .enumerate()
-            .find(|(_, &seq)| !available_packets.iter().any(|p| p.sequence_number == seq))
-            .map(|(i, &seq)| (i, seq))?;
-
-        let mut recovered_data = fec_packet.fec_data.clone();
-        for packet in available_packets {
-            for (i, &byte) in packet.data.iter().enumerate() {
-                if i < recovered_data.len() {
-                    recovered_data[i] ^= byte;
-                }
-            }
-        }
-
-        let original_length = fec_packet
-            .protected_lengths
-            .get(missing_index)
-            .copied()
-            .unwrap_or(recovered_data.len() as u16) as usize;
-        recovered_data.truncate(original_length);
-
-        let ref_index = fec_packet
-            .protected_sequences
-            .iter()
-            .position(|&seq| seq == ref_packet.sequence_number)?;
-
-        let fragment_offset = missing_index as i32 - ref_index as i32;
-        let fragment_number = (ref_packet.fragment_number as i32 + fragment_offset) as u16;
-        let total_fragments = ref_packet.total_fragments;
-        let marker_bit = total_fragments > 0 && fragment_number == total_fragments - 1;
-
-        Some(RtpBody {
-            timestamp: ref_packet.timestamp,
-            sequence_number: missing_sequence_number,
-            frame_id: ref_packet.frame_id,
-            fragment_number,
-            total_fragments,
-            marker_bit,
-            data: recovered_data.into(),
-        })
     }
 }

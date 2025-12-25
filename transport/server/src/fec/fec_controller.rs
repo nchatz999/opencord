@@ -12,9 +12,7 @@ struct RatioThreshold {
 }
 
 const RATIO_TABLE: &[RatioThreshold] = &[
-    RatioThreshold { max_loss: 0.01, ratio: 8 },
-    RatioThreshold { max_loss: 0.03, ratio: 6 },
-    RatioThreshold { max_loss: 0.05, ratio: 4 },
+    RatioThreshold { max_loss: 0.03, ratio: 4 },
     RatioThreshold { max_loss: 0.10, ratio: 3 },
     RatioThreshold { max_loss: 1.00, ratio: 2 },
 ];
@@ -34,7 +32,7 @@ impl FecController {
         Self {
             current_ratio: 4,
             last_change_time: None,
-            current_threshold_index: 2,
+            current_threshold_index: 0,
         }
     }
 
@@ -108,7 +106,7 @@ impl FecController {
     pub fn reset(&mut self) {
         self.current_ratio = 4;
         self.last_change_time = None;
-        self.current_threshold_index = 2;
+        self.current_threshold_index = 0;
     }
 }
 

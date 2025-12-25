@@ -15,7 +15,7 @@ use tokio::time::{interval, Duration, Instant};
 use tracing::{error, info};
 use web_transport::quinn::{self, quinn::rustls::pki_types::CertificateDer, Request};
 
-use crate::packet::{FecEncoder, RtpBody};
+use crate::packet::RtpBody;
 
 pub struct Server {
     server: quinn::Server,
@@ -475,15 +475,20 @@ impl ConnectionRunner {
                 }
 
                 packet::Packet::Fec(body) => {
+                    let protected_seqs: Vec<u64> = body
+                        .protected_packets
+                        .iter()
+                        .map(|m| m.sequence_number)
+                        .collect();
                     let aval_packets: Vec<RtpBody> = self
                         .received_rackets
                         .iter()
-                        .filter(|(seq, _)| body.protected_sequences.contains(&seq))
+                        .filter(|(seq, _)| protected_seqs.contains(seq))
                         .map(|(_, value)| value)
                         .cloned()
                         .collect();
 
-                    if let Some(p) = FecEncoder::recover_packet(&body, &aval_packets) {
+                    if let Some(p) = AdaptiveFecEncoder::recover_packet(&body, &aval_packets) {
                         let msg_sender = self.message_sender.clone();
                         let frame = self.streams.entry(p.frame_id).or_insert_with(|| {
                             packet::FrameBuffer::new(p.frame_id, p.total_fragments)
@@ -528,7 +533,6 @@ impl ConnectionRunner {
 
             let sequence_number = self.out_seq;
             self.out_seq = self.out_seq.wrapping_add(1);
-            let marker_bit = fragment_number == total_fragments - 1;
 
             let rtp_packet = packet::RtpBody {
                 timestamp,
@@ -536,7 +540,6 @@ impl ConnectionRunner {
                 frame_id,
                 fragment_number,
                 total_fragments,
-                marker_bit,
                 data: chunk,
             };
             let encoded = PacketSerializer::serialize(&Packet::Rtp(rtp_packet.clone()));
@@ -550,7 +553,7 @@ impl ConnectionRunner {
                 error!("Failed to send RTP packet: {}", e);
             }
 
-            if let Some(fec) = self.adaptive_fec_encoder.process_packet(
+            for fec in self.adaptive_fec_encoder.process_packet(
                 rtp_packet,
                 &self.loss_estimator,
                 &mut self.fec_controller,

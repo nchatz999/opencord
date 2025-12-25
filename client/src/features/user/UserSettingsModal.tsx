@@ -21,7 +21,7 @@ import {
   Calendar,
   Settings,
 } from "lucide-solid";
-import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice } from "../../store/index";
+import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
 import { getPresetOptions, type QualityPreset } from "../../model";
 import { useApp } from "../../store/app";
 import { Input } from "../../components/Input";
@@ -424,7 +424,7 @@ const UserSettingsModal: Component = () => {
                 <Slider
                   value={cameraActions.getQuality()}
                   min={500000}
-                  max={8000000}
+                  max={MAX_VIDEO_BITRATE}
                   onChange={(value) => cameraActions.setQuality(value)}
                 />
               </div>
@@ -436,7 +436,7 @@ const UserSettingsModal: Component = () => {
                 <Slider
                   value={screenShareActions.getQuality()}
                   min={500000}
-                  max={8000000}
+                  max={MAX_VIDEO_BITRATE}
                   onChange={(value) => screenShareActions.setQuality(value)}
                 />
               </div>

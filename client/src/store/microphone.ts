@@ -200,11 +200,13 @@ function createMicrophoneStore(): MicrophoneStore {
         const { done, value } = await reader.read();
         if (done) break;
 
-        if (value && encoder?.state === "configured") {
-          const needsMonoConversion =
-            value.numberOfChannels === 2 && DEFAULT_ENCODER_CONFIG.numberOfChannels === 1;
+        if (value) {
+          if (encoder?.state === "configured") {
+            const needsMonoConversion =
+              value.numberOfChannels === 2 && DEFAULT_ENCODER_CONFIG.numberOfChannels === 1;
 
-          encoder.encode(needsMonoConversion ? convertToMono(value) : value);
+            encoder.encode(needsMonoConversion ? convertToMono(value) : value);
+          }
           value.close();
         }
       }

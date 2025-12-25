@@ -16,9 +16,14 @@ rustls-pemfile = "2.2.0"
 thiserror = "2.0.11"
 dotenv = "0.15.0"
 rand = "0.8"
+clap = { version = "4", features = ["derive"] }
 url = "2.5.4"
 
 [lib]
 path = "src/lib.rs"
+
+[[bin]]
+name = "simulator"
+path = "src/bin/simulator.rs"
 
 

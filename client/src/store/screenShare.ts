@@ -65,12 +65,6 @@ const DEFAULT_AUDIO_ENCODER_CONFIG = {
   bitrate: DEFAULT_AUDIO_BITRATE,
 };
 
-function encodeChunkToUint8Array(chunk: EncodedVideoChunk | EncodedAudioChunk): Uint8Array {
-  const buffer = new ArrayBuffer(chunk.byteLength);
-  chunk.copyTo(buffer);
-  return new Uint8Array(buffer);
-}
-
 function buildMediaConstraints(constraints: ScreenShareConstraints): DisplayMediaStreamOptions {
   return {
     video: {
@@ -196,9 +190,11 @@ function createScreenShareStore(): ScreenShareStore {
         const { done, value } = await videoReader.read();
         if (done) break;
 
-        if (value && videoEncoder?.state === "configured") {
-          const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
-          videoEncoder.encode(value, { keyFrame });
+        if (value) {
+          if (videoEncoder?.state === "configured") {
+            const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
+            videoEncoder.encode(value, { keyFrame });
+          }
           value.close();
         }
       }
@@ -219,11 +215,13 @@ function createScreenShareStore(): ScreenShareStore {
         const { done, value } = await audioReader.read();
         if (done) break;
 
-        if (value && audioEncoder?.state === "configured") {
-          const needsMonoConversion =
-            value.numberOfChannels === 2 && DEFAULT_AUDIO_ENCODER_CONFIG.numberOfChannels === 1;
+        if (value) {
+          if (audioEncoder?.state === "configured") {
+            const needsMonoConversion =
+              value.numberOfChannels === 2 && DEFAULT_AUDIO_ENCODER_CONFIG.numberOfChannels === 1;
 
-          audioEncoder.encode(needsMonoConversion ? convertToMono(value) : value);
+            audioEncoder.encode(needsMonoConversion ? convertToMono(value) : value);
+          }
           value.close();
         }
       }
@@ -262,7 +260,7 @@ function createScreenShareStore(): ScreenShareStore {
   }
 
   const actions: ScreenShareActions = {
-    init() {},
+    init() { },
 
     isRecording: () => state.isRecording,
 

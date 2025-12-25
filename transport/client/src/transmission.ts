@@ -1,5 +1,5 @@
 import { ok, err, timerManager } from 'opencord-utils';
-import { PacketSerializer, FECEncoder } from './packet';
+import { PacketSerializer } from './packet';
 import { LossEstimator, FECController, AdaptiveFECEncoder } from './fec';
 import type { Result } from 'opencord-utils';
 export enum PacketType {
@@ -31,11 +31,19 @@ export interface NackPacket extends BasePacket {
   missingSequence: bigint;
 }
 
+export interface ProtectedPacketMeta {
+  sequenceNumber: bigint;
+  timestamp: bigint;
+  frameId: bigint;
+  fragmentNumber: number;
+  totalFragments: number;
+  dataLength: number;
+}
+
 export interface FecPacket extends BasePacket {
   type: PacketType.FEC;
   timestamp: bigint;
-  protectedSequences: bigint[];
-  protectedLengths: number[];
+  protectedPackets: ProtectedPacketMeta[];
   fecData: Uint8Array;
 }
 
@@ -46,7 +54,6 @@ export interface RTPPacket extends BasePacket {
   frameId: bigint;
   fragmentNumber: number;
   totalFragments: number;
-  markerBit: boolean;
   data: Uint8Array;
 }
 
@@ -203,7 +210,6 @@ export class MediaTransport {
 
     for (let i = 0; i < data.length; i += mtu) {
       const chunk = data.slice(i, i + mtu);
-      const last = i + mtu >= data.length;
       let packet: RTPPacket = {
         type: PacketType.RTP,
         sequenceNumber: this.outSeq++,
@@ -211,7 +217,6 @@ export class MediaTransport {
         frameId,
         fragmentNumber: Math.floor(i / mtu),
         totalFragments: Math.ceil(data.length / mtu),
-        markerBit: last,
         data: chunk,
       };
       this.sendPackets.set(packet.sequenceNumber, packet);
@@ -223,8 +228,7 @@ export class MediaTransport {
         return;
       }
 
-      const fecPacket = this.adaptiveFecEncoder.processPacket(packet);
-      if (fecPacket) {
+      for (const fecPacket of this.adaptiveFecEncoder.processPacket(packet)) {
         try {
           await this.outWriter.write(PacketSerializer.serialize(fecPacket));
         } catch {
@@ -341,10 +345,11 @@ export class MediaTransport {
   }
 
   public handleFEC(packet: FecPacket) {
+    const protectedSeqs = packet.protectedPackets.map(m => m.sequenceNumber);
     const availablePackets = Array.from(this.receivedPackets.values()).filter((p) =>
-      packet.protectedSequences.includes(p.sequenceNumber)
+      protectedSeqs.includes(p.sequenceNumber)
     );
-    const recoveredPacket = FECEncoder.recoverPacket(packet, availablePackets);
+    const recoveredPacket = AdaptiveFECEncoder.recoverPacket(packet, availablePackets);
     if (recoveredPacket) {
       let frame = this.buffers.get(recoveredPacket.frameId);
       if (!frame) {

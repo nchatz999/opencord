@@ -10,9 +10,7 @@ interface RatioThreshold {
 }
 
 const RATIO_TABLE: RatioThreshold[] = [
-  { maxLoss: 0.01, ratio: 8 },
-  { maxLoss: 0.03, ratio: 6 },
-  { maxLoss: 0.05, ratio: 4 },
+  { maxLoss: 0.03, ratio: 4 },
   { maxLoss: 0.10, ratio: 3 },
   { maxLoss: 1.00, ratio: 2 },
 ];
@@ -25,7 +23,7 @@ export class FECController {
   private lossEstimator: LossEstimator;
   private currentRatio: number = 4;
   private lastChangeTime: number = 0;
-  private currentThresholdIndex: number = 2;
+  private currentThresholdIndex: number = 0;
 
   constructor(lossEstimator: LossEstimator) {
     this.lossEstimator = lossEstimator;
@@ -96,6 +94,6 @@ export class FECController {
   reset(): void {
     this.currentRatio = 4;
     this.lastChangeTime = 0;
-    this.currentThresholdIndex = 2;
+    this.currentThresholdIndex = 0;
   }
 }

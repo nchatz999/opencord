@@ -1,58 +1,83 @@
 import { FECController, FECDecision } from './FECController';
-import { PacketType, RTPPacket, FecPacket } from '../transmission';
+import { PacketType, RTPPacket, FecPacket, ProtectedPacketMeta } from '../transmission';
+
+const INTERLEAVE_DEPTH = 3;
 
 export class AdaptiveFECEncoder {
   private controller: FECController;
-  private pendingPackets: RTPPacket[] = [];
-  private lastDecision: FECDecision = { ratio: 4 };
-  private currentFrameId: bigint | null = null;
+  private slots: RTPPacket[][] = [];
+  private currentSlot: number = 0;
+  private groupSize: number = INTERLEAVE_DEPTH;
+  private lastDecision: FECDecision = { ratio: INTERLEAVE_DEPTH };
 
   constructor(controller: FECController) {
     this.controller = controller;
+    this.initializeSlots();
   }
 
-  processPacket(packet: RTPPacket): FecPacket | null {
-    if (this.currentFrameId !== null && packet.frameId !== this.currentFrameId) {
-      const flushed = this.pendingPackets.length > 1
-        ? this.generateFECPacket(this.pendingPackets)
-        : null;
-      this.pendingPackets = [packet];
-      this.currentFrameId = packet.frameId;
-      return flushed;
-    }
-
-    this.currentFrameId = packet.frameId;
-    const decision = this.controller.decide();
-    this.lastDecision = decision;
-    this.pendingPackets.push(packet);
-
-    if (this.pendingPackets.length >= decision.ratio) {
-      const fecPacket = this.generateFECPacket(this.pendingPackets);
-      this.pendingPackets = [];
-      return fecPacket;
-    }
-
-    return null;
+  private initializeSlots(): void {
+    this.slots = Array.from({ length: INTERLEAVE_DEPTH }, () => []);
+    this.currentSlot = 0;
   }
 
-  flush(): FecPacket[] {
+  processPacket(packet: RTPPacket): FecPacket[] {
     const fecPackets: FecPacket[] = [];
 
-    if (this.pendingPackets.length > 1) {
-      fecPackets.push(this.generateFECPacket(this.pendingPackets));
-      this.pendingPackets = [];
+    const decision = this.controller.decide();
+
+    if (decision.ratio !== this.groupSize) {
+      fecPackets.push(...this.flushAll());
+      this.groupSize = Math.max(2, decision.ratio);
+    }
+
+    this.lastDecision = decision;
+
+    this.slots[this.currentSlot].push(packet);
+    this.currentSlot = (this.currentSlot + 1) % INTERLEAVE_DEPTH;
+
+    for (const slot of this.slots) {
+      if (slot.length >= this.groupSize) {
+        fecPackets.push(this.generateFECPacket(slot));
+        slot.length = 0;
+      }
     }
 
     return fecPackets;
   }
 
+  private flushAll(): FecPacket[] {
+    const fecPackets: FecPacket[] = [];
+
+    for (const slot of this.slots) {
+      if (slot.length > 1) {
+        fecPackets.push(this.generateFECPacket(slot));
+      }
+      slot.length = 0;
+    }
+
+    return fecPackets;
+  }
+
+  flush(): FecPacket[] {
+    const result = this.flushAll();
+    this.currentSlot = 0;
+    return result;
+  }
+
   private generateFECPacket(packets: RTPPacket[]): FecPacket {
     const maxLength = Math.max(...packets.map(p => p.data.length));
     const xorResult = new Uint8Array(maxLength);
-    const protectedLengths: number[] = [];
+    const protectedPackets: ProtectedPacketMeta[] = [];
 
     for (const packet of packets) {
-      protectedLengths.push(packet.data.length);
+      protectedPackets.push({
+        sequenceNumber: packet.sequenceNumber,
+        timestamp: packet.timestamp,
+        frameId: packet.frameId,
+        fragmentNumber: packet.fragmentNumber,
+        totalFragments: packet.totalFragments,
+        dataLength: packet.data.length,
+      });
       for (let i = 0; i < packet.data.length; i++) {
         xorResult[i] ^= packet.data[i];
       }
@@ -61,8 +86,7 @@ export class AdaptiveFECEncoder {
     return {
       type: PacketType.FEC,
       timestamp: packets[packets.length - 1].timestamp,
-      protectedSequences: packets.map(p => p.sequenceNumber),
-      protectedLengths,
+      protectedPackets,
       fecData: xorResult,
     };
   }
@@ -72,11 +96,47 @@ export class AdaptiveFECEncoder {
   }
 
   getPendingCount(): number {
-    return this.pendingPackets.length;
+    return this.slots.reduce((sum, slot) => sum + slot.length, 0);
   }
 
   reset(): void {
-    this.pendingPackets = [];
-    this.currentFrameId = null;
+    for (const slot of this.slots) {
+      slot.length = 0;
+    }
+    this.currentSlot = 0;
+  }
+
+  static recoverPacket(fecPacket: FecPacket, availablePackets: RTPPacket[]): RTPPacket | null {
+    if (availablePackets.length !== fecPacket.protectedPackets.length - 1) {
+      return null;
+    }
+
+    const missingMeta = fecPacket.protectedPackets.find(
+      (meta) => !availablePackets.some((p) => p.sequenceNumber === meta.sequenceNumber)
+    );
+
+    if (!missingMeta) {
+      return null;
+    }
+
+    const xorResult = new Uint8Array(fecPacket.fecData);
+    for (const packet of availablePackets) {
+      const minLength = Math.min(xorResult.length, packet.data.length);
+      for (let i = 0; i < minLength; i++) {
+        xorResult[i] ^= packet.data[i];
+      }
+    }
+
+    const trimmedData = xorResult.slice(0, missingMeta.dataLength);
+
+    return {
+      type: PacketType.RTP,
+      sequenceNumber: missingMeta.sequenceNumber,
+      timestamp: missingMeta.timestamp,
+      frameId: missingMeta.frameId,
+      fragmentNumber: missingMeta.fragmentNumber,
+      totalFragments: missingMeta.totalFragments,
+      data: trimmedData,
+    };
   }
 }

@@ -42,7 +42,8 @@ export interface CameraActions {
 
 export type CameraStore = [CameraState, CameraActions];
 
-const DEFAULT_BITRATE = 1_500_000;
+const DEFAULT_VIDEO_BITRATE = 1_500_000;
+export const MAX_VIDEO_BITRATE = 6_000_000;
 const KEYFRAME_PROBABILITY = 0.03;
 
 const DEFAULT_CONSTRAINTS: CameraConstraints = {
@@ -57,7 +58,7 @@ const DEFAULT_ENCODER_CONFIG: VideoEncoderConfig = {
   codec: "vp8",
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
-  bitrate: DEFAULT_BITRATE,
+  bitrate: DEFAULT_VIDEO_BITRATE,
   framerate: 30,
 };
 
@@ -71,12 +72,6 @@ function buildMediaConstraints(constraints: CameraConstraints): MediaStreamConst
       aspectRatio: constraints.aspectRatio,
     },
   };
-}
-
-function encodeChunkToUint8Array(chunk: EncodedVideoChunk): Uint8Array {
-  const buffer = new ArrayBuffer(chunk.byteLength);
-  chunk.copyTo(buffer);
-  return new Uint8Array(buffer);
 }
 
 function createEncoderInstance(
@@ -119,7 +114,7 @@ function createCameraStore(): CameraStore {
 
   const [state, setState] = createStore<CameraState>({
     isRecording: false,
-    quality: pref.get<number>("camera:quality") ?? DEFAULT_BITRATE,
+    quality: pref.get<number>("camera:quality") ?? DEFAULT_VIDEO_BITRATE,
     preset: savedPreset,
   });
 
@@ -155,9 +150,11 @@ function createCameraStore(): CameraStore {
         const { done, value } = await reader.read();
         if (done) break;
 
-        if (value && encoder?.state === "configured") {
-          const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
-          encoder.encode(value, { keyFrame });
+        if (value) {
+          if (encoder?.state === "configured") {
+            const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
+            encoder.encode(value, { keyFrame });
+          }
           value.close();
         }
       }
@@ -188,7 +185,7 @@ function createCameraStore(): CameraStore {
   }
 
   const actions: CameraActions = {
-    init() {},
+    init() { },
 
     isRecording: () => state.isRecording,
 
