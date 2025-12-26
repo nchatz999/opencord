@@ -1,10 +1,12 @@
 pub mod fec;
 pub mod nack;
 pub mod packet;
+pub mod pacing;
 
 use bytes::Bytes;
 use fec::{AdaptiveFecEncoder, LossEstimator};
 use nack::{NackController, PendingNack};
+use pacing::PacketPacer;
 use packet::{FrameBuffer, Packet, PacketSerializer, PingBody};
 
 use std::{
@@ -117,6 +119,7 @@ impl Connection {
             rto: 1000,
             loss_estimator: LossEstimator::new(),
             adaptive_fec_encoder: AdaptiveFecEncoder::new(),
+            pacer: PacketPacer::new(),
         };
 
         tokio::spawn(runner.run());
@@ -183,6 +186,7 @@ const PING_INTERVAL: Duration = Duration::from_millis(200);
 const CHECK_PING_INTERVAL: Duration = Duration::from_secs(1);
 const PONG_TIMEOUT: u64 = 2000;
 const CLEANUP_INTERVAL: Duration = Duration::from_millis(100);
+const PACING_INTERVAL: Duration = Duration::from_millis(5);
 
 struct ConnectionRunner {
     pub streams: HashMap<u64, FrameBuffer>,
@@ -205,6 +209,7 @@ struct ConnectionRunner {
     pub rto: u64,
     loss_estimator: LossEstimator,
     adaptive_fec_encoder: AdaptiveFecEncoder,
+    pacer: PacketPacer,
 }
 
 impl ConnectionRunner {
@@ -237,6 +242,7 @@ impl ConnectionRunner {
         let mut keep_alive_interval = interval(PING_INTERVAL);
         let mut retransmission_check_interval = interval(Duration::from_millis(10));
         let mut cleanup_interval = interval(CLEANUP_INTERVAL);
+        let mut pacing_interval = interval(PACING_INTERVAL);
 
         loop {
             tokio::select! {
@@ -352,6 +358,14 @@ impl ConnectionRunner {
                     self.nack_responses.retain(|_, time| time.elapsed() < Duration::from_secs(5));
                 },
 
+                _ = pacing_interval.tick() => {
+                    for packet in self.pacer.drain(&self.loss_estimator) {
+                        if let Err(e) = self.session.send_datagram(packet) {
+                            error!("Failed to send paced packet: {}", e);
+                        }
+                    }
+                },
+
                 Some(command) = self.session_command_receiver.recv() => {
                     match command {
                         SessionCommand::Disconnect { code, reason } => {
@@ -443,7 +457,7 @@ impl ConnectionRunner {
                             }
                         }
                         if let Some(p) = self.send_packets.get(&seq) {
-                            let _ = self.session.send_datagram(PacketSerializer::serialize(
+                            self.pacer.enqueue(PacketSerializer::serialize(
                                 &Packet::Rtp(p.clone()),
                             ));
                             self.nack_responses.insert(seq, now);
@@ -527,33 +541,21 @@ impl ConnectionRunner {
             self.loss_estimator
                 .record_packet_sent(rtp_packet.sequence_number);
 
-            if let Err(e) = self.session.send_datagram(encoded) {
-                error!("Failed to send RTP packet: {}", e);
-            }
+            self.pacer.enqueue(encoded);
 
             for fec in self.adaptive_fec_encoder.process_packet(
                 rtp_packet,
                 &self.loss_estimator,
                 self.srtt,
             ) {
-                if let Err(e) = self
-                    .session
-                    .send_datagram(PacketSerializer::serialize(&Packet::Fec(fec)))
-                {
-                    error!("Failed to send FEC packet: {}", e);
-                }
+                self.pacer.enqueue(PacketSerializer::serialize(&Packet::Fec(fec)));
             }
 
             fragment_number += 1;
         }
 
         for fec in self.adaptive_fec_encoder.flush() {
-            if let Err(e) = self
-                .session
-                .send_datagram(PacketSerializer::serialize(&Packet::Fec(fec)))
-            {
-                error!("Failed to send FEC packet: {}", e);
-            }
+            self.pacer.enqueue(PacketSerializer::serialize(&Packet::Fec(fec)));
         }
     }
 }

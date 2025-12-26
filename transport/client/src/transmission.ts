@@ -2,6 +2,7 @@ import { ok, err, timerManager } from 'opencord-utils';
 import { PacketSerializer } from './packet';
 import { LossEstimator, AdaptiveFECEncoder } from './fec';
 import { NackController, PendingNack } from './nack';
+import { PacketPacer } from './pacing';
 import type { Result } from 'opencord-utils';
 export enum PacketType {
   PING = 0x01,
@@ -136,6 +137,7 @@ export class MediaTransport {
   private nackCheckIntervalId: number | null = null;
   private lossEstimator: LossEstimator;
   private adaptiveFecEncoder: AdaptiveFECEncoder;
+  private pacer: PacketPacer;
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
   onDisconnect: (error: string) => void;
@@ -155,6 +157,10 @@ export class MediaTransport {
     this.duplicatePackets = 0;
     this.lossEstimator = new LossEstimator();
     this.adaptiveFecEncoder = new AdaptiveFECEncoder(this.lossEstimator);
+    this.pacer = new PacketPacer(
+      (data) => this.writeDatagram(data),
+      this.lossEstimator
+    );
     this.onFrameComplete = onFrameConplete;
     this.onSafeDataComplete = onSafeDataComplete;
     this.onDisconnect = onDisconnect;
@@ -191,6 +197,7 @@ export class MediaTransport {
       this.runNackCheckInterval();
       this.runCleaner();
       this.handleTransportClosed();
+      this.pacer.start();
       return ok(undefined)
     } catch (e) {
       console.dir(e);
@@ -199,8 +206,8 @@ export class MediaTransport {
     }
   }
 
-  public async send(data: Uint8Array) {
-    if (this.closed || !this.outWriter) return;
+  public send(data: Uint8Array) {
+    if (this.closed) return;
 
     const mtu = this.mtu - 200;
     let currentTime = BigInt(Date.now());
@@ -220,28 +227,24 @@ export class MediaTransport {
       this.sendPackets.set(packet.sequenceNumber, packet);
       this.lossEstimator.recordPacketSent(packet.sequenceNumber);
 
-      try {
-        await this.outWriter.write(PacketSerializer.serialize(packet));
-      } catch {
-        return;
-      }
+      const serialized = PacketSerializer.serialize(packet);
+      if (serialized) this.pacer.enqueue(serialized);
 
       for (const fecPacket of this.adaptiveFecEncoder.processPacket(packet, this.srtt)) {
-        try {
-          await this.outWriter.write(PacketSerializer.serialize(fecPacket));
-        } catch {
-          return;
-        }
+        const fecSerialized = PacketSerializer.serialize(fecPacket);
+        if (fecSerialized) this.pacer.enqueue(fecSerialized);
       }
     }
 
     for (const fecPacket of this.adaptiveFecEncoder.flush()) {
-      try {
-        await this.outWriter.write(PacketSerializer.serialize(fecPacket));
-      } catch {
-        return;
-      }
+      const fecSerialized = PacketSerializer.serialize(fecPacket);
+      if (fecSerialized) this.pacer.enqueue(fecSerialized);
     }
+  }
+
+  private writeDatagram(data: Uint8Array): void {
+    if (this.closed || !this.outWriter) return;
+    this.outWriter.write(data).catch(() => {});
   }
 
   public async sendSafe(data: Uint8Array) {
@@ -346,13 +349,12 @@ export class MediaTransport {
     }
   }
 
-  public async handleNACK(nack: NackPacket) {
-    if (!this.writer) return;
-
+  public handleNACK(nack: NackPacket) {
     for (const seq of nack.missingSequences) {
       const packet = this.sendPackets.get(seq);
       if (packet) {
-        await this.writer.write(PacketSerializer.serialize(packet));
+        const serialized = PacketSerializer.serialize(packet);
+        if (serialized) this.pacer.enqueue(serialized);
       }
     }
   }
@@ -600,6 +602,7 @@ export class MediaTransport {
 
     this.lossEstimator.reset();
     this.adaptiveFecEncoder.reset();
+    this.pacer.stop();
 
     try {
       if (this.reader) await this.reader.cancel();

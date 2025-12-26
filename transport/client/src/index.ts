@@ -2,6 +2,8 @@ export { FrameBuffer } from "./transmission";
 
 export { AdaptiveFECEncoder } from "./fec";
 
+export { PacketPacer } from "./pacing";
+
 export { MediaTransport } from "./transmission";
 
 export { PacketSerializer } from "./packet";
