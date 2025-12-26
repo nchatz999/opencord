@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use clap::Parser;
-use opencord_transport_server::fec::{AdaptiveFecEncoder, FecController, LossEstimator};
+use opencord_transport_server::fec::{AdaptiveFecEncoder, LossEstimator};
 use opencord_transport_server::packet::{FecBody, RtpBody};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
@@ -176,7 +176,6 @@ fn run_simulation(args: &Args, depth: usize, channel: &mut GilbertElliottChannel
 
     let mut fec_encoder = AdaptiveFecEncoder::with_depth(depth);
     let mut loss_estimator = LossEstimator::new();
-    let mut fec_controller = FecController::new();
 
     let mut all_packets: Vec<RtpBody> = Vec::new();
     let mut all_fec: Vec<FecBody> = Vec::new();
@@ -197,7 +196,7 @@ fn run_simulation(args: &Args, depth: usize, channel: &mut GilbertElliottChannel
         loss_estimator.record_packet_sent(seq);
         all_packets.push(packet.clone());
 
-        let fec_packets = fec_encoder.process_packet(packet.clone(), &loss_estimator, &mut fec_controller);
+        let fec_packets = fec_encoder.process_packet(packet.clone(), &loss_estimator, 50.0);
         all_fec.extend(fec_packets);
 
         if !channel.should_drop() {

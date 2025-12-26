@@ -26,7 +26,7 @@ pub struct PongBody {
 
 #[derive(Debug, Clone)]
 pub struct NackBody {
-    pub missing_sequence: u64,
+    pub missing_sequences: Vec<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -169,7 +169,10 @@ impl PacketSerializer {
             }
             Packet::Nack(body) => {
                 buffer.push(PacketType::Nack as u8);
-                buffer.extend_from_slice(&body.missing_sequence.to_be_bytes());
+                buffer.push(body.missing_sequences.len() as u8);
+                for seq in &body.missing_sequences {
+                    buffer.extend_from_slice(&seq.to_be_bytes());
+                }
             }
             Packet::Ping(body) => {
                 buffer.push(PacketType::Ping as u8);
@@ -332,21 +335,31 @@ impl PacketSerializer {
                 }))
             }
             PacketType::Nack => {
-                if buffer.len() < 9 {
+                if buffer.len() < 2 {
                     return None;
                 }
-                let missing_sequence = u64::from_be_bytes([
-                    buffer[offset],
-                    buffer[offset + 1],
-                    buffer[offset + 2],
-                    buffer[offset + 3],
-                    buffer[offset + 4],
-                    buffer[offset + 5],
-                    buffer[offset + 6],
-                    buffer[offset + 7],
-                ]);
+                let count = buffer[offset] as usize;
+                offset += 1;
+                if buffer.len() < 2 + count * 8 {
+                    return None;
+                }
+                let mut missing_sequences = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let seq = u64::from_be_bytes([
+                        buffer[offset],
+                        buffer[offset + 1],
+                        buffer[offset + 2],
+                        buffer[offset + 3],
+                        buffer[offset + 4],
+                        buffer[offset + 5],
+                        buffer[offset + 6],
+                        buffer[offset + 7],
+                    ]);
+                    offset += 8;
+                    missing_sequences.push(seq);
+                }
 
-                Some(Packet::Nack(NackBody { missing_sequence }))
+                Some(Packet::Nack(NackBody { missing_sequences }))
             }
             PacketType::Ping | PacketType::Pong => {
                 if buffer.len() < 9 {

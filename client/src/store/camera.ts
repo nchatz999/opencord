@@ -44,7 +44,7 @@ export type CameraStore = [CameraState, CameraActions];
 
 const DEFAULT_VIDEO_BITRATE = 1_500_000;
 export const MAX_VIDEO_BITRATE = 6_000_000;
-const KEYFRAME_PROBABILITY = 0.03;
+const KEYFRAME_INTERVAL = 30;
 
 const DEFAULT_CONSTRAINTS: CameraConstraints = {
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
@@ -60,6 +60,7 @@ const DEFAULT_ENCODER_CONFIG: VideoEncoderConfig = {
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_VIDEO_BITRATE,
   framerate: 30,
+  latencyMode: "realtime",
 };
 
 function buildMediaConstraints(constraints: CameraConstraints): MediaStreamConstraints {
@@ -121,6 +122,7 @@ function createCameraStore(): CameraStore {
   const encodedDataCallbacks = new Set<(chunk: EncodedVideoChunk, sequence: number) => void>();
   const recordingStoppedCallbacks = new Set<() => void>();
   let sequence = 0;
+  let frameCount = 0;
   let constraints: CameraConstraints = {
     ...DEFAULT_CONSTRAINTS,
     width: presetConfig.width,
@@ -152,8 +154,9 @@ function createCameraStore(): CameraStore {
 
         if (value) {
           if (encoder?.state === "configured") {
-            const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
+            const keyFrame = frameCount % KEYFRAME_INTERVAL === 0;
             encoder.encode(value, { keyFrame });
+            frameCount++;
           }
           value.close();
         }
@@ -177,6 +180,7 @@ function createCameraStore(): CameraStore {
 
     processor = null;
     sequence = 0;
+    frameCount = 0;
   }
 
   async function handleTrackEnded() {

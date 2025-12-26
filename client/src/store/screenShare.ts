@@ -39,7 +39,7 @@ export type ScreenShareStore = [ScreenShareState, ScreenShareActions];
 
 const DEFAULT_VIDEO_BITRATE = 2_500_000;
 const DEFAULT_AUDIO_BITRATE = 128_000;
-const KEYFRAME_PROBABILITY = 0.03;
+const KEYFRAME_INTERVAL = 30;
 
 const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
@@ -49,13 +49,13 @@ const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
   audio: true,
 };
 
-const DEFAULT_VIDEO_ENCODER_CONFIG = {
+const DEFAULT_VIDEO_ENCODER_CONFIG: VideoEncoderConfig = {
   codec: "vp8",
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_VIDEO_BITRATE,
   framerate: 60,
-  keyFrameIntervalCount: 30,
+  latencyMode: "realtime",
 };
 
 const DEFAULT_AUDIO_ENCODER_CONFIG = {
@@ -153,6 +153,7 @@ function createScreenShareStore(): ScreenShareStore {
   const recordingStoppedCallbacks = new Set<() => void>();
   let videoSequence = 0;
   let audioSequence = 0;
+  let frameCount = 0;
 
   let constraints: ScreenShareConstraints = {
     ...DEFAULT_CONSTRAINTS,
@@ -192,8 +193,9 @@ function createScreenShareStore(): ScreenShareStore {
 
         if (value) {
           if (videoEncoder?.state === "configured") {
-            const keyFrame = Math.random() < KEYFRAME_PROBABILITY;
+            const keyFrame = frameCount % KEYFRAME_INTERVAL === 0;
             videoEncoder.encode(value, { keyFrame });
+            frameCount++;
           }
           value.close();
         }
@@ -252,6 +254,7 @@ function createScreenShareStore(): ScreenShareStore {
 
     videoSequence = 0;
     audioSequence = 0;
+    frameCount = 0;
   }
 
   async function handleVideoTrackEnded() {

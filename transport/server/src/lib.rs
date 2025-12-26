@@ -1,9 +1,11 @@
-pub mod packet;
 pub mod fec;
+pub mod nack;
+pub mod packet;
 
 use bytes::Bytes;
+use fec::{AdaptiveFecEncoder, LossEstimator};
+use nack::{NackController, PendingNack};
 use packet::{FrameBuffer, Packet, PacketSerializer, PingBody};
-use fec::{LossEstimator, FecController, AdaptiveFecEncoder};
 
 use std::{
     collections::HashMap,
@@ -114,7 +116,6 @@ impl Connection {
             rttvar: 0.0,
             rto: 1000,
             loss_estimator: LossEstimator::new(),
-            fec_controller: FecController::new(),
             adaptive_fec_encoder: AdaptiveFecEncoder::new(),
         };
 
@@ -175,8 +176,6 @@ impl Connection {
 }
 
 const MAX_MISSED_PONGS: usize = 15;
-const MAX_RETRANSMISSIONS: u32 = 5;
-const MAX_SEQUENCE_GAP: u64 = 100;
 const MAX_FRAMES: usize = 16384;
 const MAX_PACKETS: usize = 262144;
 const NACK_COOLDOWN: Duration = Duration::from_millis(30);
@@ -184,13 +183,6 @@ const PING_INTERVAL: Duration = Duration::from_millis(200);
 const CHECK_PING_INTERVAL: Duration = Duration::from_secs(1);
 const PONG_TIMEOUT: u64 = 2000;
 const CLEANUP_INTERVAL: Duration = Duration::from_millis(100);
-
-struct InFlightPacket {
-    pub packet: packet::NackBody,
-    pub sent_at: Instant,
-    pub created_at: u64,
-    pub retransmissions: u32,
-}
 
 struct ConnectionRunner {
     pub streams: HashMap<u64, FrameBuffer>,
@@ -203,7 +195,7 @@ struct ConnectionRunner {
     session_command_receiver: mpsc::Receiver<SessionCommand>,
     in_seq: u64,
     out_seq: u64,
-    nacks: Vec<InFlightPacket>,
+    nacks: Vec<PendingNack>,
     nack_responses: HashMap<u64, Instant>,
     next_frame_id: u64,
     send_pings: HashMap<u64, PingBody>,
@@ -212,7 +204,6 @@ struct ConnectionRunner {
     rttvar: f64,
     pub rto: u64,
     loss_estimator: LossEstimator,
-    fec_controller: FecController,
     adaptive_fec_encoder: AdaptiveFecEncoder,
 }
 
@@ -335,24 +326,17 @@ impl ConnectionRunner {
                 }
 
                 _ = retransmission_check_interval.tick() => {
-                    self.nacks.retain_mut(|nack| {
-                        if nack.retransmissions >= MAX_RETRANSMISSIONS {
-                            return false;
-                        }
-                        let duration = if nack.retransmissions == 0 {
-                            Duration::from_millis(20)
-                        } else {
-                            Duration::from_millis(self.rto)
-                        };
-                        if nack.sent_at.elapsed() > duration {
-                            if let Err(e) = self.session.send_datagram(PacketSerializer::serialize(&packet::Packet::Nack(nack.packet.clone()))) {
+                    let session = &self.session;
+                    NackController::check_pending_nacks(
+                        &mut self.nacks,
+                        &self.received_rackets,
+                        self.rto,
+                        |packet| {
+                            if let Err(e) = session.send_datagram(PacketSerializer::serialize(packet)) {
                                 error!("Failed to send NACK retransmission: {}", e);
                             }
-                            nack.sent_at = Instant::now();
-                            nack.retransmissions += 1;
-                        }
-                        true
-                    });
+                        },
+                    );
                 }
 
                 _ = cleanup_interval.tick() => {
@@ -364,7 +348,7 @@ impl ConnectionRunner {
                     self.send_pings.retain(|_key,value| now - value.timestamp < 5000 );
                     self.send_packets.retain(|_key,value| now - value.timestamp < 5000 );
                     self.received_rackets.retain(|_key,value| now - value.timestamp < 5000 );
-                    self.nacks.retain(|nack| now - nack.created_at < 5000 );
+                    NackController::cleanup(&mut self.nacks, 5000);
                     self.nack_responses.retain(|_, time| time.elapsed() < Duration::from_secs(5));
                 },
 
@@ -432,28 +416,19 @@ impl ConnectionRunner {
                             let _ = msg_sender.send(Message::Unordered(data.into())).await;
                         }
                     }
-                    self.nacks
-                        .retain(|item| item.packet.missing_sequence != sec);
-                    self.loss_estimator.record_packet_received(body.sequence_number);
+                    NackController::on_rtp_received(&mut self.nacks, sec);
+                    self.loss_estimator
+                        .record_packet_received(body.sequence_number);
                     self.received_rackets.insert(body.sequence_number, body);
 
                     if sec > self.in_seq {
-                        if sec - self.in_seq <= MAX_SEQUENCE_GAP {
-                            let now = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap()
-                                .as_millis() as u64;
-                            for i in self.in_seq..sec {
-                                self.nacks.push(InFlightPacket {
-                                    packet: packet::NackBody {
-                                        missing_sequence: i,
-                                    },
-                                    sent_at: Instant::now(),
-                                    created_at: now,
-                                    retransmissions: 0,
-                                });
-                            }
-                        }
+                        NackController::on_gap_detected(
+                            &mut self.nacks,
+                            &self.received_rackets,
+                            self.srtt,
+                            self.in_seq,
+                            sec,
+                        );
                         self.in_seq = sec.wrapping_add(1);
                     } else if sec == self.in_seq {
                         self.in_seq += 1;
@@ -461,16 +436,18 @@ impl ConnectionRunner {
                 }
                 packet::Packet::Nack(body) => {
                     let now = Instant::now();
-                    if let Some(last) = self.nack_responses.get(&body.missing_sequence) {
-                        if now.duration_since(*last) < NACK_COOLDOWN {
-                            return;
+                    for seq in body.missing_sequences {
+                        if let Some(last) = self.nack_responses.get(&seq) {
+                            if now.duration_since(*last) < NACK_COOLDOWN {
+                                continue;
+                            }
                         }
-                    }
-                    if let Some(p) = self.send_packets.get(&body.missing_sequence) {
-                        let _ = self
-                            .session
-                            .send_datagram(PacketSerializer::serialize(&Packet::Rtp(p.clone())));
-                        self.nack_responses.insert(body.missing_sequence, now);
+                        if let Some(p) = self.send_packets.get(&seq) {
+                            let _ = self.session.send_datagram(PacketSerializer::serialize(
+                                &Packet::Rtp(p.clone()),
+                            ));
+                            self.nack_responses.insert(seq, now);
+                        }
                     }
                 }
 
@@ -501,9 +478,9 @@ impl ConnectionRunner {
                                 let _ = msg_sender.send(Message::Unordered(data.into())).await;
                             }
                         }
-                        self.nacks
-                            .retain(|item| item.packet.missing_sequence != p.sequence_number);
-                        self.loss_estimator.record_packet_recovered(p.sequence_number);
+                        NackController::on_rtp_received(&mut self.nacks, p.sequence_number);
+                        self.loss_estimator
+                            .record_packet_recovered(p.sequence_number);
                         self.received_rackets.insert(p.sequence_number, p);
                     }
                 }
@@ -547,7 +524,8 @@ impl ConnectionRunner {
                 self.send_packets
                     .insert(rtp_packet.sequence_number, rtp_packet.clone());
             }
-            self.loss_estimator.record_packet_sent(rtp_packet.sequence_number);
+            self.loss_estimator
+                .record_packet_sent(rtp_packet.sequence_number);
 
             if let Err(e) = self.session.send_datagram(encoded) {
                 error!("Failed to send RTP packet: {}", e);
@@ -556,7 +534,7 @@ impl ConnectionRunner {
             for fec in self.adaptive_fec_encoder.process_packet(
                 rtp_packet,
                 &self.loss_estimator,
-                &mut self.fec_controller,
+                self.srtt,
             ) {
                 if let Err(e) = self
                     .session

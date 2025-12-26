@@ -58,13 +58,17 @@ export class PacketSerializer {
         break;
       }
       case PacketType.NACK: {
-        // Header: type(1) + missingSeq(8) = 9
-        buffer = new ArrayBuffer(9);
+        const count = packet.missingSequences.length;
+        buffer = new ArrayBuffer(2 + count * 8);
         view = new DataView(buffer);
         view.setUint8(offset, packet.type);
         offset += 1;
-        view.setBigUint64(offset, packet.missingSequence);
-        offset += 8;
+        view.setUint8(offset, count);
+        offset += 1;
+        for (const seq of packet.missingSequences) {
+          view.setBigUint64(offset, seq);
+          offset += 8;
+        }
         break;
       }
       case PacketType.PING:
@@ -177,14 +181,22 @@ export class PacketSerializer {
         return packet;
       }
       case PacketType.NACK: {
-        if (buffer.byteLength < 9) {
+        if (buffer.byteLength < 2) {
           return null;
         }
-        const missingSequence = view.getBigUint64(offset);
-        offset += 8;
+        const count = view.getUint8(offset);
+        offset += 1;
+        if (buffer.byteLength < 2 + count * 8) {
+          return null;
+        }
+        const missingSequences: bigint[] = [];
+        for (let i = 0; i < count; i++) {
+          missingSequences.push(view.getBigUint64(offset));
+          offset += 8;
+        }
         const packet: NackPacket = {
           type,
-          missingSequence,
+          missingSequences,
         };
         return packet;
       }

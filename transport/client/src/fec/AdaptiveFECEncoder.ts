@@ -1,17 +1,23 @@
-import { FECController, FECDecision } from './FECController';
+import { LossEstimator } from './LossEstimator';
 import { PacketType, RTPPacket, FecPacket, ProtectedPacketMeta } from '../transmission';
 
 const INTERLEAVE_DEPTH = 3;
+const DEFAULT_FEC_RATIO = 4;
+
+const MIN_HOLD_TIME_MS = 2000;
+const INCREASE_THRESHOLD_OFFSET = 0.005;
+const DECREASE_THRESHOLD_OFFSET = 0.01;
 
 export class AdaptiveFECEncoder {
-  private controller: FECController;
+  private lossEstimator: LossEstimator;
   private slots: RTPPacket[][] = [];
   private currentSlot: number = 0;
-  private groupSize: number = INTERLEAVE_DEPTH;
-  private lastDecision: FECDecision = { ratio: INTERLEAVE_DEPTH };
+  private groupSize: number = DEFAULT_FEC_RATIO;
+  private currentRatio: number = DEFAULT_FEC_RATIO;
+  private lastChangeTime: number = 0;
 
-  constructor(controller: FECController) {
-    this.controller = controller;
+  constructor(lossEstimator: LossEstimator) {
+    this.lossEstimator = lossEstimator;
     this.initializeSlots();
   }
 
@@ -20,17 +26,14 @@ export class AdaptiveFECEncoder {
     this.currentSlot = 0;
   }
 
-  processPacket(packet: RTPPacket): FecPacket[] {
+  processPacket(packet: RTPPacket, rtt: number): FecPacket[] {
     const fecPackets: FecPacket[] = [];
+    const ratio = this.decideRatio(rtt);
 
-    const decision = this.controller.decide();
-
-    if (decision.ratio !== this.groupSize) {
+    if (ratio !== this.groupSize) {
       fecPackets.push(...this.flushAll());
-      this.groupSize = Math.max(2, decision.ratio);
+      this.groupSize = Math.max(2, ratio);
     }
-
-    this.lastDecision = decision;
 
     this.slots[this.currentSlot].push(packet);
     this.currentSlot = (this.currentSlot + 1) % INTERLEAVE_DEPTH;
@@ -43,6 +46,55 @@ export class AdaptiveFECEncoder {
     }
 
     return fecPackets;
+  }
+
+  private decideRatio(rtt: number): number {
+    const stats = this.lossEstimator.getStats();
+    const targetRatio = this.calculateTargetRatio(stats.lossRate, rtt);
+    return this.applyHysteresis(targetRatio, stats.lossRate);
+  }
+
+  private calculateTargetRatio(lossRate: number, rtt: number): number {
+    if (rtt > 200) return 2;
+    if (rtt > 100) {
+      if (lossRate < 0.03) return 3;
+      return 2;
+    }
+    if (lossRate < 0.03) return 4;
+    if (lossRate < 0.10) return 3;
+    return 2;
+  }
+
+  private applyHysteresis(targetRatio: number, currentLoss: number): number {
+    const now = Date.now();
+    const timeSinceLastChange = now - this.lastChangeTime;
+
+    if (targetRatio < this.currentRatio) {
+      const increaseThreshold = this.getCurrentThreshold() + INCREASE_THRESHOLD_OFFSET;
+      if (currentLoss > increaseThreshold) {
+        this.currentRatio = targetRatio;
+        this.lastChangeTime = now;
+      }
+    } else if (targetRatio > this.currentRatio) {
+      if (timeSinceLastChange < MIN_HOLD_TIME_MS) {
+        return this.currentRatio;
+      }
+      const decreaseThreshold = this.getCurrentThreshold() - DECREASE_THRESHOLD_OFFSET;
+      if (currentLoss < decreaseThreshold) {
+        this.currentRatio = targetRatio;
+        this.lastChangeTime = now;
+      }
+    }
+
+    return this.currentRatio;
+  }
+
+  private getCurrentThreshold(): number {
+    switch (this.currentRatio) {
+      case 4: return 0.03;
+      case 3: return 0.10;
+      default: return 0.10;
+    }
   }
 
   private flushAll(): FecPacket[] {
@@ -91,8 +143,8 @@ export class AdaptiveFECEncoder {
     };
   }
 
-  getCurrentDecision(): FECDecision {
-    return this.lastDecision;
+  getCurrentRatio(): number {
+    return this.currentRatio;
   }
 
   getPendingCount(): number {
@@ -104,6 +156,9 @@ export class AdaptiveFECEncoder {
       slot.length = 0;
     }
     this.currentSlot = 0;
+    this.groupSize = DEFAULT_FEC_RATIO;
+    this.currentRatio = DEFAULT_FEC_RATIO;
+    this.lastChangeTime = 0;
   }
 
   static recoverPacket(fecPacket: FecPacket, availablePackets: RTPPacket[]): RTPPacket | null {

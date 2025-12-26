@@ -7,6 +7,8 @@ const { autoUpdater } = pkg;
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+app.commandLine.appendSwitch('disable-hang-monitor');
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
 app.commandLine.appendSwitch('enable-webrtc-hw-encoding');
 app.commandLine.appendSwitch('enable-webrtc-hw-decoding');

@@ -1,6 +1,7 @@
 import { ok, err, timerManager } from 'opencord-utils';
 import { PacketSerializer } from './packet';
-import { LossEstimator, FECController, AdaptiveFECEncoder } from './fec';
+import { LossEstimator, AdaptiveFECEncoder } from './fec';
+import { NackController, PendingNack } from './nack';
 import type { Result } from 'opencord-utils';
 export enum PacketType {
   PING = 0x01,
@@ -28,7 +29,7 @@ export interface PongPacket extends BasePacket {
 
 export interface NackPacket extends BasePacket {
   type: PacketType.NACK;
-  missingSequence: bigint;
+  missingSequences: bigint[];
 }
 
 export interface ProtectedPacketMeta {
@@ -113,10 +114,7 @@ export class MediaTransport {
   outReader: ReadableStreamDefaultReader | null = null;
   outWriter: WritableStreamDefaultWriter | null = null;
   inSeq: bigint;
-  retransmission: Map<
-    bigint,
-    { packet: NackPacket; count: number; timer: number; createdAt: number }
-  >;
+  pendingNacks: PendingNack[];
   sendPackets: Map<bigint, RTPPacket>;
   receivedPackets: Map<bigint, RTPPacket>;
   duplicatePackets: number;
@@ -135,8 +133,8 @@ export class MediaTransport {
   private closed: boolean = true;
   private pingIntervalId: number | null = null;
   private cleanerIntervalId: number | null = null;
+  private nackCheckIntervalId: number | null = null;
   private lossEstimator: LossEstimator;
-  private fecController: FECController;
   private adaptiveFecEncoder: AdaptiveFECEncoder;
   onFrameComplete: (data: Uint8Array) => void;
   onSafeDataComplete: (data: Uint8Array) => void;
@@ -149,15 +147,14 @@ export class MediaTransport {
   ) {
     this.outSeq = 0n;
     this.inSeq = 0n;
-    this.retransmission = new Map();
+    this.pendingNacks = [];
     this.buffers = new Map<bigint, FrameBuffer>;
     this.rtt = 0;
     this.sendPackets = new Map();
     this.receivedPackets = new Map<bigint, RTPPacket>;
     this.duplicatePackets = 0;
     this.lossEstimator = new LossEstimator();
-    this.fecController = new FECController(this.lossEstimator);
-    this.adaptiveFecEncoder = new AdaptiveFECEncoder(this.fecController);
+    this.adaptiveFecEncoder = new AdaptiveFECEncoder(this.lossEstimator);
     this.onFrameComplete = onFrameConplete;
     this.onSafeDataComplete = onSafeDataComplete;
     this.onDisconnect = onDisconnect;
@@ -191,6 +188,7 @@ export class MediaTransport {
       this.runIncomingHandler();
       this.runOutgoingSender();
       this.runPingInterval(200);
+      this.runNackCheckInterval();
       this.runCleaner();
       this.handleTransportClosed();
       return ok(undefined)
@@ -228,7 +226,7 @@ export class MediaTransport {
         return;
       }
 
-      for (const fecPacket of this.adaptiveFecEncoder.processPacket(packet)) {
+      for (const fecPacket of this.adaptiveFecEncoder.processPacket(packet, this.srtt)) {
         try {
           await this.outWriter.write(PacketSerializer.serialize(fecPacket));
         } catch {
@@ -291,34 +289,18 @@ export class MediaTransport {
   }
 
   public cancelRetransmission(sequence: bigint) {
-    const packet = this.retransmission.get(sequence);
-    if (packet) {
-      timerManager.clearTimeout(packet.timer);
-      this.retransmission.delete(sequence);
-    }
+    NackController.onRtpReceived(this, sequence);
   }
 
-  public scheduleRetransmission(nack: NackPacket) {
-    if (!this.writer) return;
+  private handleGapDetected(start: bigint, end: bigint): void {
+    NackController.onGapDetected(this, start, end);
+  }
 
-    const MAX_RETRANSMISSIONS = 5;
-    let packet = this.retransmission.get(nack.missingSequence);
-    if (!packet) {
-      packet = { packet: nack, count: 0, timer: 0, createdAt: Date.now() };
-      this.retransmission.set(nack.missingSequence, packet);
-    }
-    packet.count++;
-    if (packet.count > MAX_RETRANSMISSIONS) {
-      this.cancelRetransmission(nack.missingSequence);
-      return;
-    }
-    let time = packet.count == 1 ? 20 : this.rto;
-    packet.timer = timerManager.setTimeout(async () => {
-      if (this.writer) {
-        await this.writer.write(PacketSerializer.serialize(packet.packet));
-        this.scheduleRetransmission(nack);
-      }
-    }, time);
+  private runNackCheckInterval() {
+    this.nackCheckIntervalId = timerManager.setInterval(async () => {
+      if (this.closed) return;
+      await NackController.checkPendingNacks(this);
+    }, 10);
   }
 
   public async handlePing(packet: PingPacket) {
@@ -367,9 +349,11 @@ export class MediaTransport {
   public async handleNACK(nack: NackPacket) {
     if (!this.writer) return;
 
-    let packet = this.sendPackets.get(nack.missingSequence);
-    if (packet) {
-      await this.writer.write(PacketSerializer.serialize(packet));
+    for (const seq of nack.missingSequences) {
+      const packet = this.sendPackets.get(seq);
+      if (packet) {
+        await this.writer.write(PacketSerializer.serialize(packet));
+      }
     }
   }
 
@@ -387,13 +371,7 @@ export class MediaTransport {
     this.deliverFrame(frame)
 
     if (packet.sequenceNumber > this.inSeq) {
-      for (let i = this.inSeq; i < packet.sequenceNumber; i++) {
-        const nack: NackPacket = {
-          type: PacketType.NACK,
-          missingSequence: i,
-        };
-        this.scheduleRetransmission(nack);
-      }
+      this.handleGapDetected(this.inSeq, packet.sequenceNumber);
       this.inSeq = packet.sequenceNumber + 1n;
     }
     else if (packet.sequenceNumber == this.inSeq) this.inSeq += 1n;
@@ -544,11 +522,7 @@ export class MediaTransport {
 
       this.pings = Array.from(this.pings).filter((ping) => now - Number(ping.timestamp) < 5000);
 
-      for (const [seq, entry] of this.retransmission) {
-        if (now - entry.createdAt > 5000) {
-          this.cancelRetransmission(seq);
-        }
-      }
+      NackController.cleanup(this);
     }, 50)
   }
 
@@ -570,7 +544,12 @@ export class MediaTransport {
         this.cleanerIntervalId = null;
       }
 
-      this.retransmission.forEach(({ timer }) => timerManager.clearTimeout(timer));
+      if (this.nackCheckIntervalId !== null) {
+        timerManager.clearInterval(this.nackCheckIntervalId);
+        this.nackCheckIntervalId = null;
+      }
+
+      this.pendingNacks = [];
       this.pings.forEach(({ timer }) => timerManager.clearTimeout(timer));
 
       try {
@@ -604,8 +583,12 @@ export class MediaTransport {
       this.cleanerIntervalId = null;
     }
 
-    this.retransmission.forEach(({ timer }) => timerManager.clearTimeout(timer));
-    this.retransmission.clear();
+    if (this.nackCheckIntervalId !== null) {
+      timerManager.clearInterval(this.nackCheckIntervalId);
+      this.nackCheckIntervalId = null;
+    }
+
+    this.pendingNacks = [];
 
     this.pings.forEach(({ timer }) => timerManager.clearTimeout(timer));
     this.pings = [];
@@ -616,7 +599,6 @@ export class MediaTransport {
     this.buffers.clear();
 
     this.lossEstimator.reset();
-    this.fecController.reset();
     this.adaptiveFecEncoder.reset();
 
     try {
