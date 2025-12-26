@@ -1,19 +1,14 @@
 use super::loss_estimator::LossEstimator;
 use crate::packet::{FecBody, ProtectedPacketMeta, RtpBody};
-use std::time::Instant;
 
 const DEFAULT_INTERLEAVE_DEPTH: usize = 3;
 const DEFAULT_FEC_RATIO: u8 = 4;
-
-const MIN_HOLD_MS: u64 = 2000;
 
 pub struct AdaptiveFecEncoder {
     slots: Vec<Vec<RtpBody>>,
     current_slot: usize,
     group_size: usize,
     interleave_depth: usize,
-    current_ratio: u8,
-    last_change_time: Option<Instant>,
 }
 
 impl AdaptiveFecEncoder {
@@ -28,8 +23,6 @@ impl AdaptiveFecEncoder {
             current_slot: 0,
             group_size: DEFAULT_FEC_RATIO as usize,
             interleave_depth: depth,
-            current_ratio: DEFAULT_FEC_RATIO,
-            last_change_time: None,
         }
     }
 
@@ -59,35 +52,12 @@ impl AdaptiveFecEncoder {
         fec_packets
     }
 
-    fn decide_ratio(&mut self, loss_estimator: &LossEstimator, rtt: f64) -> u8 {
+    fn decide_ratio(&self, loss_estimator: &LossEstimator, rtt: f64) -> u8 {
         let loss = loss_estimator.get_stats().loss_rate;
 
-        let target = if rtt < 20.0 || loss < 0.02 {
-            4
-        } else if rtt > 200.0 || loss >= 0.10 {
-            2
-        } else if rtt > 100.0 || loss >= 0.05 {
-            3
-        } else {
-            4
-        };
-
-        let now = Instant::now();
-        if target < self.current_ratio {
-            self.current_ratio = target;
-            self.last_change_time = Some(now);
-        } else if target > self.current_ratio {
-            let elapsed = self
-                .last_change_time
-                .map(|t| now.duration_since(t).as_millis() as u64)
-                .unwrap_or(u64::MAX);
-            if elapsed >= MIN_HOLD_MS {
-                self.current_ratio = target;
-                self.last_change_time = Some(now);
-            }
-        }
-
-        self.current_ratio
+        if rtt > 200.0 || loss >= 0.10 { 2 }
+        else if rtt > 100.0 || loss >= 0.05 { 3 }
+        else { 4 }
     }
 
     fn flush_all(&mut self) -> Vec<FecBody> {
@@ -147,10 +117,6 @@ impl AdaptiveFecEncoder {
         })
     }
 
-    pub fn get_current_ratio(&self) -> u8 {
-        self.current_ratio
-    }
-
     pub fn get_pending_count(&self) -> usize {
         self.slots.iter().map(|s| s.len()).sum()
     }
@@ -161,8 +127,6 @@ impl AdaptiveFecEncoder {
         }
         self.current_slot = 0;
         self.group_size = DEFAULT_FEC_RATIO as usize;
-        self.current_ratio = DEFAULT_FEC_RATIO;
-        self.last_change_time = None;
     }
 
     pub fn recover_packet(fec_packet: &FecBody, available_packets: &[RtpBody]) -> Option<RtpBody> {

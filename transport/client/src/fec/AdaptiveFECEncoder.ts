@@ -4,15 +4,11 @@ import { PacketType, RTPPacket, FecPacket, ProtectedPacketMeta } from '../transm
 const INTERLEAVE_DEPTH = 3;
 const DEFAULT_FEC_RATIO = 4;
 
-const MIN_HOLD_MS = 2000;
-
 export class AdaptiveFECEncoder {
   private lossEstimator: LossEstimator;
   private slots: RTPPacket[][] = [];
   private currentSlot: number = 0;
   private groupSize: number = DEFAULT_FEC_RATIO;
-  private currentRatio: number = DEFAULT_FEC_RATIO;
-  private lastChangeTime: number = 0;
 
   constructor(lossEstimator: LossEstimator) {
     this.lossEstimator = lossEstimator;
@@ -45,29 +41,9 @@ export class AdaptiveFECEncoder {
   private decideRatio(rtt: number): number {
     const loss = this.lossEstimator.getStats().lossRate;
 
-    let target: number;
-    if (rtt < 20 || loss < 0.02) {
-      target = 4;
-    } else if (rtt > 200 || loss >= 0.10) {
-      target = 2;
-    } else if (rtt > 100 || loss >= 0.05) {
-      target = 3;
-    } else {
-      target = 4;
-    }
-
-    const now = Date.now();
-    if (target < this.currentRatio) {
-      this.currentRatio = target;
-      this.lastChangeTime = now;
-    } else if (target > this.currentRatio) {
-      if (now - this.lastChangeTime >= MIN_HOLD_MS) {
-        this.currentRatio = target;
-        this.lastChangeTime = now;
-      }
-    }
-
-    return this.currentRatio;
+    if (rtt > 200 || loss >= 0.10) return 2;
+    if (rtt > 100 || loss >= 0.05) return 3;
+    return 4;
   }
 
   private flushAll(): FecPacket[] {
@@ -116,10 +92,6 @@ export class AdaptiveFECEncoder {
     };
   }
 
-  getCurrentRatio(): number {
-    return this.currentRatio;
-  }
-
   getPendingCount(): number {
     return this.slots.reduce((sum, slot) => sum + slot.length, 0);
   }
@@ -130,8 +102,6 @@ export class AdaptiveFECEncoder {
     }
     this.currentSlot = 0;
     this.groupSize = DEFAULT_FEC_RATIO;
-    this.currentRatio = DEFAULT_FEC_RATIO;
-    this.lastChangeTime = 0;
   }
 
   static recoverPacket(fecPacket: FecPacket, availablePackets: RTPPacket[]): RTPPacket | null {

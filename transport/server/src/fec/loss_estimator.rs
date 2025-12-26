@@ -8,7 +8,6 @@ pub struct LossStats {
 }
 
 const WINDOW_DURATION: Duration = Duration::from_millis(2000);
-const SMOOTHING_ALPHA: f64 = 0.1;
 
 struct SentRecord {
     sequence: u64,
@@ -36,6 +35,7 @@ impl LossEstimator {
             timestamp: Instant::now(),
         });
         self.prune();
+        self.update_smoothed_rate();
     }
 
     pub fn record_nack_received(&mut self, sequences: &[u64]) {
@@ -78,13 +78,14 @@ impl LossEstimator {
             return;
         }
 
-        let raw_loss_rate = self.nacked_set.len() as f64 / self.sent_packets.len() as f64;
+        let raw = self.nacked_set.len() as f64 / self.sent_packets.len() as f64;
 
         if self.smoothed_loss_rate == 0.0 {
-            self.smoothed_loss_rate = raw_loss_rate;
+            self.smoothed_loss_rate = raw;
+        } else if raw > self.smoothed_loss_rate {
+            self.smoothed_loss_rate = 0.8 * self.smoothed_loss_rate + 0.2 * raw;
         } else {
-            self.smoothed_loss_rate =
-                (1.0 - SMOOTHING_ALPHA) * self.smoothed_loss_rate + SMOOTHING_ALPHA * raw_loss_rate;
+            self.smoothed_loss_rate = 0.95 * self.smoothed_loss_rate + 0.05 * raw;
         }
     }
 

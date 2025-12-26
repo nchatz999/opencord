@@ -4,7 +4,6 @@ export interface LossStats {
 }
 
 const WINDOW_MS = 2000;
-const SMOOTHING_ALPHA = 0.1;
 
 interface SentRecord {
   sequence: bigint;
@@ -19,6 +18,7 @@ export class LossEstimator {
   recordPacketSent(sequence: bigint): void {
     this.sentPackets.push({ sequence, timestamp: Date.now() });
     this.prune();
+    this.updateSmoothedRate();
   }
 
   recordNackReceived(sequences: bigint[]): void {
@@ -58,12 +58,14 @@ export class LossEstimator {
   private updateSmoothedRate(): void {
     if (this.sentPackets.length === 0) return;
 
-    const rawLossRate = this.nackedSet.size / this.sentPackets.length;
+    const raw = this.nackedSet.size / this.sentPackets.length;
 
     if (this.smoothedLossRate === 0) {
-      this.smoothedLossRate = rawLossRate;
+      this.smoothedLossRate = raw;
+    } else if (raw > this.smoothedLossRate) {
+      this.smoothedLossRate = 0.8 * this.smoothedLossRate + 0.2 * raw;
     } else {
-      this.smoothedLossRate = (1 - SMOOTHING_ALPHA) * this.smoothedLossRate + SMOOTHING_ALPHA * rawLossRate;
+      this.smoothedLossRate = 0.95 * this.smoothedLossRate + 0.05 * raw;
     }
   }
 
