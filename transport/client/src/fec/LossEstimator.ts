@@ -1,72 +1,64 @@
-import { RingBuffer } from 'opencord-utils';
-
-interface PacketRecord {
-  sequence: bigint;
-  received: boolean;
-}
-
 export interface LossStats {
   lossRate: number;
   sampleSize: number;
 }
 
-const WINDOW_SIZE = 200;
+const WINDOW_MS = 2000;
 const SMOOTHING_ALPHA = 0.1;
 
+interface SentRecord {
+  sequence: bigint;
+  timestamp: number;
+}
+
 export class LossEstimator {
-  private window: RingBuffer<PacketRecord>;
-  private sequenceMap: Map<bigint, PacketRecord>;
+  private sentPackets: SentRecord[] = [];
+  private nackedSet: Set<bigint> = new Set();
   private smoothedLossRate: number = 0;
 
-  constructor() {
-    this.window = new RingBuffer<PacketRecord>(WINDOW_SIZE);
-    this.sequenceMap = new Map();
+  recordPacketSent(sequence: bigint): void {
+    this.sentPackets.push({ sequence, timestamp: Date.now() });
+    this.prune();
   }
 
-  recordPacketSent(sequence: bigint): void {
-    const record: PacketRecord = { sequence, received: false };
-
-    if (this.window.isFull()) {
-      const removed = this.window.shift();
-      if (removed) {
-        this.sequenceMap.delete(removed.sequence);
+  recordNackReceived(sequences: bigint[]): void {
+    const windowSeqs = new Set(this.sentPackets.map(p => p.sequence));
+    for (const seq of sequences) {
+      if (windowSeqs.has(seq)) {
+        this.nackedSet.add(seq);
       }
     }
-
-    this.window.push(record);
-    this.sequenceMap.set(sequence, record);
     this.updateSmoothedRate();
-  }
-
-  recordPacketReceived(sequence: bigint): void {
-    const record = this.sequenceMap.get(sequence);
-    if (record) {
-      record.received = true;
-      this.updateSmoothedRate();
-    }
-  }
-
-  recordPacketRecovered(sequence: bigint): void {
-    const record = this.sequenceMap.get(sequence);
-    if (record) {
-      record.received = true;
-      this.updateSmoothedRate();
-    }
   }
 
   getStats(): LossStats {
     return {
       lossRate: this.smoothedLossRate,
-      sampleSize: this.window.length(),
+      sampleSize: this.sentPackets.length,
     };
   }
 
-  private updateSmoothedRate(): void {
-    const packets = this.window.toArray();
-    if (packets.length === 0) return;
+  private prune(): void {
+    const cutoff = Date.now() - WINDOW_MS;
+    const toRemove: bigint[] = [];
 
-    const received = packets.filter(p => p.received).length;
-    const rawLossRate = (packets.length - received) / packets.length;
+    this.sentPackets = this.sentPackets.filter(p => {
+      if (p.timestamp < cutoff) {
+        toRemove.push(p.sequence);
+        return false;
+      }
+      return true;
+    });
+
+    for (const seq of toRemove) {
+      this.nackedSet.delete(seq);
+    }
+  }
+
+  private updateSmoothedRate(): void {
+    if (this.sentPackets.length === 0) return;
+
+    const rawLossRate = this.nackedSet.size / this.sentPackets.length;
 
     if (this.smoothedLossRate === 0) {
       this.smoothedLossRate = rawLossRate;
@@ -76,8 +68,8 @@ export class LossEstimator {
   }
 
   reset(): void {
-    this.window.clear();
-    this.sequenceMap.clear();
+    this.sentPackets = [];
+    this.nackedSet.clear();
     this.smoothedLossRate = 0;
   }
 }

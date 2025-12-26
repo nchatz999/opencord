@@ -5,9 +5,7 @@ use std::time::Instant;
 const DEFAULT_INTERLEAVE_DEPTH: usize = 3;
 const DEFAULT_FEC_RATIO: u8 = 4;
 
-const MIN_HOLD_TIME_MS: u64 = 2000;
-const INCREASE_THRESHOLD_OFFSET: f64 = 0.005;
-const DECREASE_THRESHOLD_OFFSET: f64 = 0.01;
+const MIN_HOLD_MS: u64 = 2000;
 
 pub struct AdaptiveFecEncoder {
     slots: Vec<Vec<RtpBody>>,
@@ -44,11 +42,7 @@ impl AdaptiveFecEncoder {
         let mut fec_packets = Vec::new();
 
         let ratio = self.decide_ratio(loss_estimator, rtt);
-
-        if ratio as usize != self.group_size {
-            fec_packets.extend(self.flush_all());
-            self.group_size = (ratio as usize).max(2);
-        }
+        self.group_size = (ratio as usize).max(2);
 
         self.slots[self.current_slot].push(packet);
         self.current_slot = (self.current_slot + 1) % self.interleave_depth;
@@ -66,67 +60,34 @@ impl AdaptiveFecEncoder {
     }
 
     fn decide_ratio(&mut self, loss_estimator: &LossEstimator, rtt: f64) -> u8 {
-        let stats = loss_estimator.get_stats();
-        let target_ratio = self.calculate_target_ratio(stats.loss_rate, rtt);
-        self.apply_hysteresis(target_ratio, stats.loss_rate)
-    }
+        let loss = loss_estimator.get_stats().loss_rate;
 
-    fn calculate_target_ratio(&self, loss_rate: f64, rtt: f64) -> u8 {
-        if rtt > 200.0 {
-            return 2;
-        }
+        let target = if rtt < 20.0 || loss < 0.02 {
+            4
+        } else if rtt > 200.0 || loss >= 0.10 {
+            2
+        } else if rtt > 100.0 || loss >= 0.05 {
+            3
+        } else {
+            4
+        };
 
-        if rtt > 100.0 {
-            if loss_rate < 0.03 {
-                return 3;
-            }
-            return 2;
-        }
-
-        if loss_rate < 0.03 {
-            return 4;
-        }
-        if loss_rate < 0.10 {
-            return 3;
-        }
-        2
-    }
-
-    fn apply_hysteresis(&mut self, target_ratio: u8, current_loss: f64) -> u8 {
         let now = Instant::now();
-
-        if target_ratio < self.current_ratio {
-            let increase_threshold = self.get_current_threshold() + INCREASE_THRESHOLD_OFFSET;
-            if current_loss > increase_threshold {
-                self.current_ratio = target_ratio;
-                self.last_change_time = Some(now);
-            }
-        } else if target_ratio > self.current_ratio {
-            let time_since_last_change = self
+        if target < self.current_ratio {
+            self.current_ratio = target;
+            self.last_change_time = Some(now);
+        } else if target > self.current_ratio {
+            let elapsed = self
                 .last_change_time
                 .map(|t| now.duration_since(t).as_millis() as u64)
                 .unwrap_or(u64::MAX);
-
-            if time_since_last_change < MIN_HOLD_TIME_MS {
-                return self.current_ratio;
-            }
-
-            let decrease_threshold = self.get_current_threshold() - DECREASE_THRESHOLD_OFFSET;
-            if current_loss < decrease_threshold {
-                self.current_ratio = target_ratio;
+            if elapsed >= MIN_HOLD_MS {
+                self.current_ratio = target;
                 self.last_change_time = Some(now);
             }
         }
 
         self.current_ratio
-    }
-
-    fn get_current_threshold(&self) -> f64 {
-        match self.current_ratio {
-            4 => 0.03,
-            3 => 0.10,
-            _ => 0.10,
-        }
     }
 
     fn flush_all(&mut self) -> Vec<FecBody> {

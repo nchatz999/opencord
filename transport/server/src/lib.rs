@@ -336,6 +336,7 @@ impl ConnectionRunner {
                     NackController::check_pending_nacks(
                         &mut self.nacks,
                         &self.received_rackets,
+                        self.srtt,
                         self.rto,
                         |packet| {
                             if let Err(e) = session.send_datagram(PacketSerializer::serialize(packet)) {
@@ -431,8 +432,6 @@ impl ConnectionRunner {
                         }
                     }
                     NackController::on_rtp_received(&mut self.nacks, sec);
-                    self.loss_estimator
-                        .record_packet_received(body.sequence_number);
                     self.received_rackets.insert(body.sequence_number, body);
 
                     if sec > self.in_seq {
@@ -449,6 +448,7 @@ impl ConnectionRunner {
                     }
                 }
                 packet::Packet::Nack(body) => {
+                    self.loss_estimator.record_nack_received(&body.missing_sequences);
                     let now = Instant::now();
                     for seq in body.missing_sequences {
                         if let Some(last) = self.nack_responses.get(&seq) {
@@ -493,8 +493,6 @@ impl ConnectionRunner {
                             }
                         }
                         NackController::on_rtp_received(&mut self.nacks, p.sequence_number);
-                        self.loss_estimator
-                            .record_packet_recovered(p.sequence_number);
                         self.received_rackets.insert(p.sequence_number, p);
                     }
                 }

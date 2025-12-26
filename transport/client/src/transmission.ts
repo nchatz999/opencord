@@ -345,11 +345,11 @@ export class MediaTransport {
       this.deliverFrame(frame);
       this.cancelRetransmission(recoveredPacket.sequenceNumber);
       this.receivedPackets.set(recoveredPacket.sequenceNumber, recoveredPacket);
-      this.lossEstimator.recordPacketRecovered(recoveredPacket.sequenceNumber);
     }
   }
 
   public handleNACK(nack: NackPacket) {
+    this.lossEstimator.recordNackReceived(nack.missingSequences);
     for (const seq of nack.missingSequences) {
       const packet = this.sendPackets.get(seq);
       if (packet) {
@@ -369,7 +369,6 @@ export class MediaTransport {
     if (this.receivedPackets.has(packet.sequenceNumber)) this.duplicatePackets++;
     this.cancelRetransmission(packet.sequenceNumber);
     this.receivedPackets.set(packet.sequenceNumber, packet);
-    this.lossEstimator.recordPacketReceived(packet.sequenceNumber);
     this.deliverFrame(frame)
 
     if (packet.sequenceNumber > this.inSeq) {

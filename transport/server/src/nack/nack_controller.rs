@@ -15,10 +15,18 @@ pub struct PendingNack {
 pub struct NackController;
 
 impl NackController {
+    pub fn get_delay(srtt: f64, rto: u64, retransmissions: u32) -> Duration {
+        if retransmissions == 0 {
+            if srtt > 150.0 { Duration::from_millis(60) } else { Duration::from_millis(20) }
+        } else {
+            Duration::from_millis(rto)
+        }
+    }
+
     pub fn on_gap_detected(
         pending_nacks: &mut Vec<PendingNack>,
         received_packets: &HashMap<u64, RtpBody>,
-        srtt: f64,
+        _srtt: f64,
         start: u64,
         end: u64,
     ) {
@@ -34,12 +42,6 @@ impl NackController {
             return;
         }
 
-        let delay = if srtt > 150.0 {
-            Duration::from_millis(40)
-        } else {
-            Duration::ZERO
-        };
-
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -47,7 +49,7 @@ impl NackController {
 
         pending_nacks.push(PendingNack {
             packet: NackBody { missing_sequences: missing },
-            sent_at: Instant::now() + delay,
+            sent_at: Instant::now(),
             created_at: now,
             retransmissions: 0,
         });
@@ -66,6 +68,7 @@ impl NackController {
     pub fn check_pending_nacks<F>(
         pending_nacks: &mut Vec<PendingNack>,
         received_packets: &HashMap<u64, RtpBody>,
+        srtt: f64,
         rto: u64,
         mut send_fn: F,
     ) where
@@ -80,13 +83,8 @@ impl NackController {
                 return false;
             }
 
-            let duration = if nack.retransmissions == 0 {
-                Duration::from_millis(20)
-            } else {
-                Duration::from_millis(rto)
-            };
-
-            if Instant::now() >= nack.sent_at + duration {
+            let delay = Self::get_delay(srtt, rto, nack.retransmissions);
+            if Instant::now() >= nack.sent_at + delay {
                 send_fn(&Packet::Nack(nack.packet.clone()));
                 nack.sent_at = Instant::now();
                 nack.retransmissions += 1;

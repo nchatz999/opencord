@@ -4,9 +4,7 @@ import { PacketType, RTPPacket, FecPacket, ProtectedPacketMeta } from '../transm
 const INTERLEAVE_DEPTH = 3;
 const DEFAULT_FEC_RATIO = 4;
 
-const MIN_HOLD_TIME_MS = 2000;
-const INCREASE_THRESHOLD_OFFSET = 0.005;
-const DECREASE_THRESHOLD_OFFSET = 0.01;
+const MIN_HOLD_MS = 2000;
 
 export class AdaptiveFECEncoder {
   private lossEstimator: LossEstimator;
@@ -29,11 +27,7 @@ export class AdaptiveFECEncoder {
   processPacket(packet: RTPPacket, rtt: number): FecPacket[] {
     const fecPackets: FecPacket[] = [];
     const ratio = this.decideRatio(rtt);
-
-    if (ratio !== this.groupSize) {
-      fecPackets.push(...this.flushAll());
-      this.groupSize = Math.max(2, ratio);
-    }
+    this.groupSize = Math.max(2, ratio);
 
     this.slots[this.currentSlot].push(packet);
     this.currentSlot = (this.currentSlot + 1) % INTERLEAVE_DEPTH;
@@ -49,52 +43,31 @@ export class AdaptiveFECEncoder {
   }
 
   private decideRatio(rtt: number): number {
-    const stats = this.lossEstimator.getStats();
-    const targetRatio = this.calculateTargetRatio(stats.lossRate, rtt);
-    return this.applyHysteresis(targetRatio, stats.lossRate);
-  }
+    const loss = this.lossEstimator.getStats().lossRate;
 
-  private calculateTargetRatio(lossRate: number, rtt: number): number {
-    if (rtt > 200) return 2;
-    if (rtt > 100) {
-      if (lossRate < 0.03) return 3;
-      return 2;
+    let target: number;
+    if (rtt < 20 || loss < 0.02) {
+      target = 4;
+    } else if (rtt > 200 || loss >= 0.10) {
+      target = 2;
+    } else if (rtt > 100 || loss >= 0.05) {
+      target = 3;
+    } else {
+      target = 4;
     }
-    if (lossRate < 0.03) return 4;
-    if (lossRate < 0.10) return 3;
-    return 2;
-  }
 
-  private applyHysteresis(targetRatio: number, currentLoss: number): number {
     const now = Date.now();
-    const timeSinceLastChange = now - this.lastChangeTime;
-
-    if (targetRatio < this.currentRatio) {
-      const increaseThreshold = this.getCurrentThreshold() + INCREASE_THRESHOLD_OFFSET;
-      if (currentLoss > increaseThreshold) {
-        this.currentRatio = targetRatio;
-        this.lastChangeTime = now;
-      }
-    } else if (targetRatio > this.currentRatio) {
-      if (timeSinceLastChange < MIN_HOLD_TIME_MS) {
-        return this.currentRatio;
-      }
-      const decreaseThreshold = this.getCurrentThreshold() - DECREASE_THRESHOLD_OFFSET;
-      if (currentLoss < decreaseThreshold) {
-        this.currentRatio = targetRatio;
+    if (target < this.currentRatio) {
+      this.currentRatio = target;
+      this.lastChangeTime = now;
+    } else if (target > this.currentRatio) {
+      if (now - this.lastChangeTime >= MIN_HOLD_MS) {
+        this.currentRatio = target;
         this.lastChangeTime = now;
       }
     }
 
     return this.currentRatio;
-  }
-
-  private getCurrentThreshold(): number {
-    switch (this.currentRatio) {
-      case 4: return 0.03;
-      case 3: return 0.10;
-      default: return 0.10;
-    }
   }
 
   private flushAll(): FecPacket[] {

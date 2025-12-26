@@ -20,6 +20,13 @@ export interface NackContext {
 }
 
 export class NackController {
+  static getDelay(ctx: NackContext, retransmissions: number): number {
+    if (retransmissions === 0) {
+      return ctx.srtt > 150 ? 60 : 20;
+    }
+    return ctx.rto;
+  }
+
   static onGapDetected(ctx: NackContext, start: bigint, end: bigint): void {
     const gap = end - start;
     if (gap > MAX_SEQUENCE_GAP) return;
@@ -32,12 +39,11 @@ export class NackController {
     }
     if (missingSequences.length === 0) return;
 
-    const delay = ctx.srtt > 150 ? 40 : 0;
     const now = Date.now();
 
     ctx.pendingNacks.push({
       packet: { type: PacketType.NACK, missingSequences },
-      sentAt: now + delay,
+      sentAt: now,
       createdAt: now,
       retransmissions: 0,
     });
@@ -70,8 +76,8 @@ export class NackController {
     for (const nack of ctx.pendingNacks) {
       if (nack.retransmissions >= MAX_RETRANSMISSIONS) continue;
 
-      const duration = nack.retransmissions === 0 ? 20 : ctx.rto;
-      if (now >= nack.sentAt + duration) {
+      const delay = this.getDelay(ctx, nack.retransmissions);
+      if (now >= nack.sentAt + delay) {
         if (ctx.writer && nack.packet.missingSequences.length > 0) {
           await ctx.writer.write(PacketSerializer.serialize(nack.packet)!);
         }
@@ -82,7 +88,7 @@ export class NackController {
 
     ctx.pendingNacks = ctx.pendingNacks.filter(
       nack => nack.retransmissions < MAX_RETRANSMISSIONS &&
-              nack.packet.missingSequences.length > 0
+        nack.packet.missingSequences.length > 0
     );
   }
 

@@ -1,10 +1,5 @@
-use std::collections::{HashMap, VecDeque};
-
-#[derive(Debug, Clone)]
-struct PacketRecord {
-    sequence: u64,
-    received: bool,
-}
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct LossStats {
@@ -12,77 +7,78 @@ pub struct LossStats {
     pub sample_size: usize,
 }
 
-const WINDOW_SIZE: usize = 200;
+const WINDOW_DURATION: Duration = Duration::from_millis(2000);
 const SMOOTHING_ALPHA: f64 = 0.1;
 
+struct SentRecord {
+    sequence: u64,
+    timestamp: Instant,
+}
+
 pub struct LossEstimator {
-    window: VecDeque<PacketRecord>,
-    sequence_map: HashMap<u64, usize>,
+    sent_packets: Vec<SentRecord>,
+    nacked_set: HashSet<u64>,
     smoothed_loss_rate: f64,
 }
 
 impl LossEstimator {
     pub fn new() -> Self {
         Self {
-            window: VecDeque::with_capacity(WINDOW_SIZE),
-            sequence_map: HashMap::new(),
+            sent_packets: Vec::new(),
+            nacked_set: HashSet::new(),
             smoothed_loss_rate: 0.0,
         }
     }
 
     pub fn record_packet_sent(&mut self, sequence: u64) {
-        let record = PacketRecord {
+        self.sent_packets.push(SentRecord {
             sequence,
-            received: false,
-        };
+            timestamp: Instant::now(),
+        });
+        self.prune();
+    }
 
-        if self.window.len() >= WINDOW_SIZE {
-            if let Some(removed) = self.window.pop_front() {
-                self.sequence_map.remove(&removed.sequence);
-            }
-            for (_, idx) in self.sequence_map.iter_mut() {
-                *idx = idx.saturating_sub(1);
+    pub fn record_nack_received(&mut self, sequences: &[u64]) {
+        let window_seqs: HashSet<u64> = self.sent_packets.iter().map(|p| p.sequence).collect();
+        for &seq in sequences {
+            if window_seqs.contains(&seq) {
+                self.nacked_set.insert(seq);
             }
         }
-
-        let idx = self.window.len();
-        self.window.push_back(record);
-        self.sequence_map.insert(sequence, idx);
         self.update_smoothed_rate();
-    }
-
-    pub fn record_packet_received(&mut self, sequence: u64) {
-        if let Some(&idx) = self.sequence_map.get(&sequence) {
-            if let Some(record) = self.window.get_mut(idx) {
-                record.received = true;
-                self.update_smoothed_rate();
-            }
-        }
-    }
-
-    pub fn record_packet_recovered(&mut self, sequence: u64) {
-        if let Some(&idx) = self.sequence_map.get(&sequence) {
-            if let Some(record) = self.window.get_mut(idx) {
-                record.received = true;
-                self.update_smoothed_rate();
-            }
-        }
     }
 
     pub fn get_stats(&self) -> LossStats {
         LossStats {
             loss_rate: self.smoothed_loss_rate,
-            sample_size: self.window.len(),
+            sample_size: self.sent_packets.len(),
+        }
+    }
+
+    fn prune(&mut self) {
+        let cutoff = Instant::now() - WINDOW_DURATION;
+        let mut to_remove = Vec::new();
+
+        self.sent_packets.retain(|p| {
+            if p.timestamp < cutoff {
+                to_remove.push(p.sequence);
+                false
+            } else {
+                true
+            }
+        });
+
+        for seq in to_remove {
+            self.nacked_set.remove(&seq);
         }
     }
 
     fn update_smoothed_rate(&mut self) {
-        if self.window.is_empty() {
+        if self.sent_packets.is_empty() {
             return;
         }
 
-        let received = self.window.iter().filter(|p| p.received).count();
-        let raw_loss_rate = (self.window.len() - received) as f64 / self.window.len() as f64;
+        let raw_loss_rate = self.nacked_set.len() as f64 / self.sent_packets.len() as f64;
 
         if self.smoothed_loss_rate == 0.0 {
             self.smoothed_loss_rate = raw_loss_rate;
@@ -93,8 +89,8 @@ impl LossEstimator {
     }
 
     pub fn reset(&mut self) {
-        self.window.clear();
-        self.sequence_map.clear();
+        self.sent_packets.clear();
+        self.nacked_set.clear();
         self.smoothed_loss_rate = 0.0;
     }
 }
