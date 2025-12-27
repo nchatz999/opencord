@@ -1,23 +1,25 @@
-import { type Component } from "solid-js";
+import { type Component, Show } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
 import Avatar from "../../components/Avatar";
 import { UserStatusType, type User } from "../../model";
-import { useVoip, usePlayback, useContext, useAuth, useMicrophone, useScreenShare, useCamera } from "../../store/index";
+import { useVoip, usePlayback, useContext, useMicrophone, useScreenShare, useCamera } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
+
+const UnreadBadge = () => (
+  <span class="w-2 h-2 bg-primary rounded-full shrink-0" />
+);
 
 export const UserEntry: Component<{ user: User; }> = (
   props
 ) => {
   const { addToast } = useToaster();
-  const [, authActions] = useAuth();
   const [, voipActions] = useVoip();
   const [, playbackActions] = usePlayback();
   const [, contextActions] = useContext();
+  const hasUnread = () => contextActions.hasUnread("dm", props.user.userId);
   const [, microphoneActions] = useMicrophone();
   const [, screenShareActions] = useScreenShare();
   const [, cameraActions] = useCamera();
-
-  const currentUser = () => authActions.getUser();
 
   const statusColors: Record<UserStatusType | number, string> = {
     [UserStatusType.Online]: "bg-status-online",
@@ -40,11 +42,6 @@ export const UserEntry: Component<{ user: User; }> = (
       default:
         return "Offline";
     }
-  };
-
-  const isUserCallingMe = () => {
-    const userParticipant = voipActions.findById(props.user.userId);
-    return userParticipant?.recipientId === currentUser().userId;
   };
 
   const handleUserClick = async (user: User) => {
@@ -97,9 +94,9 @@ export const UserEntry: Component<{ user: User; }> = (
       <div class="flex-1 text-left min-w-0">
         <div class="flex items-center gap-1">
           <p class="text-sm text-foreground truncate">{props.user.username}</p>
-          {isUserCallingMe() && (
-            <Phone size={12} class="text-success flex-shrink-0" />
-          )}
+          <Show when={hasUnread()}>
+            <UnreadBadge />
+          </Show>
         </div>
         <p class="text-xs text-muted-foreground truncate">{statusText()}</p>
       </div>

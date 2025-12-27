@@ -20,8 +20,9 @@ import {
   Trash2,
   Calendar,
   Settings,
+  Bell,
 } from "lucide-solid";
-import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
+import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, useSound, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
 import { getPresetOptions, type QualityPreset } from "../../model";
 import { useApp } from "../../store/app";
 import { Input } from "../../components/Input";
@@ -45,6 +46,7 @@ const UserSettingsModal: Component = () => {
   const [, cameraActions] = useCamera();
   const [, screenShareActions] = useScreenShare();
   const [, outputActions] = useOutput();
+  const [, soundActions] = useSound();
   const user = () => authActions.getUser();
 
 
@@ -289,8 +291,8 @@ const UserSettingsModal: Component = () => {
 
 
               <div class="flex items-center space-x-2">
-                <Mic class="w-4 h-4" />
                 <Slider
+                  title="Microphone Volume"
                   min={0}
                   max={200}
                   value={microphoneActions.getVolume()}
@@ -327,21 +329,29 @@ const UserSettingsModal: Component = () => {
                 class="w-full"
               />
 
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Output Volume
-                </label>
-                <div class="flex items-center space-x-2">
-                  <Headphones class="w-4 h-4" />
-                  <Slider
-                    min={0}
-                    max={200}
-                    value={outputVolume()}
-                    onChange={(value) => setOutputVolume(value)}
-                    class="w-full"
-                  />
-                </div>
+              <div class="flex items-center space-x-2">
+                <Slider
+                  title="Output Volume"
+                  min={0}
+                  max={200}
+                  value={outputVolume()}
+                  onChange={(value) => setOutputVolume(value)}
+                  class="w-full"
+                />
               </div>
+            </div>
+          </div>
+
+          <div class="p-4 bg-card rounded-md">
+            <div class="flex items-center space-x-2">
+              <Slider
+                title="Notification Sounds Volume"
+                min={0}
+                max={100}
+                value={soundActions.getVolume()}
+                onChange={(value) => soundActions.setVolume(value)}
+                class="w-full"
+              />
             </div>
           </div>
         </div>
@@ -353,7 +363,7 @@ const UserSettingsModal: Component = () => {
       label: "Security",
       icon: <Shield class="w-4 h-4" />,
       content: (
-        <div class="space-y-4">
+        <div class="space-y-4 mt-6">
           <div class="p-4 bg-card rounded-md">
             <h3 class="text-sm font-medium mb-2 flex items-center">
               <Lock class="w-4 h-4 mr-2" />
@@ -417,41 +427,29 @@ const UserSettingsModal: Component = () => {
                 class="w-full"
               />
 
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Camera Bitrate: {cameraActions.getQuality()} bps
-                </label>
-                <Slider
-                  value={cameraActions.getQuality()}
-                  min={500000}
-                  max={MAX_VIDEO_BITRATE}
-                  onChange={(value) => cameraActions.setQuality(value)}
-                />
-              </div>
+              <Slider
+                title={`Camera Bitrate: ${cameraActions.getQuality()} bps`}
+                value={cameraActions.getQuality()}
+                min={500000}
+                max={MAX_VIDEO_BITRATE}
+                onChange={(value) => cameraActions.setQuality(value)}
+              />
 
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Screen Share Bitrate: {screenShareActions.getQuality()} bps
-                </label>
-                <Slider
-                  value={screenShareActions.getQuality()}
-                  min={500000}
-                  max={MAX_VIDEO_BITRATE}
-                  onChange={(value) => screenShareActions.setQuality(value)}
-                />
-              </div>
+              <Slider
+                title={`Screen Share Bitrate: ${screenShareActions.getQuality()} bps`}
+                value={screenShareActions.getQuality()}
+                min={500000}
+                max={MAX_VIDEO_BITRATE}
+                onChange={(value) => screenShareActions.setQuality(value)}
+              />
 
-              <div>
-                <label class="block mb-2 text-sm font-medium text-foreground">
-                  Audio Bitrate: {microphoneActions.getQuality()} bps
-                </label>
-                <Slider
-                  value={microphoneActions.getQuality()}
-                  min={64000}
-                  max={320000}
-                  onChange={(value) => microphoneActions.setQuality(value)}
-                />
-              </div>
+              <Slider
+                title={`Audio Bitrate: ${microphoneActions.getQuality()} bps`}
+                value={microphoneActions.getQuality()}
+                min={64000}
+                max={320000}
+                onChange={(value) => microphoneActions.setQuality(value)}
+              />
             </div>
           </div>
         </div>

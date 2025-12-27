@@ -1,5 +1,8 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
+import { usePreference } from "./preference";
+
+const UNREAD_KEY = "unread";
 
 interface MessageContext {
   type: "channel" | "dm";
@@ -8,6 +11,7 @@ interface MessageContext {
 
 interface ContextState {
   context: MessageContext | null;
+  unread: Set<ContextKey>;
 }
 
 type ContextKey = `${"channel" | "dm"}-${number}`;
@@ -20,13 +24,27 @@ interface ContextActions {
   setScrollPosition: (ctx: MessageContext, position: number) => void;
   hasVisited: (ctx: MessageContext) => boolean;
   markVisited: (ctx: MessageContext) => void;
+  hasUnread: (type: "channel" | "dm", id: number) => boolean;
+  markUnread: (type: "channel" | "dm", id: number) => void;
 }
 
 export type ContextStore = [ContextState, ContextActions];
 
 function createContextStore(): ContextStore {
+  const [, prefActions] = usePreference();
+
+  const loadUnread = (): Set<ContextKey> => {
+    const saved = prefActions.get<string[]>(UNREAD_KEY);
+    return saved ? new Set(saved as ContextKey[]) : new Set();
+  };
+
+  const saveUnread = (unread: Set<ContextKey>) => {
+    prefActions.set(UNREAD_KEY, [...unread]);
+  };
+
   const [state, setState] = createStore<ContextState>({
     context: null,
+    unread: loadUnread(),
   });
 
   const scrollPositions = new Map<ContextKey, number>();
@@ -35,6 +53,9 @@ function createContextStore(): ContextStore {
   const getContextKey = (ctx: MessageContext): ContextKey =>
     `${ctx.type}-${ctx.id}`;
 
+  const toKey = (type: "channel" | "dm", id: number): ContextKey =>
+    `${type}-${id}`;
+
   const actions: ContextActions = {
     get() {
       return state.context;
@@ -42,6 +63,13 @@ function createContextStore(): ContextStore {
 
     set(ctx) {
       setState("context", ctx);
+      const key = getContextKey(ctx);
+      if (state.unread.has(key)) {
+        const next = new Set(state.unread);
+        next.delete(key);
+        setState("unread", next);
+        saveUnread(next);
+      }
     },
 
     clear() {
@@ -62,6 +90,18 @@ function createContextStore(): ContextStore {
 
     markVisited(ctx) {
       visitedContexts.add(getContextKey(ctx));
+    },
+
+    hasUnread(type, id) {
+      return state.unread.has(toKey(type, id));
+    },
+
+    markUnread(type, id) {
+      const active = state.context;
+      if (active?.type === type && active?.id === id) return;
+      const next = new Set(state.unread).add(toKey(type, id));
+      setState("unread", next);
+      saveUnread(next);
     },
   };
 

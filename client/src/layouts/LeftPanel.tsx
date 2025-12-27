@@ -5,6 +5,7 @@ import { useGroup, useModal, useUser, useServer, useAuth } from "../store/index"
 import { ChannelBrowser } from "../features/channel/ChannelBrowser";
 import { UserBrowser } from "../features/user/UserBrowser";
 import { Tabs } from "../components/Tabs";
+import IncomingCallsPanel from "../features/voip/IncomingCallsPanel";
 import UserPanel from "../features/user/UserPanel";
 
 const LeftPanel: Component = () => {
@@ -98,6 +99,7 @@ const LeftPanel: Component = () => {
         />
       </div>
 
+      <IncomingCallsPanel />
       <UserPanel />
     </div>
   );

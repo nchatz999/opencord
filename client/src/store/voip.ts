@@ -10,6 +10,7 @@ import { useAuth } from "./auth";
 import { useMicrophone } from "./microphone";
 import { useScreenShare } from "./screenShare";
 import { useCamera } from "./camera";
+import { useSound } from "./sound";
 
 interface VoipState {
   voipState: VoipParticipant[];
@@ -49,6 +50,7 @@ function createVoipStore(): VoipStore {
   const [, microphoneActions] = useMicrophone();
   const [, screenActions] = useScreenShare();
   const [, cameraActions] = useCamera();
+  const [, soundActions] = useSound();
   let cleanupFn: (() => void) | null = null;
 
   const actions: VoipActions = {
@@ -64,9 +66,19 @@ function createVoipStore(): VoipStore {
       actions.replaceAll(result.value);
 
       cleanupFn = connection.onServerEvent(async (event) => {
+        const myChannelId = actions.findById(authActions.getUser().userId)?.channelId;
+
         if (event.type === "voipParticipantUpdated") {
-          actions.update(event.user as VoipParticipant);
+          const participant = event.user as VoipParticipant;
+          if (myChannelId && participant.channelId === myChannelId) {
+            soundActions.play("/sounds/join.mp3");
+          }
+          actions.update(participant);
         } else if (event.type === "voipParticipantDeleted") {
+          const participant = actions.findById(event.userId as number);
+          if (myChannelId && participant?.channelId === myChannelId) {
+            soundActions.play("/sounds/leave.mp3");
+          }
           if (event.userId == authActions.getUser().userId) {
             await microphoneActions.stop()
             await screenActions.stop()

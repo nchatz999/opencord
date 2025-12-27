@@ -58,7 +58,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
 
   const user = () => userActions.findById(props.participant.userId);
   const currentUser = () => authActions.getUser();
-  const volume = () => Math.round(playbackActions.getVolume(props.participant.userId));
+  const volume = () => Math.round(playbackActions.getVolume(props.participant.userId, "channel"));
   const isSpeaking = () => playbackActions.getSpeakingState(props.participant.userId);
 
   const canKick = () => {
@@ -91,7 +91,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
             min={0}
             max={200}
             onChange={(value) => {
-              playbackActions.adjustVolume(props.participant.userId, value)
+              playbackActions.adjustVolume(props.participant.userId, value, "channel")
             }}
           />
         </div>
@@ -102,7 +102,7 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
       label: volume() === 0 ? "Unmute" : "Mute",
       icon: volume() === 0 ? <Volume2 size={14} /> : <VolumeX size={14} />,
       onClick: () => {
-        playbackActions.adjustVolume(props.participant.userId, volume() === 0 ? 100 : 0);
+        playbackActions.adjustVolume(props.participant.userId, volume() === 0 ? 100 : 0, "channel");
       },
     },
     {

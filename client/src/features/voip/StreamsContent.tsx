@@ -16,6 +16,11 @@ const StreamsContent: Component = () => {
   const [contextState] = useContext();
   const currentUser = () => authActions.getUser();
 
+  const callType = () => {
+    const session = voipActions.findById(currentUser().userId);
+    return session?.recipientId ? "private" : "channel";
+  };
+
   const [focusedStream, setFocusedStream] = createSignal<FocusedStream>(null);
   const [isModalFullscreen, setIsModalFullscreen] = createSignal(false);
 
@@ -122,6 +127,7 @@ const StreamsContent: Component = () => {
                         <VideoStream
                           publisherId={participant.userId}
                           mediaType={MediaType.Camera}
+                          callType={callType()}
                         />
                         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                           <Button
@@ -139,6 +145,7 @@ const StreamsContent: Component = () => {
                         <VideoStream
                           publisherId={participant.userId}
                           mediaType={MediaType.Screen}
+                          callType={callType()}
                         />
                         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                           <Button
@@ -206,6 +213,7 @@ const StreamsContent: Component = () => {
                 <VideoStream
                   publisherId={stream().publisherId}
                   mediaType={stream().mediaType}
+                  callType={callType()}
                 />
               </div>
             </div>

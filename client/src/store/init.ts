@@ -135,6 +135,9 @@ screenShareActions.onRecordingStopped(async () => {
 
 connection.onVoipData((frame: VoipPayload) => {
   if (frame.type === "media") {
+    const participant = voipActions.findById(frame.userId);
+    const callType = participant?.recipientId ? "private" : "channel";
+
     switch (frame.mediaType) {
       case "voice": {
         const packet = new EncodedAudioChunk({
@@ -143,7 +146,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "voice", packet, frame.timestamp, frame.sequence);
+        playbackActions.streamMedia(frame.userId, "voice", packet, frame.timestamp, frame.sequence, callType);
         break;
       }
       case "camera": {
@@ -153,7 +156,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "camera", videoPacket, frame.timestamp, frame.sequence);
+        playbackActions.streamMedia(frame.userId, "camera", videoPacket, frame.timestamp, frame.sequence, callType);
         break;
       }
       case "screen": {
@@ -163,7 +166,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "screen", videoPacket, frame.timestamp, frame.sequence);
+        playbackActions.streamMedia(frame.userId, "screen", videoPacket, frame.timestamp, frame.sequence, callType);
         break;
       }
       case "screenSound": {
@@ -173,7 +176,7 @@ connection.onVoipData((frame: VoipPayload) => {
           duration: undefined,
           data: new Uint8Array(frame.data),
         });
-        playbackActions.streamMedia(frame.userId, "screenSound", audioPacket, frame.timestamp, frame.sequence);
+        playbackActions.streamMedia(frame.userId, "screenSound", audioPacket, frame.timestamp, frame.sequence, callType);
         break;
       }
     }

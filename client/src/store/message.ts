@@ -7,6 +7,7 @@ import { request, upload } from "../utils";
 import { useConnection } from "./connection";
 import { useFile } from "./file";
 import { useAuth } from "./auth";
+import { useContext } from "./context";
 
 interface MessageState {
   messages: Message[];
@@ -59,6 +60,7 @@ function createMessageStore(): MessageStore {
       actions.cleanup();
 
       const [, fileActions] = useFile();
+      const [, contextActions] = useContext();
 
       cleanupFn = connection.onServerEvent((event) => {
         if (event.type === "messageCreated") {
@@ -88,6 +90,13 @@ function createMessageStore(): MessageStore {
           for (const file of data.files) {
             fileActions.add(file);
           }
+
+          if (data.messageType.type === "Channel") {
+            contextActions.markUnread("channel", data.messageType.channel_id);
+          } else {
+            contextActions.markUnread("dm", data.senderId);
+          }
+
         } else if (event.type === "messageUpdated") {
           const data = event as unknown as {
             messageId: number;

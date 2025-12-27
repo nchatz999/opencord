@@ -4,6 +4,7 @@ import { Show, createEffect, createMemo } from "solid-js";
 import { Camera, Monitor, Volume2, Eye, EyeOff } from "lucide-solid";
 import { useAuth, useSubscription, usePlayback, useUser } from "../../store/index";
 import { MediaType } from "../../model";
+import type { CallType } from "../../store/playback";
 import type { VideoPlayback } from "../../lib/VideoPlayback";
 import ContextMenu from "../../components/ContextMenu";
 import type { ContextMenuItem } from "../../components/ContextMenu";
@@ -13,6 +14,7 @@ import Button from "../../components/Button";
 interface VideoStreamProps {
   publisherId: number;
   mediaType: MediaType;
+  callType: CallType;
 }
 
 const CONTAINER_CLASS =
@@ -34,7 +36,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
     subscriptionActions.isSubscribedToMedia(viewer().userId, props.publisherId, props.mediaType)
   );
 
-  const screenVolume = createMemo(() => playbackActions.getScreenAudioVolume(props.publisherId));
+  const screenVolume = createMemo(() => playbackActions.getScreenAudioVolume(props.publisherId, props.callType));
 
   const mediaPlayback = () => {
     const type = isCamera() ? "camera" : "screen";
@@ -77,7 +79,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
             value={screenVolume()}
             min={0}
             max={200}
-            onChange={(value) => playbackActions.adjustScreenAudio(props.publisherId, value)}
+            onChange={(value) => playbackActions.adjustScreenAudio(props.publisherId, value, props.callType)}
             class="w-32"
           />
         </div>

@@ -73,13 +73,6 @@ Access at `https://localhost:3000`
 
 The first user should register using the invite code `OWNER_INVITE_2024` to become the server owner.
 
-### Electron
-
-```bash
-make build-electron
-cd client && npm run dev:electron
-```
-
 ## Production Deployment
 
 ### Prerequisites

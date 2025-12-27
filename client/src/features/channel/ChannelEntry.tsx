@@ -7,10 +7,15 @@ import { ChannelType, type Channel } from "../../model";
 import { useContext, useModal, useVoip, usePlayback, useMicrophone, useScreenShare, useCamera } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 
+const UnreadBadge = () => (
+  <span class="w-2 h-2 bg-primary rounded-full shrink-0" />
+);
+
 export const ChannelEntry: Component<{
   channel: Channel;
 }> = (props) => {
   const [, contextActions] = useContext();
+  const hasUnread = () => contextActions.hasUnread("channel", props.channel.channelId);
   const [, modalActions] = useModal();
   const [, voipActions] = useVoip();
   const [, playbackActions] = usePlayback();
@@ -69,6 +74,9 @@ export const ChannelEntry: Component<{
           <Volume2 size={16} class="shrink-0" />
         </Show>
         <span class="text-sm truncate">{props.channel.channelName}</span>
+        <Show when={hasUnread()}>
+          <UnreadBadge />
+        </Show>
       </button>
 
       <Show

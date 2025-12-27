@@ -82,9 +82,9 @@ const Slider: Component<SliderProps> = (props) => {
   return (
     <div class={`w-full ${props.class || ''}`}>
       <Show when={props.title}>
-        <div class="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+        <label class="block mb-2 text-sm font-medium text-foreground">
           {props.title}
-        </div>
+        </label>
       </Show>
       <div class="flex items-center gap-3">
         <div
