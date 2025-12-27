@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, For } from "solid-js";
-import { Folder, X } from "lucide-solid";
+import { Folder, X, Shield } from "lucide-solid";
 import { RIGHTS, type Group } from "../../model";
 import { useModal, useRole, useGroup, useAcl } from "../../store/index";
 import { Input } from "../../components/Input";
@@ -8,6 +8,7 @@ import Button from "../../components/Button";
 import { useToaster } from "../../components/Toaster";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
 
@@ -40,8 +41,10 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       id: "general",
       label: "General",
       content: (
-        <div class="space-y-4 mt-4">
-          <Input label="Group Name" value={name()} onChange={setName} />
+        <div class="space-y-4 mt-6">
+          <Card title="Group Info" icon={<Folder class="w-4 h-4" />}>
+            <Input label="Group Name" value={name()} onChange={setName} />
+          </Card>
         </div>
       ),
     },
@@ -49,8 +52,9 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
       id: "permissions",
       label: "Permissions",
       content: (
-        <div class="mt-4">
-          <Table>
+        <div class="space-y-4 mt-6">
+          <Card title="Role Permissions" icon={<Shield class="w-4 h-4" />}>
+            <Table>
             <TableHead>
               <TableRow>
                 <TableHeader>Role</TableHeader>
@@ -86,6 +90,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
               </For>
             </TableBody>
           </Table>
+          </Card>
         </div>
       ),
     },

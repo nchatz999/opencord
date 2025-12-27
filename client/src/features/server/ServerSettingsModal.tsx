@@ -5,6 +5,7 @@ import { useToaster } from '../../components/Toaster'
 import { useConfirm } from '../../components/ConfirmDialog'
 import Button from '../../components/Button'
 import { Tabs } from '../../components/Tabs'
+import Card from '../../components/Card'
 import { useAcl, useAuth, useModal, useRole, useServer, useUser } from '../../store/index'
 import { Input } from '../../components/Input'
 import Select from '../../components/Select'
@@ -233,60 +234,61 @@ const ServerSettingsModal: Component = () => {
         <div class="space-y-4 mt-6">
           <Show when={serverConfig()}>
             {(config) => (
-              <div class="flex items-center gap-4 p-4 bg-card rounded-lg">
-                <div class="relative">
-                  <Show
-                    when={config().avatarFileId}
-                    fallback={
-                      <div class="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-2xl font-bold">
-                        {config().serverName.charAt(0)}
-                      </div>
-                    }
-                  >
-                    {(avatarId) => (
-                      <img
-                        src={`/server/avatar/${avatarId()}`}
-                        alt="Server avatar"
-                        class="w-20 h-20 rounded-full object-cover"
-                      />
-                    )}
-                  </Show>
-                  <Show when={isAdmin()}>
-                    <Button
-                      onClick={() => avatarInputRef?.click()}
-                      variant="primary"
-                      size="sm"
-                      class="absolute bottom-0 right-0 rounded-full p-1.5"
+              <Card>
+                <div class="flex items-center gap-4">
+                  <div class="relative">
+                    <Show
+                      when={config().avatarFileId}
+                      fallback={
+                        <div class="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-2xl font-bold">
+                          {config().serverName.charAt(0)}
+                        </div>
+                      }
                     >
-                      <Upload class="w-4 h-4" />
-                    </Button>
-                  </Show>
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarChange}
-                    class="hidden"
-                  />
-                </div>
-                <div class="flex-1">
-                  <Show
-                    when={isAdmin()}
-                    fallback={
-                      <h3 class="text-lg font-semibold text-foreground">{config().serverName}</h3>
-                    }
-                  >
-                    <Input
-                      label="Server Name"
-                      value={config().serverName}
-                      onBlur={(e) => saveServerName(e.currentTarget.value)}
+                      {(avatarId) => (
+                        <img
+                          src={`/server/avatar/${avatarId()}`}
+                          alt="Server avatar"
+                          class="w-20 h-20 rounded-full object-cover"
+                        />
+                      )}
+                    </Show>
+                    <Show when={isAdmin()}>
+                      <Button
+                        onClick={() => avatarInputRef?.click()}
+                        variant="primary"
+                        size="sm"
+                        class="absolute bottom-0 right-0 rounded-full p-1.5"
+                      >
+                        <Upload class="w-4 h-4" />
+                      </Button>
+                    </Show>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      class="hidden"
                     />
-                  </Show>
+                  </div>
+                  <div class="flex-1">
+                    <Show
+                      when={isAdmin()}
+                      fallback={
+                        <h3 class="text-lg font-semibold text-foreground">{config().serverName}</h3>
+                      }
+                    >
+                      <Input
+                        label="Server Name"
+                        value={config().serverName}
+                        onBlur={(e) => saveServerName(e.currentTarget.value)}
+                      />
+                    </Show>
+                  </div>
                 </div>
-              </div>
+              </Card>
             )}
           </Show>
-
         </div>
       ),
     },
@@ -295,82 +297,84 @@ const ServerSettingsModal: Component = () => {
       label: 'Rights',
       content: (
         <div class="space-y-4 mt-6">
-          <div class="space-y-4">
-            <Input
-              value={searchTerm()}
-              onChange={setSearchTerm}
-              placeholder="Search users..."
-              icon={<Search class="w-4 h-4 text-muted-foreground" />}
-            />
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableHeader>User</TableHeader>
-                  <TableHeader align="center">Role</TableHeader>
-                  <TableHeader align="center">Actions</TableHeader>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <For each={filteredUsers()}>
-                  {(user) => (
-                    <TableRow class="hover:bg-muted">
-                      <TableCell>
-                        <div class="flex items-center space-x-3">
-                          <Avatar
-                            avatarFileId={user.avatarFileId}
-                            alt={user.username}
-                            size="sm"
+          <Card title="User Management" icon={<Users class="w-4 h-4" />}>
+            <div class="space-y-4">
+              <Input
+                value={searchTerm()}
+                onChange={setSearchTerm}
+                placeholder="Search users..."
+                icon={<Search class="w-4 h-4 text-muted-foreground" />}
+              />
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>User</TableHeader>
+                    <TableHeader align="center">Role</TableHeader>
+                    <TableHeader align="center">Actions</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <For each={filteredUsers()}>
+                    {(user) => (
+                      <TableRow class="hover:bg-muted">
+                        <TableCell>
+                          <div class="flex items-center space-x-3">
+                            <Avatar
+                              avatarFileId={user.avatarFileId}
+                              alt={user.username}
+                              size="sm"
+                            />
+                            <span class="font-medium">{user.username}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Select
+                            value={user.roleId}
+                            onChange={async (roleId) => {
+                              const result = await aclActions.updateUserRole(user.userId, roleId as number);
+                              if (result.isErr()) {
+                                addToast(result.error, "error")
+                              }
+                            }}
+                            options={roleActions.list().map((role) => ({
+                              value: role.roleId,
+                              label: role.roleName,
+                            }))}
+                            class="min-w-[120px]"
                           />
-                          <span class="font-medium">{user.username}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Select
-                          value={user.roleId}
-                          onChange={async (roleId) => {
-                            const result = await aclActions.updateUserRole(user.userId, roleId as number);
-                            if (result.isErr()) {
-                              addToast(result.error, "error")
-                            }
-                          }}
-                          options={roleActions.list().map((role) => ({
-                            value: role.roleId,
-                            label: role.roleName,
-                          }))}
-                          class="min-w-[120px]"
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Button
-                          variant="destructive"
-                          disabled={user.roleId === 1 || !isAdmin()}
-                          title={user.roleId === 1 ? "Cannot delete owner" : "Delete user"}
-                          onClick={async () => {
-                            const confirmed = await confirm({
-                              title: "Delete User",
-                              message: `Are you sure you want to delete "${user.username}"? This will remove all their messages and files.`,
-                              confirmText: "Delete",
-                              variant: "danger",
-                            });
-                            if (!confirmed) return;
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button
+                            variant="destructive"
+                            disabled={user.roleId === 1 || !isAdmin()}
+                            title={user.roleId === 1 ? "Cannot delete owner" : "Delete user"}
+                            onClick={async () => {
+                              const confirmed = await confirm({
+                                title: "Delete User",
+                                message: `Are you sure you want to delete "${user.username}"? This will remove all their messages and files.`,
+                                confirmText: "Delete",
+                                variant: "danger",
+                              });
+                              if (!confirmed) return;
 
-                            const result = await userActions.deleteUser(user.userId);
-                            if (result.isErr()) {
-                              addToast(result.error, "error");
-                            } else {
-                              addToast(`User "${user.username}" deleted`, "success");
-                            }
-                          }}
-                        >
-                          <Trash2 class="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </For>
-              </TableBody>
-            </Table>
-          </div>
+                              const result = await userActions.deleteUser(user.userId);
+                              if (result.isErr()) {
+                                addToast(result.error, "error");
+                              } else {
+                                addToast(`User "${user.username}" deleted`, "success");
+                              }
+                            }}
+                          >
+                            <Trash2 class="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </For>
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
         </div>
       ),
     },
@@ -386,14 +390,8 @@ const ServerSettingsModal: Component = () => {
             </div>
           }
         >
-          <div class="space-y-6 mt-6">
-            <div class="flex items-center gap-2 mb-4">
-              <Users class="w-5 h-5 text-foreground" />
-              <h3 class="text-lg font-semibold text-foreground">Invitation Management</h3>
-            </div>
-
-            <div class="bg-card rounded-lg p-4">
-              <h4 class="text-md font-medium text-foreground mb-4">Create New Invitation</h4>
+          <div class="space-y-4 mt-6">
+            <Card title="Create New Invitation" icon={<Plus class="w-4 h-4" />}>
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="md:col-span-1">
                   <Input
@@ -432,11 +430,11 @@ const ServerSettingsModal: Component = () => {
                   Create Invite
                 </Button>
               </div>
-            </div>
+            </Card>
 
-            <div class="bg-card rounded-lg p-4">
+            <Card title="Active Invitations" icon={<Users class="w-4 h-4" />}>
               <div class="flex items-center justify-between mb-4">
-                <h4 class="text-md font-medium text-foreground">Active Invitations</h4>
+                <div />
                 <Button
                   onClick={loadInvites}
                   variant="secondary"
@@ -508,7 +506,7 @@ const ServerSettingsModal: Component = () => {
                   </TableBody>
                 </Table>
               </Show>
-            </div>
+            </Card>
           </div>
         </Show>
       ),
@@ -525,13 +523,8 @@ const ServerSettingsModal: Component = () => {
             </div>
           }
         >
-          <div class="space-y-6 mt-6">
-            <div class="flex items-center gap-2 mb-4">
-              <FileText class="w-5 h-5 text-foreground" />
-              <h3 class="text-lg font-semibold text-foreground">Server Logs</h3>
-            </div>
-
-            <div class="bg-card rounded-lg p-4">
+          <div class="space-y-4 mt-6">
+            <Card title="Log Viewer" icon={<FileText class="w-4 h-4" />}>
               <div class="flex flex-wrap items-center gap-4 mb-4">
                 <div class="flex-1 min-w-[200px]">
                   <Input
@@ -581,41 +574,39 @@ const ServerSettingsModal: Component = () => {
                   </div>
                 }
               >
-                <div class="">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Date</TableHeader>
-                        <TableHeader>Category</TableHeader>
-                        <TableHeader>Message</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      <For each={filteredLogs()}>
-                        {(log) => (
-                          <TableRow class="hover:bg-muted">
-                            <TableCell class="text-xs text-muted-foreground-dark whitespace-nowrap">
-                              {formatLogDate(log.date)}
-                            </TableCell>
-                            <TableCell>
-                              <span class="px-2 py-1 rounded text-xs font-medium bg-link/20 text-link">
-                                {log.category}
-                              </span>
-                            </TableCell>
-                            <TableCell class="text-sm font-mono text-foreground break-all">
-                              {log.log}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </For>
-                    </TableBody>
-                  </Table>
-                </div>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>Date</TableHeader>
+                      <TableHeader>Category</TableHeader>
+                      <TableHeader>Message</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <For each={filteredLogs()}>
+                      {(log) => (
+                        <TableRow class="hover:bg-muted">
+                          <TableCell class="text-xs text-muted-foreground-dark whitespace-nowrap">
+                            {formatLogDate(log.date)}
+                          </TableCell>
+                          <TableCell>
+                            <span class="px-2 py-1 rounded text-xs font-medium bg-link/20 text-link">
+                              {log.category}
+                            </span>
+                          </TableCell>
+                          <TableCell class="text-sm font-mono text-foreground break-all">
+                            {log.log}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </For>
+                  </TableBody>
+                </Table>
                 <div class="mt-4 text-sm text-muted-foreground-dark">
                   Showing {filteredLogs().length} of {logs().length} entries
                 </div>
               </Show>
-            </div>
+            </Card>
           </div>
         </Show>
       ),

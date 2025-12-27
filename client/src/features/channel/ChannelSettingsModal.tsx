@@ -1,12 +1,13 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, createEffect, For } from "solid-js";
-import { Hash, Volume2, X } from "lucide-solid";
+import { Hash, Volume2, X, Shield } from "lucide-solid";
 import { ChannelType, RIGHTS, type Channel } from "../../model";
 import { useAcl, useModal, useRole, useChannel } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
 import { Input } from "../../components/Input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
@@ -44,8 +45,10 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
       id: "general",
       label: "General",
       content: (
-        <div class="space-y-4 mt-4">
-          <Input label="Channel Name" value={name()} onChange={setName} />
+        <div class="space-y-4 mt-6">
+          <Card title="Channel Info" icon={<Hash class="w-4 h-4" />}>
+            <Input label="Channel Name" value={name()} onChange={setName} />
+          </Card>
         </div>
       ),
     },
@@ -53,8 +56,9 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
       id: "permissions",
       label: "Permissions",
       content: (
-        <div class="mt-4">
-          <Table>
+        <div class="space-y-4 mt-6">
+          <Card title="Role Permissions" icon={<Shield class="w-4 h-4" />}>
+            <Table>
             <TableHead>
               <TableRow>
                 <TableHeader>Role</TableHeader>
@@ -84,6 +88,7 @@ const ChannelSettingsModal: Component<ChannelSettingsProps> = (props) => {
               </For>
             </TableBody>
           </Table>
+          </Card>
         </div>
       ),
     },

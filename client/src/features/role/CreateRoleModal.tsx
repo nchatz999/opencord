@@ -7,6 +7,7 @@ import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import { useToaster } from "../../components/Toaster";
 import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
 
@@ -25,8 +26,10 @@ const CreateRoleModal: Component = () => {
       id: "general",
       label: "General",
       content: (
-        <div class="space-y-4 mt-4">
-          <Input label="Role Name" value={name()} onChange={setName} />
+        <div class="space-y-4 mt-6">
+          <Card title="Role Info" icon={<Shield class="w-4 h-4" />}>
+            <Input label="Role Name" value={name()} onChange={setName} />
+          </Card>
         </div>
       ),
     },
@@ -34,8 +37,9 @@ const CreateRoleModal: Component = () => {
       id: "permissions",
       label: "Permissions",
       content: (
-        <div class="mt-4">
-          <Table>
+        <div class="space-y-4 mt-6">
+          <Card title="Group Permissions" icon={<Shield class="w-4 h-4" />}>
+            <Table>
             <TableHead>
               <TableRow>
                 <TableHeader>Group</TableHeader>
@@ -71,6 +75,7 @@ const CreateRoleModal: Component = () => {
               </For>
             </TableBody>
           </Table>
+          </Card>
         </div>
       ),
     },

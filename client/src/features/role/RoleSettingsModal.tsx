@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, For } from "solid-js";
-import { Search, Shield, X } from "lucide-solid";
+import { Search, Shield, X, Users } from "lucide-solid";
 import { RIGHTS, type Role } from "../../model";
 import { useAcl, useGroup, useModal, useUser, useRole } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
@@ -8,6 +8,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
 import Checkbox from "../../components/CheckBox";
 import Avatar from "../../components/Avatar";
@@ -50,8 +51,10 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
       id: "general",
       label: "General",
       content: (
-        <div class="space-y-4 mt-4">
-          <Input label="Role Name" value={name()} onChange={setName} />
+        <div class="space-y-4 mt-6">
+          <Card title="Role Info" icon={<Shield class="w-4 h-4" />}>
+            <Input label="Role Name" value={name()} onChange={setName} />
+          </Card>
         </div>
       ),
     },
@@ -59,27 +62,31 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
       id: "users",
       label: "Users",
       content: (
-        <div class="space-y-4 mt-4">
-          <Input
-            value={searchTerm()}
-            onChange={setSearchTerm}
-            placeholder="Search users..."
-            icon={<Search class="w-4 h-4 text-muted-foreground" />}
-          />
-          <ul class="space-y-2 max-h-80 overflow-y-auto">
-            <For each={filteredUsers()}>
-              {(user) => (
-                <li class="flex items-center gap-2 bg-muted p-2 rounded">
-                  <Avatar
-                    avatarFileId={user.avatarFileId}
-                    alt={user.username}
-                    size="sm"
-                  />
-                  <span class="text-foreground">{user.username}</span>
-                </li>
-              )}
-            </For>
-          </ul>
+        <div class="space-y-4 mt-6">
+          <Card title="Role Members" icon={<Users class="w-4 h-4" />}>
+            <div class="space-y-4">
+              <Input
+                value={searchTerm()}
+                onChange={setSearchTerm}
+                placeholder="Search users..."
+                icon={<Search class="w-4 h-4 text-muted-foreground" />}
+              />
+              <ul class="space-y-2 max-h-80 overflow-y-auto">
+                <For each={filteredUsers()}>
+                  {(user) => (
+                    <li class="flex items-center gap-2 bg-muted p-2 rounded">
+                      <Avatar
+                        avatarFileId={user.avatarFileId}
+                        alt={user.username}
+                        size="sm"
+                      />
+                      <span class="text-foreground">{user.username}</span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </div>
+          </Card>
         </div>
       ),
     },
@@ -87,8 +94,9 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
       id: "permissions",
       label: "Permissions",
       content: (
-        <div class="mt-4">
-          <Table>
+        <div class="space-y-4 mt-6">
+          <Card title="Group Permissions" icon={<Shield class="w-4 h-4" />}>
+            <Table>
             <TableHead>
               <TableRow>
                 <TableHeader>Group</TableHeader>
@@ -118,6 +126,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
               </For>
             </TableBody>
           </Table>
+          </Card>
         </div>
       ),
     },

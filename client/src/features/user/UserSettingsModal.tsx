@@ -31,6 +31,7 @@ import Select from "../../components/Select";
 import Slider from "../../components/Slider";
 import Avatar from "../../components/Avatar";
 import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../components/Table";
 import { UserStatusType, type Session } from "../../model";
 import { useToaster } from "../../components/Toaster";
@@ -177,13 +178,11 @@ const UserSettingsModal: Component = () => {
       icon: <UserIcon class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <Input label="Username" value={username()} onChange={setUsername} />
+          <Card title="Profile" icon={<UserIcon class="w-4 h-4" />}>
+            <Input label="Username" value={username()} onChange={setUsername} />
+          </Card>
 
-          <div class="p-4 bg-card rounded-md">
-            <h3 class="text-sm font-medium mb-3 flex items-center">
-              <Circle class="w-4 h-4 mr-2" />
-              Status
-            </h3>
+          <Card title="Status" icon={<Circle class="w-4 h-4" />}>
             <div class="space-y-3">
               <Select
                 label="Current Status"
@@ -205,14 +204,10 @@ const UserSettingsModal: Component = () => {
                 </span>
               </div>
             </div>
-          </div>
+          </Card>
 
 
-          <div class="p-4 bg-card rounded-md">
-            <h3 class="text-sm font-medium mb-2 flex items-center">
-              <Upload class="w-4 h-4 mr-2" />
-              Change Avatar
-            </h3>
+          <Card title="Change Avatar" icon={<Upload class="w-4 h-4" />}>
             <div class="flex flex-col items-center space-y-3">
               <div class="relative w-24 h-24">
                 <Avatar
@@ -259,7 +254,7 @@ const UserSettingsModal: Component = () => {
                 Recommended: Square image, at least 128x128px
               </p>
             </div>
-          </div>
+          </Card>
         </div>
       ),
     },
@@ -269,12 +264,7 @@ const UserSettingsModal: Component = () => {
       icon: <Volume2 class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <div class="p-4 bg-card rounded-md">
-            <h3 class="text-sm font-medium mb-2 flex items-center">
-              <Mic class="w-4 h-4 mr-2" />
-              Microphone
-            </h3>
-
+          <Card title="Microphone" icon={<Mic class="w-4 h-4" />}>
             <div class="space-y-4">
               <Select
                 label="Input Device"
@@ -288,28 +278,17 @@ const UserSettingsModal: Component = () => {
                 }}
                 class="w-full"
               />
-
-
-              <div class="flex items-center space-x-2">
-                <Slider
-                  title="Microphone Volume"
-                  min={0}
-                  max={200}
-                  value={microphoneActions.getVolume()}
-                  onChange={(e) => microphoneActions.setVolume(e)}
-                  class="w-full"
-                />
-              </div>
-
+              <Slider
+                title="Microphone Volume"
+                min={0}
+                max={200}
+                value={microphoneActions.getVolume()}
+                onChange={(e) => microphoneActions.setVolume(e)}
+              />
             </div>
-          </div>
+          </Card>
 
-          <div class="p-4 bg-card rounded-md">
-            <h3 class="text-sm font-medium mb-2 flex items-center">
-              <Headphones class="w-4 h-4 mr-2" />
-              Output
-            </h3>
-
+          <Card title="Output" icon={<Headphones class="w-4 h-4" />}>
             <div class="space-y-4">
               <Select
                 label="Output Device"
@@ -328,32 +307,25 @@ const UserSettingsModal: Component = () => {
                 }}
                 class="w-full"
               />
-
-              <div class="flex items-center space-x-2">
-                <Slider
-                  title="Output Volume"
-                  min={0}
-                  max={200}
-                  value={outputVolume()}
-                  onChange={(value) => setOutputVolume(value)}
-                  class="w-full"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="p-4 bg-card rounded-md">
-            <div class="flex items-center space-x-2">
               <Slider
-                title="Notification Sounds Volume"
+                title="Output Volume"
                 min={0}
-                max={100}
-                value={soundActions.getVolume()}
-                onChange={(value) => soundActions.setVolume(value)}
-                class="w-full"
+                max={200}
+                value={outputVolume()}
+                onChange={(value) => setOutputVolume(value)}
               />
             </div>
-          </div>
+          </Card>
+
+          <Card>
+            <Slider
+              title="Notification Sounds Volume"
+              min={0}
+              max={100}
+              value={soundActions.getVolume()}
+              onChange={(value) => soundActions.setVolume(value)}
+            />
+          </Card>
         </div>
       ),
     },
@@ -364,11 +336,7 @@ const UserSettingsModal: Component = () => {
       icon: <Shield class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <div class="p-4 bg-card rounded-md">
-            <h3 class="text-sm font-medium mb-2 flex items-center">
-              <Lock class="w-4 h-4 mr-2" />
-              Change Password
-            </h3>
+          <Card title="Change Password" icon={<Lock class="w-4 h-4" />}>
             <div class="space-y-3">
               <Input
                 label="Current Password"
@@ -394,7 +362,7 @@ const UserSettingsModal: Component = () => {
               />
               <Button onClick={handleChangePassword}>Update Password</Button>
             </div>
-          </div>
+          </Card>
         </div>
       ),
     },
@@ -404,12 +372,7 @@ const UserSettingsModal: Component = () => {
       icon: <Settings class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <div class="p-4 bg-card rounded-md">
-            <h3 class="text-sm font-medium mb-4 flex items-center">
-              <Settings class="w-4 h-4 mr-2" />
-              Video Settings
-            </h3>
-
+          <Card title="Video Settings" icon={<Settings class="w-4 h-4" />}>
             <div class="space-y-6">
               <Select
                 label="Camera Resolution"
@@ -451,7 +414,7 @@ const UserSettingsModal: Component = () => {
                 onChange={(value) => microphoneActions.setQuality(value)}
               />
             </div>
-          </div>
+          </Card>
         </div>
       ),
     },
@@ -460,22 +423,17 @@ const UserSettingsModal: Component = () => {
       label: "Sessions",
       icon: <Monitor class="w-4 h-4" />,
       content: (
-        <div class="space-y-6 mt-6">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <Monitor class="w-5 h-5 text-foreground" />
-              <h3 class="text-lg font-semibold text-foreground">Active Sessions</h3>
+        <div class="space-y-4 mt-6">
+          <Card title="Active Sessions" icon={<Monitor class="w-4 h-4" />}>
+            <div class="flex justify-end mb-4">
+              <Button
+                onClick={loadSessions}
+                variant="secondary"
+                size="sm"
+              >
+                Refresh
+              </Button>
             </div>
-            <Button
-              onClick={loadSessions}
-              variant="secondary"
-              size="sm"
-            >
-              Refresh
-            </Button>
-          </div>
-
-          <div class="bg-card rounded-lg p-4">
             <Show
               when={sessions().length > 0}
               fallback={
@@ -542,7 +500,7 @@ const UserSettingsModal: Component = () => {
               </Table>
             </Show>
 
-            <div class="mt-4 p-3 bg-input rounded-lg">
+            <Card.Sub class="mt-4">
               <h4 class="text-sm font-medium text-foreground mb-2">Session Information</h4>
               <ul class="text-xs text-secondary-text space-y-1">
                 <li>• Sessions allow you to stay logged in across different devices</li>
@@ -550,8 +508,8 @@ const UserSettingsModal: Component = () => {
                 <li>• Your current session cannot be terminated from this interface</li>
                 <li>• Sessions may expire automatically after a period of inactivity</li>
               </ul>
-            </div>
-          </div>
+            </Card.Sub>
+          </Card>
         </div>
       ),
     },

@@ -1,11 +1,12 @@
 import type { Component } from "solid-js";
 import { createSignal, createMemo, createEffect, For } from "solid-js";
-import { Hash, Volume2, X } from "lucide-solid";
+import { Hash, Volume2, X, Shield } from "lucide-solid";
 import { ChannelType, RIGHTS } from "../../model";
 import { useAcl, useGroup, useModal, useRole, useChannel } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 import Button from "../../components/Button";
 import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
 import { Input } from "../../components/Input";
 import Select from "../../components/Select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/Table";
@@ -47,26 +48,30 @@ const CreateChannelModal: Component = () => {
       id: "general",
       label: "General",
       content: (
-        <div class="space-y-4 mt-4">
-          <Input label="Channel Name" value={name()} onChange={setName} />
-          <Select
-            label="Channel Type"
-            options={[
-              { value: ChannelType.Text, label: "Text Channel" },
-              { value: ChannelType.VoIP, label: "Voice Channel" },
-            ]}
-            value={type()}
-            onChange={(value) => setType(value as ChannelType)}
-          />
-          <Select
-            label="Group"
-            options={groupActions.list().map((g) => ({
-              value: g.groupId,
-              label: g.groupName,
-            }))}
-            value={group()}
-            onChange={(value) => setGroup(value as number)}
-          />
+        <div class="space-y-4 mt-6">
+          <Card title="Channel Info" icon={<Hash class="w-4 h-4" />}>
+            <div class="space-y-4">
+              <Input label="Channel Name" value={name()} onChange={setName} />
+              <Select
+                label="Channel Type"
+                options={[
+                  { value: ChannelType.Text, label: "Text Channel" },
+                  { value: ChannelType.VoIP, label: "Voice Channel" },
+                ]}
+                value={type()}
+                onChange={(value) => setType(value as ChannelType)}
+              />
+              <Select
+                label="Group"
+                options={groupActions.list().map((g) => ({
+                  value: g.groupId,
+                  label: g.groupName,
+                }))}
+                value={group()}
+                onChange={(value) => setGroup(value as number)}
+              />
+            </div>
+          </Card>
         </div>
       ),
     },
@@ -74,8 +79,9 @@ const CreateChannelModal: Component = () => {
       id: "permissions",
       label: "Permissions",
       content: (
-        <div class="mt-4">
-          <Table>
+        <div class="space-y-4 mt-6">
+          <Card title="Role Permissions" icon={<Shield class="w-4 h-4" />}>
+            <Table>
             <TableHead>
               <TableRow>
                 <TableHeader>Role</TableHeader>
@@ -105,6 +111,7 @@ const CreateChannelModal: Component = () => {
               </For>
             </TableBody>
           </Table>
+          </Card>
         </div>
       ),
     },
