@@ -35,22 +35,16 @@ sudo cp "$LETSENCRYPT_DIR/privkey.pem" "$CERT_DIR/$DOMAIN.key"
 sudo chown "$USER:$USER" "$CERT_DIR/$DOMAIN.crt" "$CERT_DIR/$DOMAIN.key"
 chmod 600 "$CERT_DIR/$DOMAIN.key"
 
-# Update .env file
-ENV_FILE=".env"
-if [ -f "$ENV_FILE" ]; then
-    sed -i "s|^CERT_PATH=.*|CERT_PATH=certs/$DOMAIN.crt|" "$ENV_FILE"
-    sed -i "s|^KEY_PATH=.*|KEY_PATH=certs/$DOMAIN.key|" "$ENV_FILE"
-    # Remove hash - not needed for trusted certificates
-    sed -i "/^VITE_CERT_HASH=/d" "$ENV_FILE"
-    echo "Updated .env with certificate paths"
-else
-    echo "Warning: $ENV_FILE not found"
-fi
-
 echo ""
 echo "Production certificate generated successfully for $DOMAIN"
 echo "Certificate: $CERT_DIR/$DOMAIN.crt"
 echo "Key: $CERT_DIR/$DOMAIN.key"
 echo ""
-echo "Note: Let's Encrypt certificates expire in 90 days."
+echo "Add the following to your .env file:"
+echo "  CERT_PATH=certs/$DOMAIN.crt"
+echo "  KEY_PATH=certs/$DOMAIN.key"
+echo ""
+echo "Note: Remove any VITE_CERT_HASH line - not needed for trusted certificates."
+echo ""
+echo "Let's Encrypt certificates expire in 90 days."
 echo "Set up auto-renewal with: sudo certbot renew --dry-run"

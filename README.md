@@ -32,7 +32,6 @@ A modern real-time communication platform built with Rust and SolidJS.
 | Command | Description |
 |---------|-------------|
 | `make install` | Install npm dependencies |
-| `make build` | Build everything (client + server) |
 | `make build-client` | Build web client for server |
 | `make build-electron` | Build Electron desktop app |
 | `make server` | Build server only |
@@ -59,7 +58,8 @@ git clone <repository-url>
 cd opencord
 cp .env.example .env
 # Edit .env with your DATABASE_URL
-./generate-dev-certs
+# Set SERVE_CLIENT=true if you want the server to serve the frontend
+./generate-dev-certs  # Add the output to .env
 ```
 
 ### Running
@@ -91,10 +91,9 @@ The first user should register using the invite code `OWNER_INVITE_2024` to beco
 git clone <repository-url>
 cd opencord
 cp .env.example .env
-# Edit .env with your DATABASE_URL and set SERVE_CLIENT=true
-
-# Generate certificates
-./generate-prod-certs yourdomain.com
+# Edit .env with your DATABASE_URL
+# Set SERVE_CLIENT=true if you want the server to serve the frontend
+./generate-prod-certs yourdomain.com  # Add the output to .env
 
 # Build and run
 make build
