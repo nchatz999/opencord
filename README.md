@@ -65,8 +65,10 @@ cp .env.example .env
 ### Running
 
 ```bash
-make build-client  # Required for server to serve the client
-make run
+make install       # Install dependencies (required if SERVE_CLIENT=true)
+make build-client  # Build client (required if SERVE_CLIENT=true)
+make server        # Build server
+make run           # Run server
 ```
 
 Access at `https://localhost:3000`
@@ -96,8 +98,10 @@ cp .env.example .env
 ./generate-prod-certs yourdomain.com  # Add the output to .env
 
 # Build and run
-make build
-make run
+make install       # Install dependencies (required if SERVE_CLIENT=true)
+make build-client  # Build client (required if SERVE_CLIENT=true)
+make server        # Build server
+make run           # Run server
 ```
 
 ### Environment Variables
