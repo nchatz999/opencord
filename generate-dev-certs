@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+CERT_DIR="certs"
+mkdir -p "$CERT_DIR"
+
+# Generate a self-signed certificate for localhost.
+# This is only valid for 10 days so we can use serverCertificateHashes to avoid a CA (bugged).
+# https://developer.mozilla.org/en-US/docs/Web/API/WebTransport/WebTransport#servercertificatehashes
+openssl ecparam -genkey -name prime256v1 -out "$CERT_DIR/localhost.key"
+openssl req -x509 -sha256 -nodes -days 10 -key "$CERT_DIR/localhost.key" -out "$CERT_DIR/localhost.crt" -config "$CERT_DIR/localhost.conf" -extensions 'v3_req'
+
+# Generate a hex-encoded SHA-256 hash of the certificate
+CERT_HASH=$(openssl x509 -in "$CERT_DIR/localhost.crt" -outform der | openssl dgst -sha256 -binary | xxd -p -c 256)
+echo "$CERT_HASH" > "$CERT_DIR/localhost.hex"
+
+echo "Development certificate generated successfully"
+echo ""
+echo "Add the following to your .env file:"
+echo "  CERT_PATH=certs/localhost.crt"
+echo "  KEY_PATH=certs/localhost.key"
+echo "  VITE_CERT_HASH=$CERT_HASH"

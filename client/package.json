@@ -1,0 +1,41 @@
+{
+  "name": "opencord-client",
+  "description": "Opencord desktop client",
+  "author": "nchatz999@gmail.com",
+  "repository": "github:nchatz999/opencord",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:web": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bigmistqke/solid-contenteditable": "^0.0.12",
+    "@msgpack/msgpack": "^3.1.2",
+    "@tanstack/solid-virtual": "^3.13.13",
+    "@types/dom-mediacapture-transform": "^0.1.11",
+    "clsx": "^2.1.1",
+    "electron-updater": "^6.6.2",
+    "lucide-solid": "^0.523.0",
+    "opencord-transport": "workspace:*",
+    "opencord-utils": "workspace:*",
+    "solid-js": "^1.9.7",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@tailwindcss/vite": "^4.1.11",
+    "electron": "33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^4.0.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}

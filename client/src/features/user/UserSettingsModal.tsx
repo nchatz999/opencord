@@ -1,0 +1,547 @@
+import type { Component } from "solid-js";
+import {
+  createSignal,
+  createMemo,
+  Show,
+  onMount,
+  For,
+} from "solid-js";
+import {
+  Shield,
+  Volume2,
+  X,
+  Lock,
+  Upload,
+  User as UserIcon,
+  Mic,
+  Headphones,
+  Circle,
+  Monitor,
+  Trash2,
+  Calendar,
+  Settings,
+} from "lucide-solid";
+import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, useSound, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
+import { getPresetOptions, type QualityPreset } from "../../model";
+import { useApp } from "../../store/app";
+import { Input } from "../../components/Input";
+import Button from "../../components/Button";
+import Select from "../../components/Select";
+import Slider from "../../components/Slider";
+import Avatar from "../../components/Avatar";
+import { Tabs } from "../../components/Tabs";
+import Card from "../../components/Card";
+import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../components/Table";
+import { UserStatusType, type Session } from "../../model";
+import { useToaster } from "../../components/Toaster";
+import { getStatusColor } from "../../utils";
+
+const UserSettingsModal: Component = () => {
+  const [, authActions] = useAuth();
+  const [, appActions] = useApp();
+  const [, modalActions] = useModal();
+  const [, playbackActions] = usePlayback();
+  const [, userActions] = useUser();
+  const [microphoneState, microphoneActions] = useMicrophone();
+  const [cameraState, cameraActions] = useCamera();
+  const [screenShareState, screenShareActions] = useScreenShare();
+  const [, outputActions] = useOutput();
+  const [, soundActions] = useSound();
+  const user = () => authActions.getUser();
+
+
+  const [username, setUsername] = createSignal(user().username);
+  const [avatarFile, setAvatarFile] = createSignal<File | null>(null);
+  const [_avatarPreview, setAvatarPreview] = createSignal<string | null>(null);
+  let fileInputRef: HTMLInputElement | undefined;
+
+  const [outputVolume, setOutputVolume] = createSignal(50);
+
+  const [currentPassword, setCurrentPassword] = createSignal("");
+  const [newPassword, setNewPassword] = createSignal("");
+  const [confirmPassword, setConfirmPassword] = createSignal("");
+  const [passwordError, setPasswordError] = createSignal("");
+
+  const [sessions, setSessions] = createSignal<Session[]>([]);
+
+  const { addToast } = useToaster();
+
+  const statusOptions = [
+    { value: UserStatusType.Online, label: 'Online', color: 'text-status-online' },
+    { value: UserStatusType.Away, label: 'Away', color: 'text-status-away' },
+    { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-status-dnd' },
+    { value: UserStatusType.Offline, label: 'Offline', color: 'text-status-offline' },
+  ];
+
+  const handleStatusChange = async (newStatus: UserStatusType) => {
+    const result = await userActions.updateStatus(user().userId, newStatus);
+    if (result.isErr()) {
+      addToast(result.error, "error");
+    }
+  };
+
+  onMount(async () => {
+    await playbackActions.resume()
+    loadSessions();
+  });
+
+  const loadSessions = async () => {
+    const result = await authActions.getSessions();
+
+    if (result.isErr()) {
+      addToast(result.error, "error");
+      return
+    }
+    setSessions(result.value);
+  };
+
+  const terminateSession = async (sessionToken: string) => {
+    const result = await authActions.terminateSession(sessionToken);
+
+    if (result.isErr()) {
+      addToast(result.error, "error");
+      return;
+    }
+
+    setSessions(sessions().filter(session => session.sessionToken !== sessionToken));
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const isCurrentSession = (sessionToken: string) => {
+    return authActions.getSession().sessionToken === sessionToken;
+  };
+
+
+  const handleChangePassword = () => {
+    setPasswordError("");
+
+    if (!currentPassword()) {
+      setPasswordError("Current password is required");
+      return;
+    }
+
+    if (!newPassword()) {
+      setPasswordError("New password is required");
+      return;
+    }
+
+    if (newPassword() !== confirmPassword()) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+
+    if (newPassword().length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+      return;
+    }
+
+
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+
+  };
+
+  const handleAvatarChange = async (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+      const file = target.files[0];
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = (reader.result as string).split(',')[1];
+
+        const result = await userActions.updateAvatar(file.name, file.type, base64data);
+
+        if (result.isErr()) {
+          addToast(result.error, "error");
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAvatarUpload = async () => {
+    if (!avatarFile()) return;
+    setAvatarPreview(null);
+    setAvatarFile(null);
+  };
+
+  const tabItems = createMemo(() => [
+    {
+      id: "account",
+      label: "Account",
+      icon: <UserIcon class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Profile" icon={<UserIcon class="w-4 h-4" />}>
+            <Input label="Username" value={username()} onChange={setUsername} />
+          </Card>
+
+          <Card title="Status" icon={<Circle class="w-4 h-4" />}>
+            <div class="space-y-3">
+              <Select
+                label="Current Status"
+                options={statusOptions.map(option => ({
+                  value: option.value,
+                  label: option.label
+                }))}
+                value={user().status}
+                onChange={(value) => handleStatusChange(value as UserStatusType)}
+                class="w-full"
+              />
+              <div class="flex items-center space-x-2 text-sm">
+                <Circle
+                  size={12}
+                  class={`${getStatusColor(user().status)} fill-current`}
+                />
+                <span class="text-secondary-text">
+                  Your status is visible to other users
+                </span>
+              </div>
+            </div>
+          </Card>
+
+
+          <Card title="Change Avatar" icon={<Upload class="w-4 h-4" />}>
+            <div class="flex flex-col items-center space-y-3">
+              <div class="relative w-24 h-24">
+                <Avatar
+                  avatarFileId={user().avatarFileId}
+                  alt="Avatar"
+                  size="xl"
+                />
+                <Button
+                  onClick={() => fileInputRef?.click()}
+                  variant="primary"
+                  size="sm"
+                  class="absolute bottom-0 right-0 p-2 rounded-full"
+                >
+                  <Upload class="w-4 h-4" />
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  class="hidden"
+                />
+              </div>
+
+              <Show when={avatarFile()}>
+                <div class="flex space-x-2">
+                  <Button onClick={handleAvatarUpload} size="sm">
+                    Upload Avatar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setAvatarPreview(null);
+                      setAvatarFile(null);
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </Show>
+
+              <p class="text-xs text-secondary-text">
+                Recommended: Square image, at least 128x128px
+              </p>
+            </div>
+          </Card>
+        </div>
+      ),
+    },
+    {
+      id: "audio",
+      label: "Audio",
+      icon: <Volume2 class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Microphone" icon={<Mic class="w-4 h-4" />}>
+            <div class="space-y-4">
+              <Select
+                label="Input Device"
+                options={microphoneState.availableInputs.map((device: MediaDeviceInfo) => ({
+                  value: device.deviceId,
+                  label: device.label,
+                }))}
+                value={microphoneState.deviceId}
+                onChange={(device) => {
+                  microphoneActions.setDevice(device as string)
+                }}
+                class="w-full"
+              />
+              <Slider
+                title="Microphone Volume"
+                min={0}
+                max={200}
+                value={microphoneState.volume}
+                onChange={(e) => microphoneActions.setVolume(e)}
+              />
+            </div>
+          </Card>
+
+          <Card title="Output" icon={<Headphones class="w-4 h-4" />}>
+            <div class="space-y-4">
+              <Select
+                label="Output Device"
+                options={outputActions.getAvailableOutputs().map(
+                  (device: AudioOutputDevice) => ({
+                    value: device.deviceId,
+                    label: device.label,
+                  })
+                )}
+                value={outputActions.getSelectedOutput()?.deviceId || ""}
+                onChange={(deviceId) => {
+                  const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
+                  if (device) {
+                    outputActions.setOutput(device);
+                  }
+                }}
+                class="w-full"
+              />
+              <Slider
+                title="Output Volume"
+                min={0}
+                max={200}
+                value={outputVolume()}
+                onChange={(value) => setOutputVolume(value)}
+              />
+            </div>
+          </Card>
+
+          <Card>
+            <Slider
+              title="Notification Sounds Volume"
+              min={0}
+              max={100}
+              value={soundActions.getVolume()}
+              onChange={(value) => soundActions.setVolume(value)}
+            />
+          </Card>
+        </div>
+      ),
+    },
+
+    {
+      id: "security",
+      label: "Security",
+      icon: <Shield class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Change Password" icon={<Lock class="w-4 h-4" />}>
+            <div class="space-y-3">
+              <Input
+                label="Current Password"
+                value={currentPassword()}
+                onChange={setCurrentPassword}
+                type="password"
+                placeholder="Enter current password"
+              />
+              <Input
+                label="New Password"
+                value={newPassword()}
+                onChange={setNewPassword}
+                type="password"
+                placeholder="Enter new password"
+              />
+              <Input
+                label="Confirm New Password"
+                value={confirmPassword()}
+                onChange={setConfirmPassword}
+                type="password"
+                placeholder="Confirm new password"
+                error={passwordError()}
+              />
+              <Button onClick={handleChangePassword}>Update Password</Button>
+            </div>
+          </Card>
+        </div>
+      ),
+    },
+    {
+      id: "quality",
+      label: "Quality",
+      icon: <Settings class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Video Settings" icon={<Settings class="w-4 h-4" />}>
+            <div class="space-y-6">
+              <Select
+                label="Camera Resolution"
+                options={getPresetOptions()}
+                value={cameraState.preset}
+                onChange={(value) => cameraActions.setPreset(value as QualityPreset)}
+                class="w-full"
+              />
+
+              <Select
+                label="Screen Share Resolution"
+                options={getPresetOptions()}
+                value={screenShareState.preset}
+                onChange={(value) => screenShareActions.setPreset(value as QualityPreset)}
+                class="w-full"
+              />
+
+              <Slider
+                title={`Camera Bitrate: ${cameraState.quality} bps`}
+                value={cameraState.quality}
+                min={500000}
+                max={MAX_VIDEO_BITRATE}
+                onChange={(value) => cameraActions.setQuality(value)}
+              />
+
+              <Slider
+                title={`Screen Share Bitrate: ${screenShareState.quality} bps`}
+                value={screenShareState.quality}
+                min={500000}
+                max={MAX_VIDEO_BITRATE}
+                onChange={(value) => screenShareActions.setQuality(value)}
+              />
+
+              <Slider
+                title={`Audio Bitrate: ${microphoneState.quality} bps`}
+                value={microphoneState.quality}
+                min={64000}
+                max={320000}
+                onChange={(value) => microphoneActions.setQuality(value)}
+              />
+            </div>
+          </Card>
+        </div>
+      ),
+    },
+    {
+      id: "sessions",
+      label: "Sessions",
+      icon: <Monitor class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Active Sessions" icon={<Monitor class="w-4 h-4" />}>
+            <div class="flex justify-end mb-4">
+              <Button
+                onClick={loadSessions}
+                variant="secondary"
+                size="sm"
+              >
+                Refresh
+              </Button>
+            </div>
+            <Show
+              when={sessions().length > 0}
+              fallback={
+                <div class="text-center py-8 text-muted-foreground-dark">
+                  {"No active sessions found."}
+                </div>
+              }
+            >
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Session</TableHeader>
+                    <TableHeader>Created</TableHeader>
+                    <TableHeader>Expires</TableHeader>
+                    <TableHeader align="center">Actions</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <For each={sessions()}>
+                    {(session) => (
+                      <TableRow class="hover:bg-muted">
+                        <TableCell>
+                          <div class="flex items-center gap-2">
+                            <span class="text-foreground font-medium">
+                              Session #{session.sessionId}
+                            </span>
+                            <Show when={isCurrentSession(session.sessionToken)}>
+                              <span class="px-2 py-1 rounded text-xs font-medium bg-success/20 text-success">
+                                Current
+                              </span>
+                            </Show>
+                          </div>
+                        </TableCell>
+                        <TableCell class="text-secondary-text text-sm">
+                          <div class="flex items-center gap-1">
+                            <Calendar class="w-4 h-4" />
+                            {formatDate(session.createdAt)}
+                          </div>
+                        </TableCell>
+                        <TableCell class="text-secondary-text text-sm">
+                          <Show
+                            when={session.expiresAt}
+                            fallback={<span class="text-muted-foreground-dark">Never</span>}
+                          >
+                            {formatDate(session.expiresAt)}
+                          </Show>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button
+                            onClick={() => terminateSession(session.sessionToken)}
+                            disabled={isCurrentSession(session.sessionToken)}
+                            variant="ghost"
+                            size="sm"
+                            class="p-2 hover:bg-destructive/20 text-destructive hover:text-destructive"
+                            title={isCurrentSession(session.sessionToken) ? "Cannot terminate current session" : "Terminate session"}
+                          >
+                            <Trash2 class="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </For>
+                </TableBody>
+              </Table>
+            </Show>
+
+            <Card.Sub class="mt-4">
+              <h4 class="text-sm font-medium text-foreground mb-2">Session Information</h4>
+              <ul class="text-xs text-secondary-text space-y-1">
+                <li>• Sessions allow you to stay logged in across different devices</li>
+                <li>• You can terminate sessions from other devices for security</li>
+                <li>• Your current session cannot be terminated from this interface</li>
+                <li>• Sessions may expire automatically after a period of inactivity</li>
+              </ul>
+            </Card.Sub>
+          </Card>
+        </div>
+      ),
+    },
+  ]);
+
+  return (
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-popover text-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold">User Settings</h2>
+          <Button onClick={() => modalActions.close()} variant="ghost" size="sm">
+            <X class="w-6 h-6" />
+          </Button>
+        </div>
+        <Tabs items={tabItems()} />
+        <div class="mt-6 flex justify-end gap-2">
+          <Button onClick={async () => {
+            await microphoneActions.stop();
+            await cameraActions.stop();
+            await screenShareActions.stop();
+            await authActions.logout();
+            await connection.disconnect();
+            modalActions.close();
+            appActions.setView("unauthenticated");
+          }}
+            variant="destructive">Logout</Button>
+          <Button onClick={() => modalActions.close()} variant="secondary">
+            Close
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UserSettingsModal;

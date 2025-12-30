@@ -1,0 +1,18 @@
+{
+  "name": "opencord",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "pnpm --filter opencord-client build",
+    "dev": "pnpm --filter opencord-client dev"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"]
+  }
+}

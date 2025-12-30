@@ -1,0 +1,29 @@
+[package]
+name = "opencord-transport-server"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+
+[dependencies]
+anyhow = "1.0"
+bitflags = "2.5"
+bytes = "1.6"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+web-transport = "0.9.3"
+rustls-pemfile = "2.2.0"
+thiserror = "2.0.11"
+dotenv = "0.15.0"
+rand = "0.8"
+clap = { version = "4", features = ["derive"] }
+url = "2.5.4"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "simulator"
+path = "src/bin/simulator.rs"
+
+

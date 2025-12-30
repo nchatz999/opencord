@@ -1,0 +1,67 @@
+.aider*
+# Root Git Ignore for Rust server + SolidJS client (Vite)
+
+# Node/Solid/Vite
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-electron/
+**/dist-electron/
+out/
+**/out/
+build/
+**/build/
+coverage/
+**/coverage/
+.vite/
+**/.vite/
+.cache/
+**/.cache/
+.parcel-cache/
+**/.parcel-cache/
+.eslintcache
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+vite-error.log*
+
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+client/.env
+client/.env.*
+!client/.env.example
+server/.env
+server/.env.*
+!server/.env.example
+CLAUDE.md
+
+# Rust / Cargo
+target/
+**/target/
+.sqlx/
+**/.sqlx/
+
+# Uploads and user data
+server/avatars/
+server/files/
+
+# Certificates (generated)
+certs/
+
+# OS / Editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+.history/
