@@ -2,8 +2,8 @@ import {
   createSignal,
   For,
   Show,
-  mergeProps,
   createMemo,
+  onMount,
   type JSX,
   type Component,
 } from "solid-js";
@@ -23,31 +23,38 @@ interface TabsProps {
 }
 
 export const Tabs: Component<TabsProps> = (props) => {
-  const merged = mergeProps(props);
-
   const [activeTab, setActiveTab] = createSignal(
-    merged.defaultActiveTab || merged.items[0]?.id
+    props.defaultActiveTab || props.items[0]?.id
+  );
+  const [tabWidth, setTabWidth] = createSignal<number>();
+  const tabRefs: HTMLButtonElement[] = [];
+
+  const activeContent = createMemo(() =>
+    props.items.find((item) => item.id === activeTab())?.content
   );
 
-  const activeContent = createMemo(() => {
-    return merged.items.find((item) => item.id === activeTab())?.content;
+  onMount(() => {
+    const maxWidth = Math.max(...tabRefs.map((ref) => ref?.offsetWidth || 0));
+    if (maxWidth > 0) setTabWidth(maxWidth);
   });
 
   return (
-    <div class={cn("flex flex-col", merged.class)}>
+    <div class={cn("flex flex-col", props.class)}>
       <div class="flex border-b border-input">
-        <For each={merged.items}>
-          {(item) => (
+        <For each={props.items}>
+          {(item, index) => (
             <button
+              ref={(el) => (tabRefs[index()] = el)}
               class={cn(
                 "py-2 px-4 font-semibold",
                 activeTab() === item.id
                   ? "text-primary-foreground border-b-2 border-primary"
                   : "text-tab-inactive"
               )}
+              style={{ width: tabWidth() ? `${tabWidth()}px` : undefined }}
               onClick={() => setActiveTab(item.id)}
             >
-              <div class="flex items-center gap-2">
+              <div class="flex items-center justify-center gap-2">
                 <Show when={item.icon}>{item.icon}</Show>
                 {item.label}
               </div>
