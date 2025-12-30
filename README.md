@@ -24,7 +24,7 @@ A modern real-time communication platform built with Rust and SolidJS.
 | Electron | Full support |
 | Chrome/Chromium | Full support |
 | Edge | Full support |
-| Firefox | No screen share or camera support |
+| Firefox | No screen share or camera support, also bugs |
 | Safari | Not supported |
 
 ### Make Commands
