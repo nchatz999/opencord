@@ -89,15 +89,17 @@ The first user should register using the invite code `OWNER_INVITE_2024` to beco
 ### Setup
 
 ```bash
-# Clone and setup
 git clone <repository-url>
 cd opencord
 cp .env.example .env
 # Edit .env with your DATABASE_URL
 # Set SERVE_CLIENT=true if you want the server to serve the frontend
 ./generate-prod-certs yourdomain.com  # Add the output to .env
+```
 
-# Build and run
+### Running
+
+```bash
 make install       # Install dependencies (required if SERVE_CLIENT=true)
 make build-client  # Build client (required if SERVE_CLIENT=true)
 make server        # Build server
