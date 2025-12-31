@@ -49,13 +49,12 @@ const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
 };
 
 const DEFAULT_VIDEO_ENCODER_CONFIG: VideoEncoderConfig = {
-  codec: "avc1.64002A",
+  codec: "vp8",
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_VIDEO_BITRATE,
   framerate: DEFAULT_FRAME_RATE,
   latencyMode: "realtime",
-  avc: { format: "annexb" },
 };
 
 const DEFAULT_AUDIO_ENCODER_CONFIG: AudioEncoderConfig = {

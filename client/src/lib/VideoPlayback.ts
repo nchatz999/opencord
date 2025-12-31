@@ -8,7 +8,7 @@ interface BufferItem {
 }
 
 const DEFAULT_DECODER_CONFIG: VideoDecoderConfig = {
-  codec: 'avc1.64002A',
+  codec: 'vp8',
 };
 
 export class VideoPlayback {
