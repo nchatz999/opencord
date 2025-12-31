@@ -1,1 +1,2 @@
-export { NackController, PendingNack, NackContext } from './NackController';
+export { NackController } from './NackController';
+export type { PendingNack, NackContext } from './NackController';

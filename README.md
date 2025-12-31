@@ -27,45 +27,7 @@ A modern real-time communication platform built with Rust and SolidJS.
 | Firefox | No screen share or camera support, also bugs |
 | Safari | Not supported |
 
-### Make Commands
-
-**Install Dependencies**
-
-| Command | Description |
-|---------|-------------|
-| `make install` | Install npm dependencies |
-| `make clean` | Remove build artifacts |
-
-**Development**
-
-| Command | Description |
-|---------|-------------|
-| `make dev-client` | Run web client dev server with hot reload |
-| `make dev-electron` | Run Electron client in dev mode |
-| `make dev-server` | Build server in debug mode |
-| `make dev-run` | Run server in debug mode |
-
-**Production**
-
-| Command | Description |
-|---------|-------------|
-| `make prod-client` | Build web client for server |
-| `make prod-electron` | Build Electron desktop app |
-| `make prod-server` | Build server (with database setup) |
-| `make prod-run` | Run server (release mode) |
-| `make prod-stop` | Stop server |
-
-**Database**
-
-| Command | Description |
-|---------|-------------|
-| `make db-create` | Create database |
-| `make db-migrate` | Run database migrations |
-| `make db-reset` | Drop and recreate database |
-
-## Local Development
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 20.19+
 - pnpm (`npm install -g pnpm`)
@@ -74,6 +36,9 @@ A modern real-time communication platform built with Rust and SolidJS.
 - OpenSSL
 - xxd
 - sqlx-cli (`cargo install sqlx-cli`)
+- certbot (production only)
+
+## Development
 
 ### Setup
 
@@ -82,13 +47,12 @@ git clone <repository-url>
 cd opencord
 cp .env.example .env
 # Edit .env with your DATABASE_URL
-# Set SERVE_CLIENT=true if you want the server to serve the frontend
 ./generate-dev-certs  # Add the output to .env
 ```
 
-### Development Workflow
+### Running
 
-Run client and server in separate terminals for hot reload:
+Run client and server in separate terminals:
 
 ```bash
 # Terminal 1 - Client (hot reload)
@@ -102,29 +66,7 @@ make dev-run
 
 Client runs at `https://localhost:5173`, server at `https://localhost:3000`
 
-### Production Build
-
-```bash
-make install       # Install dependencies (required if SERVE_CLIENT=true)
-make prod-client   # Build client (required if SERVE_CLIENT=true)
-make prod-server   # Build server
-make prod-run      # Run server
-```
-
-Access at `https://localhost:3000`
-
-The first user should register using the invite code `OWNER_INVITE_2024` to become the server owner.
-
-## Production Deployment
-
-### Prerequisites
-
-- Node.js 20.19+
-- pnpm (`npm install -g pnpm`)
-- Rust 1.85+
-- PostgreSQL
-- sqlx-cli (`cargo install sqlx-cli`)
-- certbot
+## Production
 
 ### Setup
 
@@ -133,15 +75,15 @@ git clone <repository-url>
 cd opencord
 cp .env.example .env
 # Edit .env with your DATABASE_URL
-# Set SERVE_CLIENT=true if you want the server to serve the frontend
+# Set SERVE_CLIENT=true to serve frontend from server
 ./generate-prod-certs yourdomain.com  # Add the output to .env
 ```
 
 ### Running
 
 ```bash
-make install       # Install dependencies (required if SERVE_CLIENT=true)
-make prod-client   # Build client (required if SERVE_CLIENT=true)
+make install       # Install dependencies
+make prod-client   # Build client (if SERVE_CLIENT=true)
 make prod-server   # Build server
 make prod-run      # Run server
 ```
@@ -150,7 +92,7 @@ Access at `https://yourdomain.com:3000`
 
 The first user should register using the invite code `OWNER_INVITE_2024` to become the server owner.
 
-### Environment Variables
+## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -158,6 +100,25 @@ The first user should register using the invite code `OWNER_INVITE_2024` to beco
 | `CERT_PATH` | Path to TLS certificate | required |
 | `KEY_PATH` | Path to TLS private key | required |
 | `SERVE_CLIENT` | Serve frontend from server | false |
+
+## Make Commands
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install npm dependencies |
+| `make clean` | Remove build artifacts |
+| `make dev-client` | Run web client dev server with hot reload |
+| `make dev-electron` | Run Electron client in dev mode |
+| `make dev-server` | Build server in debug mode |
+| `make dev-run` | Run server in debug mode |
+| `make prod-client` | Build web client for server |
+| `make prod-electron` | Build Electron desktop app |
+| `make prod-server` | Build server (with database setup) |
+| `make prod-run` | Run server (release mode) |
+| `make prod-stop` | Stop server |
+| `make db-create` | Create database |
+| `make db-migrate` | Run database migrations |
+| `make db-reset` | Drop and recreate database |
 
 ## Project Structure
 

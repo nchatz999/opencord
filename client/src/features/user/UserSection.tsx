@@ -17,14 +17,12 @@ const UserSection: Component = () => {
   const handleMuteToggle = async () => {
     const newMuted = !microphoneState.muted
     microphoneActions.setMuted(newMuted)
-    if (!voipActions.findById(currentUser().userId)) return
     await voipActions.setMuted(newMuted)
   }
 
   const handleDeafenToggle = async () => {
     const newDeafened = !outputActions.getDeafened()
     outputActions.setDeafened(newDeafened)
-    if (!voipActions.findById(currentUser().userId)) return
     await voipActions.setDeafened(newDeafened)
   }
 

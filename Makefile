@@ -34,7 +34,7 @@ dev-electron: check-node
 	pnpm --filter opencord-client run dev:electron
 
 dev-server: check-rust
-	cargo build -p opencord-server
+	sqlx database create && sqlx migrate run --source server/migrations && cargo build -p opencord-server
 
 dev-run:
 	cargo run -p opencord-server
