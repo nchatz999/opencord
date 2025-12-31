@@ -329,7 +329,7 @@ class NativeTimerManager implements TimerManager {
     window.clearInterval(id);
   }
 
-  terminate(): void {}
+  terminate(): void { }
 }
 
 const workerCode = `
