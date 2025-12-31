@@ -32,11 +32,9 @@ jobs:
         run: pnpm install
 
       - name: Build
-        working-directory: client
-        run: pnpm run build
+        run: pnpm --filter opencord-client run build
 
       - name: Package and release
-        working-directory: client
-        run: pnpm exec electron-builder --publish always
+        run: pnpm --filter opencord-client exec electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

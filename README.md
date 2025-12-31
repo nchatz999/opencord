@@ -29,15 +29,39 @@ A modern real-time communication platform built with Rust and SolidJS.
 
 ### Make Commands
 
+**Install Dependencies**
+
 | Command | Description |
 |---------|-------------|
 | `make install` | Install npm dependencies |
-| `make build-client` | Build web client for server |
-| `make build-electron` | Build Electron desktop app |
-| `make server` | Build server only |
-| `make run` | Run server |
-| `make stop` | Stop server |
 | `make clean` | Remove build artifacts |
+
+**Development**
+
+| Command | Description |
+|---------|-------------|
+| `make dev-client` | Run web client dev server with hot reload |
+| `make dev-electron` | Run Electron client in dev mode |
+| `make dev-server` | Build server in debug mode |
+| `make dev-run` | Run server in debug mode |
+
+**Production**
+
+| Command | Description |
+|---------|-------------|
+| `make prod-client` | Build web client for server |
+| `make prod-electron` | Build Electron desktop app |
+| `make prod-server` | Build server (with database setup) |
+| `make prod-run` | Run server (release mode) |
+| `make prod-stop` | Stop server |
+
+**Database**
+
+| Command | Description |
+|---------|-------------|
+| `make db-create` | Create database |
+| `make db-migrate` | Run database migrations |
+| `make db-reset` | Drop and recreate database |
 
 ## Local Development
 
@@ -62,13 +86,29 @@ cp .env.example .env
 ./generate-dev-certs  # Add the output to .env
 ```
 
-### Running
+### Development Workflow
+
+Run client and server in separate terminals for hot reload:
+
+```bash
+# Terminal 1 - Client (hot reload)
+make install
+make dev-client
+
+# Terminal 2 - Server (debug mode)
+make dev-server
+make dev-run
+```
+
+Client runs at `https://localhost:5173`, server at `https://localhost:3000`
+
+### Production Build
 
 ```bash
 make install       # Install dependencies (required if SERVE_CLIENT=true)
-make build-client  # Build client (required if SERVE_CLIENT=true)
-make server        # Build server
-make run           # Run server
+make prod-client   # Build client (required if SERVE_CLIENT=true)
+make prod-server   # Build server
+make prod-run      # Run server
 ```
 
 Access at `https://localhost:3000`
@@ -101,10 +141,14 @@ cp .env.example .env
 
 ```bash
 make install       # Install dependencies (required if SERVE_CLIENT=true)
-make build-client  # Build client (required if SERVE_CLIENT=true)
-make server        # Build server
-make run           # Run server
+make prod-client   # Build client (required if SERVE_CLIENT=true)
+make prod-server   # Build server
+make prod-run      # Run server
 ```
+
+Access at `https://yourdomain.com:3000`
+
+The first user should register using the invite code `OWNER_INVITE_2024` to become the server owner.
 
 ### Environment Variables
 
