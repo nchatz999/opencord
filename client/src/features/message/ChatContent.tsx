@@ -20,13 +20,8 @@ const BOTTOM_THRESHOLD = 200;
 const toContextId = (c: { type: string; id: number }) => `${c.type}-${c.id}`;
 
 const waitForImages = async (container: HTMLElement) => {
-  const pending = Array.from(container.querySelectorAll("img"))
-    .filter((img) => !img.complete)
-    .map((img) => new Promise<void>((resolve) => {
-      img.addEventListener("load", () => resolve(), { once: true });
-      img.addEventListener("error", () => resolve(), { once: true });
-    }));
-  return Promise.all(pending).then(() => { });
+  const images = Array.from(container.querySelectorAll("img"));
+  await Promise.all(images.map((img) => img.decode().catch(() => {})));
 };
 
 const waitForRender = (): Promise<void> =>
