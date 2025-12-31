@@ -934,6 +934,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 .service
                 .get_voip_participant(subscriber.user_id())
                 .await?
+                && !participant.local_deafen
             {
                 let can_receive = match (&policy, participant.channel_id, participant.recipient_id)
                 {
