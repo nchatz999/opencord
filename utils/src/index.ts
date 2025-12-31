@@ -295,6 +295,43 @@ export class RingBuffer<T> {
 
 
 
+interface TimerManager {
+  setTimeout(callback: Function, delay: number): number;
+  setInterval(callback: Function, interval: number): number;
+  clearTimeout(id: number): void;
+  clearInterval(id: number): void;
+  terminate(): void;
+}
+
+declare global {
+  interface Window {
+    process?: { versions?: { electron?: string } };
+  }
+}
+
+const isElectron = typeof window !== 'undefined' &&
+  !!(window.process?.versions?.electron || navigator.userAgent.includes('Electron'));
+
+class NativeTimerManager implements TimerManager {
+  setTimeout(callback: Function, delay: number): number {
+    return window.setTimeout(callback, delay);
+  }
+
+  setInterval(callback: Function, interval: number): number {
+    return window.setInterval(callback, interval);
+  }
+
+  clearTimeout(id: number): void {
+    window.clearTimeout(id);
+  }
+
+  clearInterval(id: number): void {
+    window.clearInterval(id);
+  }
+
+  terminate(): void {}
+}
+
 const workerCode = `
   const timers = new Map();
   let nextId = 1;
@@ -321,7 +358,7 @@ const workerCode = `
       case 'clear':
         const timerId = timers.get(id);
         if (timerId !== undefined) {
-          clearTimeout(timerId); 
+          clearTimeout(timerId);
           clearInterval(timerId);
           timers.delete(id);
         }
@@ -331,7 +368,7 @@ const workerCode = `
 `;
 
 
-export class WorkerTimerManager {
+class WorkerTimerManager implements TimerManager {
   private worker: Worker;
   private callbacks: Map<number, Function>;
   private nextId: number = 1;
@@ -389,7 +426,9 @@ export class WorkerTimerManager {
 }
 
 
-export const timerManager = new WorkerTimerManager();
+export const timerManager: TimerManager = isElectron
+  ? new NativeTimerManager()
+  : new WorkerTimerManager();
 
 
 export class MinHeap<T> {
