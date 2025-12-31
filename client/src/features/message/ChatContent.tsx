@@ -15,13 +15,26 @@ import MessageComponent from "./Message";
 
 const MESSAGES_LIMIT = 50;
 const SCROLL_THRESHOLD = 5;
-const BOTTOM_THRESHOLD = 200;
 
 const toContextId = (c: { type: string; id: number }) => `${c.type}-${c.id}`;
 
-const waitForImages = async (container: HTMLElement) => {
-  const images = Array.from(container.querySelectorAll("img"));
-  await Promise.all(images.map((img) => img.decode().catch(() => {})));
+const waitForImages = (container: HTMLElement, timeout = 3000): Promise<void> => {
+  return new Promise((resolve) => {
+    const start = Date.now();
+
+    const check = () => {
+      const images = Array.from(container.querySelectorAll("img"));
+      const allReady = images.every((img) => img.src && img.complete);
+
+      if (allReady || Date.now() - start > timeout) {
+        resolve();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+
+    check();
+  });
 };
 
 const waitForRender = (): Promise<void> =>
@@ -41,6 +54,7 @@ const ChatContent: Component = () => {
 
   const [isLoadingMore, setIsLoadingMore] = createSignal(false);
   const [stableContextId, setStableContextId] = createSignal<string | null>(null);
+  const [wasAtBottom, setWasAtBottom] = createSignal(true);
 
   const ctx = createMemo(() => contextState.context);
 
@@ -104,11 +118,15 @@ const ChatContent: Component = () => {
     const context = ctx();
     if (!context || !containerRef) return;
 
+    const { scrollTop, scrollHeight, clientHeight } = containerRef;
+    const maxScrollTop = scrollHeight - clientHeight;
+    setWasAtBottom(Math.ceil(scrollTop) >= Math.floor(maxScrollTop));
+
     if (stableContextId() === toContextId(context)) {
-      contextActions.setScrollPosition(context, containerRef.scrollTop);
+      contextActions.setScrollPosition(context, scrollTop);
     }
 
-    if (containerRef.scrollTop < SCROLL_THRESHOLD) {
+    if (scrollTop < SCROLL_THRESHOLD) {
       loadMoreMessages();
     }
   };
@@ -147,10 +165,7 @@ const ChatContent: Component = () => {
 
 
   createEffect(on([latestMessageId, lastMessageReactionCount], async () => {
-    if (!stableContextId() || !containerRef) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = containerRef;
-    if (scrollHeight - scrollTop - clientHeight >= BOTTOM_THRESHOLD) return;
+    if (!stableContextId() || !containerRef || !wasAtBottom()) return;
 
     await waitForImages(containerRef);
 

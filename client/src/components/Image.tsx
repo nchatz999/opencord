@@ -4,10 +4,12 @@ import { getSessionToken } from '../utils';
 
 const cache = new Map<string, string>();
 
-type ImageProps = JSX.ImgHTMLAttributes<HTMLImageElement>;
+interface ImageProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement>, 'onLoad'> {
+  onLoad?: () => void;
+}
 
 const Image: Component<ImageProps> = (props) => {
-  const [local, rest] = splitProps(props, ['src']);
+  const [local, rest] = splitProps(props, ['src', 'onLoad']);
   const [url, setUrl] = createSignal<string | undefined>(undefined);
 
   createEffect(async () => {
@@ -19,6 +21,7 @@ const Image: Component<ImageProps> = (props) => {
 
     if (cache.has(path)) {
       setUrl(cache.get(path)!);
+      local.onLoad?.();
       return;
     }
 
@@ -35,6 +38,7 @@ const Image: Component<ImageProps> = (props) => {
       const blobUrl = URL.createObjectURL(blob);
       cache.set(path, blobUrl);
       setUrl(blobUrl);
+      local.onLoad?.();
     } catch {}
   });
 
