@@ -30,3 +30,4 @@ mac:
 win:
   target:
     - nsis
+  icon: build/icon.png
