@@ -13,6 +13,7 @@ import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '.
 import { request } from '../../utils'
 import type { User } from '../../model'
 import Avatar from '../../components/Avatar'
+import Image from '../../components/Image'
 
 
 interface Invite {
@@ -246,7 +247,7 @@ const ServerSettingsModal: Component = () => {
                       }
                     >
                       {(avatarId) => (
-                        <img
+                        <Image
                           src={`/server/avatar/${avatarId()}`}
                           alt="Server avatar"
                           class="w-20 h-20 rounded-full object-cover"

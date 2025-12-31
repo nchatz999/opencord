@@ -55,8 +55,6 @@ const UserSettingsModal: Component = () => {
   const [_avatarPreview, setAvatarPreview] = createSignal<string | null>(null);
   let fileInputRef: HTMLInputElement | undefined;
 
-  const [outputVolume, setOutputVolume] = createSignal(50);
-
   const [currentPassword, setCurrentPassword] = createSignal("");
   const [newPassword, setNewPassword] = createSignal("");
   const [confirmPassword, setConfirmPassword] = createSignal("");
@@ -288,32 +286,23 @@ const UserSettingsModal: Component = () => {
           </Card>
 
           <Card title="Output" icon={<Headphones class="w-4 h-4" />}>
-            <div class="space-y-4">
-              <Select
-                label="Output Device"
-                options={outputActions.getAvailableOutputs().map(
-                  (device: AudioOutputDevice) => ({
-                    value: device.deviceId,
-                    label: device.label,
-                  })
-                )}
-                value={outputActions.getSelectedOutput()?.deviceId || ""}
-                onChange={(deviceId) => {
-                  const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
-                  if (device) {
-                    outputActions.setOutput(device);
-                  }
-                }}
-                class="w-full"
-              />
-              <Slider
-                title="Output Volume"
-                min={0}
-                max={200}
-                value={outputVolume()}
-                onChange={(value) => setOutputVolume(value)}
-              />
-            </div>
+            <Select
+              label="Output Device"
+              options={outputActions.getAvailableOutputs().map(
+                (device: AudioOutputDevice) => ({
+                  value: device.deviceId,
+                  label: device.label,
+                })
+              )}
+              value={outputActions.getSelectedOutput()?.deviceId || ""}
+              onChange={(deviceId) => {
+                const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
+                if (device) {
+                  outputActions.setOutput(device);
+                }
+              }}
+              class="w-full"
+            />
           </Card>
 
           <Card>
@@ -401,7 +390,7 @@ const UserSettingsModal: Component = () => {
               />
 
               <Slider
-                title={`Camera Bitrate: ${cameraState.quality} bps`}
+                title={`Camera Bitrate: ${(cameraState.quality / 1_000_000).toFixed(1)} Mbps`}
                 value={cameraState.quality}
                 min={500000}
                 max={MAX_VIDEO_BITRATE}
@@ -409,7 +398,7 @@ const UserSettingsModal: Component = () => {
               />
 
               <Slider
-                title={`Screen Share Bitrate: ${screenShareState.quality} bps`}
+                title={`Screen Share Bitrate: ${(screenShareState.quality / 1_000_000).toFixed(1)} Mbps`}
                 value={screenShareState.quality}
                 min={500000}
                 max={MAX_VIDEO_BITRATE}
@@ -417,7 +406,7 @@ const UserSettingsModal: Component = () => {
               />
 
               <Slider
-                title={`Audio Bitrate: ${microphoneState.quality} bps`}
+                title={`Audio Bitrate: ${(microphoneState.quality / 1000).toFixed(0)} kbps`}
                 value={microphoneState.quality}
                 min={64000}
                 max={320000}
