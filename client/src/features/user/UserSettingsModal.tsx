@@ -389,6 +389,17 @@ const UserSettingsModal: Component = () => {
                 class="w-full"
               />
 
+              <Select
+                label="Screen Share Frame Rate"
+                options={[
+                  { value: 30, label: "30 FPS" },
+                  { value: 60, label: "60 FPS" },
+                ]}
+                value={screenShareState.frameRate}
+                onChange={(value) => screenShareActions.setFrameRate(value as number)}
+                class="w-full"
+              />
+
               <Slider
                 title={`Camera Bitrate: ${cameraState.quality} bps`}
                 value={cameraState.quality}

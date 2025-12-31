@@ -7,6 +7,7 @@ import { UserBrowser } from "../features/user/UserBrowser";
 import { Tabs } from "../components/Tabs";
 import IncomingCallsPanel from "../features/voip/IncomingCallsPanel";
 import UserPanel from "../features/user/UserPanel";
+import Image from "../components/Image";
 
 const LeftPanel: Component = () => {
   const [, groupActions] = useGroup();
@@ -77,7 +78,7 @@ const LeftPanel: Component = () => {
                   }
                 >
                   {(avatarId) => (
-                    <img
+                    <Image
                       src={`/server/avatar/${avatarId()}`}
                       alt="Server avatar"
                       class="w-7 h-7 rounded-full object-cover"

@@ -17,11 +17,13 @@ interface ScreenShareState {
   isRecording: boolean;
   quality: number;
   preset: QualityPreset;
+  frameRate: number;
 }
 
 export interface ScreenShareActions {
   setQuality: (quality: number) => void;
   setPreset: (preset: QualityPreset) => void;
+  setFrameRate: (frameRate: number) => void;
   setConstraints: (constraints: Partial<ScreenShareConstraints>) => void;
   onEncodedVideoData: (callback: (chunk: EncodedVideoChunk, sequence: number) => void) => () => void;
   onEncodedAudioData: (callback: (chunk: EncodedAudioChunk, sequence: number) => void) => () => void;
@@ -36,11 +38,12 @@ export type ScreenShareStore = [ScreenShareState, ScreenShareActions];
 const DEFAULT_VIDEO_BITRATE = 2_500_000;
 const DEFAULT_AUDIO_BITRATE = 128_000;
 const KEYFRAME_INTERVAL = 30;
+const DEFAULT_FRAME_RATE = 30;
 
 const DEFAULT_CONSTRAINTS: ScreenShareConstraints = {
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
-  frameRate: 60,
+  frameRate: DEFAULT_FRAME_RATE,
   cursor: "always",
   audio: true,
 };
@@ -50,7 +53,7 @@ const DEFAULT_VIDEO_ENCODER_CONFIG: VideoEncoderConfig = {
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_VIDEO_BITRATE,
-  framerate: 60,
+  framerate: DEFAULT_FRAME_RATE,
   latencyMode: "realtime",
   avc: { format: "annexb" },
 };
@@ -102,12 +105,14 @@ function createAudioEncoderInstance(
 function createScreenShareStore(): ScreenShareStore {
   const [, pref] = usePreference();
   const savedPreset = pref.get<QualityPreset>("screen:preset") ?? DEFAULT_PRESET;
+  const savedFrameRate = pref.get<number>("screen:frameRate") ?? DEFAULT_FRAME_RATE;
   const presetConfig = QUALITY_PRESETS[savedPreset];
 
   const [state, setState] = createStore<ScreenShareState>({
     isRecording: false,
     quality: pref.get<number>("screen:quality") ?? DEFAULT_VIDEO_BITRATE,
     preset: savedPreset,
+    frameRate: savedFrameRate,
   });
 
   const encodedVideoDataCallbacks = new Set<(chunk: EncodedVideoChunk, sequence: number) => void>();
@@ -117,7 +122,7 @@ function createScreenShareStore(): ScreenShareStore {
   let videoSequence = 0;
   let audioSequence = 0;
   let frameCount = 0;
-  let constraints: ScreenShareConstraints = { ...DEFAULT_CONSTRAINTS, width: presetConfig.width, height: presetConfig.height };
+  let constraints: ScreenShareConstraints = { ...DEFAULT_CONSTRAINTS, width: presetConfig.width, height: presetConfig.height, frameRate: savedFrameRate };
   let stream: MediaStream | null = null;
   let videoProcessor: MediaStreamTrackProcessor<VideoFrame> | null = null;
   let videoEncoder: VideoEncoder | null = null;
@@ -230,8 +235,15 @@ function createScreenShareStore(): ScreenShareStore {
           width: config.width,
           height: config.height,
           bitrate: state.quality,
+          framerate: state.frameRate,
         });
       }
+    },
+
+    setFrameRate(frameRate: number) {
+      setState("frameRate", frameRate);
+      pref.set("screen:frameRate", frameRate);
+      this.setConstraints({ frameRate });
     },
 
     onEncodedVideoData(callback) {
@@ -263,7 +275,7 @@ function createScreenShareStore(): ScreenShareStore {
 
         videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
         videoEncoder = createVideoEncoderInstance(
-          { ...DEFAULT_VIDEO_ENCODER_CONFIG, bitrate: state.quality },
+          { ...DEFAULT_VIDEO_ENCODER_CONFIG, bitrate: state.quality, framerate: state.frameRate },
           notifyEncodedVideoData
         );
 
