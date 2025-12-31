@@ -23,9 +23,10 @@ A modern real-time communication platform built with Rust and SolidJS.
 |----------|---------|
 | Electron | Full support |
 | Chrome/Chromium | Full support |
-| Edge | Full support |
-| Firefox | No screen share or camera support, also bugs |
+| Firefox | Not supported |
 | Safari | Not supported |
+
+> **Note:** Opencord requires a Chromium-based browser for WebTransport, WebCodecs, and Insertable Streams for MediaStreamTrack API support. Firefox and Safari are not supported. For the best experience, download the desktop app.
 
 ## Prerequisites
 
