@@ -92,10 +92,13 @@ function createMessageStore(): MessageStore {
             fileActions.add(file);
           }
 
-          if (messageType.type === "Channel" && !context.isCurrentContext("channel", channelId)) {
-            context.markUnread("channel", channelId);
-          } else if (messageType.type === "Direct" && !context.isCurrentContext("dm", senderId)) {
-            context.markUnread("dm", senderId);
+          const currentUserId = authActions.getUser().userId;
+          if (senderId !== currentUserId) {
+            if (messageType.type === "Channel" && !context.isCurrentContext("channel", channelId)) {
+              context.markUnread("channel", channelId);
+            } else if (messageType.type === "Direct" && !context.isCurrentContext("dm", senderId)) {
+              context.markUnread("dm", senderId);
+            }
           }
         } else if (event.type === "messageUpdated") {
           const { messageId, messageText } = event as any;
