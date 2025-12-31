@@ -7,6 +7,10 @@ import logo from "../assets/opencord.webp";
 const MAX_RETRIES = 5;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isChromiumBased = (): boolean => {
+  return /Chrome|Chromium/.test(navigator.userAgent);
+};
+
 const LoadingPage: Component = () => {
   const [auth, authActions] = useAuth();
   const [, appActions] = useApp();
@@ -18,6 +22,11 @@ const LoadingPage: Component = () => {
   });
 
   const connectWithRetry = async () => {
+    if (!isChromiumBased()) {
+      appActions.setView("unsupported");
+      return;
+    }
+
     if (!auth.session) {
       appActions.setView("unauthenticated");
       return;

@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 
-export type AppView = "loading" | "unauthenticated" | "app" | "error";
+export type AppView = "loading" | "unauthenticated" | "app" | "error" | "unsupported";
 
 export interface AppState {
   view: AppView;
