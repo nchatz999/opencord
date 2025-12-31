@@ -9,7 +9,7 @@ import {
   Match,
   Switch,
 } from "solid-js";
-import { useChannel, useMessage, useUser, useContext } from "../../store/index";
+import { useChannel, useMessage, useUser, useContext, useReaction } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 import MessageComponent from "./Message";
 
@@ -39,6 +39,7 @@ const ChatContent: Component = () => {
   const [, messageActions] = useMessage();
   const [, userActions] = useUser();
   const [contextState, contextActions] = useContext();
+  const [, reactionActions] = useReaction();
   const { addToast } = useToaster();
 
   let containerRef: HTMLDivElement | undefined;
@@ -59,6 +60,12 @@ const ChatContent: Component = () => {
   const latestMessageId = createMemo(() => {
     const msgs = messages();
     return msgs.length > 0 ? msgs[msgs.length - 1].id : null;
+  });
+
+  const lastMessageReactionCount = createMemo(() => {
+    const id = latestMessageId();
+    if (!id) return 0;
+    return reactionActions.findByMessageId(id).length;
   });
 
   const contextKey = createMemo(() => {
@@ -144,7 +151,7 @@ const ChatContent: Component = () => {
   }, { defer: true }));
 
 
-  createEffect(on(latestMessageId, async () => {
+  createEffect(on([latestMessageId, lastMessageReactionCount], async () => {
     if (!stableContextId() || !containerRef) return;
 
     const { scrollTop, scrollHeight, clientHeight } = containerRef;
