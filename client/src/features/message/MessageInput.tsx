@@ -161,7 +161,7 @@ const MessageInput: Component<{
 
   return (
     <Show when={props.context}>
-      <div class="p-4 bg-background">
+      <div class="p-4 bg-background relative">
         <Show when={replyingToMessage()}>
           <div class="mb-3 flex items-center gap-2 p-2 bg-accent border-l-2 border-primary">
             <ReplyIcon size={14} class="text-muted-foreground shrink-0" />
@@ -185,7 +185,7 @@ const MessageInput: Component<{
         </Show>
 
         <Show when={files().length > 0}>
-          <div class="mb-3 flex flex-wrap gap-2 p-3 bg-background-dark rounded-lg border border-muted">
+          <div class="absolute bottom-full left-0 right-0 mb-2 mx-4 flex flex-wrap gap-2 p-3 bg-background-dark rounded-lg border border-muted shadow-lg">
             <For each={files()}>
               {(file) => (
                 <FilePreview
