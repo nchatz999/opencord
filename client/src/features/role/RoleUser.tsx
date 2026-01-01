@@ -1,5 +1,6 @@
 import type { Component } from "solid-js";
 import { UserStatusType, type User } from "../../model";
+import { useModal } from "../../store/index";
 import Avatar from "../../components/Avatar";
 
 interface RoleUserProps {
@@ -7,6 +8,11 @@ interface RoleUserProps {
 }
 
 const RoleUser: Component<RoleUserProps> = (props) => {
+  const [, modalActions] = useModal();
+
+  const handleClick = () => {
+    modalActions.open({ type: "userInfo", userId: props.user.userId });
+  };
 
   const statusColors: Record<string, string> = {
     online: "bg-status-online",
@@ -18,7 +24,10 @@ const RoleUser: Component<RoleUserProps> = (props) => {
   const statusColor = () => statusColors[props.user.status || "online"];
 
   return (
-    <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted transition-all group cursor-pointer">
+    <div
+      onClick={handleClick}
+      class="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted transition-all group cursor-pointer"
+    >
       {}
       <div class="relative shrink-0">
         <Avatar

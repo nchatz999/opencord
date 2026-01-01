@@ -3,7 +3,7 @@ import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, HeadphoneOff, Settings, Circle } from 'lucide-solid'
 import Avatar from '../../components/Avatar'
 import Button from '../../components/Button'
-import { useAuth, useVoip, useModal, useMicrophone, useOutput } from '../../store/index'
+import { useAuth, useVoip, useModal, useMicrophone, useOutput, useSound } from '../../store/index'
 import { getStatusColor } from '../../utils'
 
 const UserSection: Component = () => {
@@ -12,18 +12,21 @@ const UserSection: Component = () => {
   const [, modalActions] = useModal()
   const [microphoneState, microphoneActions] = useMicrophone()
   const [, outputActions] = useOutput()
+  const [, soundActions] = useSound();
   const currentUser = () => authActions.getUser()
 
   const handleMuteToggle = async () => {
     const newMuted = !microphoneState.muted
     microphoneActions.setMuted(newMuted)
     await voipActions.setMuted(newMuted)
+    soundActions.play("/sounds/mute.mp3");
   }
 
   const handleDeafenToggle = async () => {
     const newDeafened = !outputActions.getDeafened()
     outputActions.setDeafened(newDeafened)
     await voipActions.setDeafened(newDeafened)
+    soundActions.play("/sounds/deafen.mp3");
   }
 
   const handleUserSettings = async () => {

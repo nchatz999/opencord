@@ -6,6 +6,7 @@ import ChatContent from "../features/message/ChatContent";
 import MessageInput from "../features/message/MessageInput";
 import StreamsContent from "../features/voip/StreamsContent";
 import { Tabs } from "../components/Tabs";
+import MessageNotification from "../components/MessageNotification";
 
 const MiddlePanel: Component = () => {
   const [contextState] = useContext();
@@ -39,8 +40,9 @@ const MiddlePanel: Component = () => {
   });
 
   return (
-    <div class="flex-1 flex flex-col bg-background h-full overflow-hidden">
+    <div class="flex-1 flex flex-col bg-background h-full overflow-hidden relative">
       <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
+      <MessageNotification />
     </div>
   );
 };

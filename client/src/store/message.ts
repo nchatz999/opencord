@@ -9,6 +9,7 @@ import { useFile } from "./file";
 import { useReaction } from "./reaction";
 import { useAuth } from "./auth";
 import { useContext } from "./context";
+import { pushNotification } from "../components/MessageNotification";
 
 interface MessageState {
   messages: Message[];
@@ -99,6 +100,7 @@ function createMessageStore(): MessageStore {
             } else if (messageType.type === "Direct" && !context.isCurrentContext("dm", senderId)) {
               context.markUnread("dm", senderId);
             }
+            pushNotification(messageId);
           }
         } else if (event.type === "messageUpdated") {
           const { messageId, messageText } = event as any;

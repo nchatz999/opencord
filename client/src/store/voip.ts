@@ -201,6 +201,7 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+      soundActions.play("/sounds/mute.mp3");
       return ok(undefined);
     },
 
@@ -212,6 +213,7 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+      soundActions.play("/sounds/deafen.mp3");
       return ok(undefined);
     },
 

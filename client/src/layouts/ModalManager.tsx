@@ -1,12 +1,13 @@
 import type { Component } from "solid-js";
 import { Switch, Match, Show, createMemo } from "solid-js";
-import { useChannel, useGroup, useModal, useRole } from "../store/index";
+import { useChannel, useGroup, useModal, useRole, useUser } from "../store/index";
 import GroupSettingsModal from "../features/group/GroupSettingsModal";
 import CreateGroupModal from "../features/group/CreateGroupModal";
 import ServerSettingsModal from "../features/server/ServerSettingsModal";
 import CreateChannelModal from "../features/channel/CreateChannelModal";
 import CreateRoleModal from "../features/role/CreateRoleModal";
 import UserSettingsModal from "../features/user/UserSettingsModal";
+import UserInfoModal from "../features/user/UserInfoModal";
 import { RoleSettingsModal } from "../features/role/RoleSettingsModal";
 import ChannelSettingsModal from "../features/channel/ChannelSettingsModal";
 
@@ -15,6 +16,7 @@ const ModalManager: Component = () => {
   const [, channelActions] = useChannel();
   const [, groupActions] = useGroup();
   const [, roleActions] = useRole();
+  const [, userActions] = useUser();
 
   const current = createMemo(() => modalState.modal);
 
@@ -42,6 +44,10 @@ const ModalManager: Component = () => {
 
       <Match when={current()?.type === "userSettings"}>
         <UserSettingsModal />
+      </Match>
+
+      <Match when={current()?.type === "userInfo"}>
+        <UserInfoModal userId={(current() as { type: "userInfo"; userId: number }).userId} />
       </Match>
 
       <Match when={current()?.type === "createRole"}>

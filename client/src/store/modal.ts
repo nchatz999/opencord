@@ -7,6 +7,7 @@ export type ModalType =
   | { type: "channelSettings"; channelId: number }
   | { type: "groupSettings"; groupId: number }
   | { type: "userSettings" }
+  | { type: "userInfo"; userId: number }
   | { type: "roleSettings"; roleId: number }
   | { type: "createRole" }
   | { type: "serverSettings" }
