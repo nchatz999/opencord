@@ -99,10 +99,14 @@ textarea,
   --color-toast-success: #22c55e;
   --color-toast-error: #ef4444;
 
+  --color-syntax-keyword: #c084fc;
   --color-syntax-string: #4ade80;
   --color-syntax-number: #60a5fa;
-  --color-syntax-boolean: #c084fc;
+  --color-syntax-boolean: #f472b6;
   --color-syntax-null: #9ca3af;
+  --color-syntax-comment: #6b7280;
+  --color-syntax-function: #60a5fa;
+  --color-syntax-punctuation: #9ca3af;
   --color-syntax-date: #facc15;
 
   --color-chart-1: #5865f2;

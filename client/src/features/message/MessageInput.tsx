@@ -1,19 +1,13 @@
 import type { Component } from "solid-js";
-import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
+import { createSignal, createMemo, For, Show } from "solid-js";
 import { Send, Paperclip, X, ReplyIcon } from "lucide-solid";
 import FilePreview from "./FilePreview";
-import { ContentEditable } from "@bigmistqke/solid-contenteditable";
+import TextEditor from "../../components/TextEditor";
 import { useToaster } from "../../components/Toaster";
 import { useChannel, useContext, useUser, useMessage } from "../../store/index";
 import Button from "../../components/Button";
 import EmojiPicker from "../../components/EmojiPicker";
 import { formatLinks } from "../../utils/messageFormatting";
-
-
-const formatContent = (text: string) => {
-  if (!text) return <></>;
-  return formatLinks(text, "text-link hover:underline", true);
-};
 
 const MessageInput: Component<{
   context: { type: "channel" | "dm"; id: number };
@@ -31,7 +25,6 @@ const MessageInput: Component<{
 
   const isUploading = () => uploadProgress() !== null;
 
-  let textareaRef: HTMLDivElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
 
   const { addToast } = useToaster();
@@ -68,13 +61,6 @@ const MessageInput: Component<{
     (content().trim().length > 0 || files().length > 0) && uploadProgress() === null
   );
 
-  createEffect(() => {
-    if (textareaRef && content()) {
-      textareaRef.style.height = "auto";
-      textareaRef.style.height = `${Math.min(textareaRef.scrollHeight, 120)}px`;
-    }
-  });
-
   const handleSubmit = async () => {
     if (!canSend()) return;
 
@@ -107,10 +93,6 @@ const MessageInput: Component<{
     setContent("");
     setFiles([]);
     contextActions.setReplyingTo(null);
-    if (textareaRef) {
-      textareaRef.innerText = "";
-      textareaRef.style.height = "";
-    }
   };
 
   const handleCancel = () => {
@@ -229,19 +211,14 @@ const MessageInput: Component<{
             <Paperclip size={20} />
           </Button>
 
-          <div class="flex-1 min-w-0 relative flex items-center">
-            <ContentEditable
-              ref={textareaRef}
-              contentEditable
-              editable
-              textContent={content()}
-              onTextContent={setContent}
-              onKeyDown={handleKeyDown}
-              data-placeholder={placeholder()}
-              class="w-full bg-transparent text-foreground placeholder-muted-foreground-dark resize-none outline-none max-h-[120px] min-h-[24px] empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground-dark overflow-y-auto whitespace-pre-wrap break-words p-2 flex items-center"
-              render={(content) => formatContent(content())}
-            />
-          </div>
+          <TextEditor
+            value={content()}
+            onInput={setContent}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder()}
+            format={(text) => formatLinks(text, "text-link", true)}
+            class="flex-1 min-w-0"
+          />
 
           <EmojiPicker
             onSelect={(emoji) => {

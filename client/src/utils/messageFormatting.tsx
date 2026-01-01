@@ -1,8 +1,118 @@
 import type { JSX } from "solid-js";
+import { For } from "solid-js";
 
-export const URL_REGEX = /(https?:\/\/[^\s]+)/g;
-export const CODE_BLOCK_REGEX = /```([^`]*)```/g;
-export const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+const CODE_BLOCK_REGEX = /```(\w*)\n?([\s\S]*?)```/g;
+const INLINE_CODE_REGEX = /`([^`\n]+)`/g;
+const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
+
+type Segment =
+  | { type: "text"; content: string }
+  | { type: "code"; content: string; language: string };
+
+type Token = { type: string; content: string };
+
+const SYNTAX_RULES: Array<{ pattern: RegExp; type: string }> = [
+  { pattern: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, type: "comment" },
+  { pattern: /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, type: "string" },
+  { pattern: /\b(true|false)\b/g, type: "boolean" },
+  { pattern: /\b(null|undefined|nil|None)\b/g, type: "null" },
+  { pattern: /\b\d+\.?\d*\b/g, type: "number" },
+  { pattern: /\b(const|let|var|function|return|if|else|for|while|class|import|export|from|async|await|try|catch|throw|new|this|super|extends|implements|interface|type|enum|public|private|protected|static|readonly|fn|pub|mod|use|struct|impl|trait|def|self|lambda|yield|match|case|switch|break|continue|do|in|of|as|is|not|and|or|with|finally|raise|except|pass|elif|goto|sizeof|typedef|extern|register|volatile|union)\b/g, type: "keyword" },
+  { pattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\()/g, type: "function" },
+  { pattern: /([{}[\]();,.])/g, type: "punctuation" },
+  { pattern: /[a-zA-Z_][a-zA-Z0-9_]*/g, type: "text" },
+];
+
+function tokenize(code: string): Token[] {
+  const tokens: Token[] = [];
+  let remaining = code;
+
+  while (remaining.length > 0) {
+    let matched = false;
+
+    for (const rule of SYNTAX_RULES) {
+      rule.pattern.lastIndex = 0;
+      const match = rule.pattern.exec(remaining);
+
+      if (match && match.index === 0) {
+        tokens.push({ type: rule.type, content: match[0] });
+        remaining = remaining.slice(match[0].length);
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      if (tokens.length > 0 && tokens[tokens.length - 1].type === "text") {
+        tokens[tokens.length - 1].content += remaining[0];
+      } else {
+        tokens.push({ type: "text", content: remaining[0] });
+      }
+      remaining = remaining.slice(1);
+    }
+  }
+
+  return tokens;
+}
+
+const TOKEN_CLASSES: Record<string, string> = {
+  keyword: "text-syntax-keyword",
+  string: "text-syntax-string",
+  number: "text-syntax-number",
+  boolean: "text-syntax-boolean",
+  null: "text-syntax-null",
+  comment: "text-syntax-comment italic",
+  function: "text-syntax-function",
+  punctuation: "text-syntax-punctuation",
+  text: "text-foreground",
+};
+
+function parseSegments(text: string): Segment[] {
+  const segments: Segment[] = [];
+  let lastIndex = 0;
+  let match;
+
+  CODE_BLOCK_REGEX.lastIndex = 0;
+  while ((match = CODE_BLOCK_REGEX.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", content: text.substring(lastIndex, match.index) });
+    }
+    segments.push({ type: "code", content: match[2].trim(), language: match[1] || "" });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", content: text.substring(lastIndex) });
+  }
+
+  return segments;
+}
+
+function formatInlineCode(text: string, linkClass: string): JSX.Element {
+  const parts: JSX.Element[] = [];
+  let lastIndex = 0;
+  let match;
+
+  INLINE_CODE_REGEX.lastIndex = 0;
+  while ((match = INLINE_CODE_REGEX.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(formatLinks(text.substring(lastIndex, match.index), linkClass));
+    }
+    parts.push(
+      <code class="bg-card px-1.5 py-0.5 rounded text-sm font-mono text-foreground">
+        {match[1]}
+      </code>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(formatLinks(text.substring(lastIndex), linkClass));
+  }
+
+  return <>{parts}</>;
+}
 
 export function formatLinks(text: string | null, linkClass: string, preventClick = false): JSX.Element {
   if (!text) return <></>;
@@ -27,6 +137,47 @@ export function formatLinks(text: string | null, linkClass: string, preventClick
   );
 }
 
+function HighlightedCode(props: { code: string }): JSX.Element {
+  const tokens = () => tokenize(props.code);
+
+  return (
+    <For each={tokens()}>
+      {(token) => (
+        <span class={TOKEN_CLASSES[token.type] || "text-foreground"}>
+          {token.content}
+        </span>
+      )}
+    </For>
+  );
+}
+
+function CodeBlock(props: { content: string; language: string }): JSX.Element {
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(props.content);
+  };
+
+  return (
+    <div class="relative group my-2">
+      <div class="flex items-center justify-between bg-sidebar px-3 py-1.5 rounded-t border-b border-border">
+        <span class="text-xs text-muted-foreground font-mono">
+          {props.language || "code"}
+        </span>
+        <button
+          onClick={handleCopy}
+          class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Copy
+        </button>
+      </div>
+      <pre class="bg-sidebar p-3 rounded-b overflow-x-auto">
+        <code class="text-sm font-mono whitespace-pre">
+          <HighlightedCode code={props.content} />
+        </code>
+      </pre>
+    </div>
+  );
+}
+
 export function formatMessageText(
   text: string | null,
   isOwner: boolean,
@@ -37,31 +188,15 @@ export function formatMessageText(
     ? "text-link hover:text-primary-foreground hover:underline"
     : "text-link hover:text-foreground-bright hover:underline";
 
-  const segments: Array<{ type: "text" | "code"; content: string }> = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = CODE_BLOCK_REGEX.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", content: text.substring(lastIndex, match.index) });
-    }
-    segments.push({ type: "code", content: match[1] });
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ type: "text", content: text.substring(lastIndex) });
-  }
+  const segments = parseSegments(text);
 
   return (
     <>
       {segments.map((segment) =>
         segment.type === "code" ? (
-          <pre class="bg-card p-3 my-2 rounded overflow-auto whitespace-pre-wrap break-words">
-            <code>{segment.content}</code>
-          </pre>
+          <CodeBlock content={segment.content} language={segment.language} />
         ) : (
-          formatLinks(segment.content, linkClass)
+          formatInlineCode(segment.content, linkClass)
         )
       )}
     </>
