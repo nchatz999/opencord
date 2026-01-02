@@ -1,16 +1,10 @@
-import type { JSX } from "solid-js";
+import type { Component, JSX } from "solid-js";
 import { For } from "solid-js";
 
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 const CODE_BLOCK_REGEX = /```(\w*)\n?([\s\S]*?)```/g;
 const INLINE_CODE_REGEX = /`([^`\n]+)`/g;
 const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{11})/g;
-
-type Segment =
-  | { type: "text"; content: string }
-  | { type: "code"; content: string; language: string };
-
-type Token = { type: string; content: string };
 
 const SYNTAX_RULES: Array<{ pattern: RegExp; type: string }> = [
   { pattern: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, type: "comment" },
@@ -24,7 +18,25 @@ const SYNTAX_RULES: Array<{ pattern: RegExp; type: string }> = [
   { pattern: /[a-zA-Z_][a-zA-Z0-9_]*/g, type: "text" },
 ];
 
-function tokenize(code: string): Token[] {
+const TOKEN_CLASSES: Record<string, string> = {
+  keyword: "text-syntax-keyword",
+  string: "text-syntax-string",
+  number: "text-syntax-number",
+  boolean: "text-syntax-boolean",
+  null: "text-syntax-null",
+  comment: "text-syntax-comment italic",
+  function: "text-syntax-function",
+  punctuation: "text-syntax-punctuation",
+  text: "text-foreground",
+};
+
+type Segment =
+  | { type: "text"; content: string }
+  | { type: "code"; content: string; language: string };
+
+type Token = { type: string; content: string };
+
+const tokenize = (code: string): Token[] => {
   const tokens: Token[] = [];
   let remaining = code;
 
@@ -54,21 +66,9 @@ function tokenize(code: string): Token[] {
   }
 
   return tokens;
-}
-
-const TOKEN_CLASSES: Record<string, string> = {
-  keyword: "text-syntax-keyword",
-  string: "text-syntax-string",
-  number: "text-syntax-number",
-  boolean: "text-syntax-boolean",
-  null: "text-syntax-null",
-  comment: "text-syntax-comment italic",
-  function: "text-syntax-function",
-  punctuation: "text-syntax-punctuation",
-  text: "text-foreground",
 };
 
-function parseSegments(text: string): Segment[] {
+const parseSegments = (text: string): Segment[] => {
   const segments: Segment[] = [];
   let lastIndex = 0;
   let match;
@@ -87,9 +87,9 @@ function parseSegments(text: string): Segment[] {
   }
 
   return segments;
-}
+};
 
-function formatInlineCode(text: string, linkClass: string): JSX.Element {
+const formatInlineCode = (text: string, linkClass: string): JSX.Element => {
   const parts: JSX.Element[] = [];
   let lastIndex = 0;
   let match;
@@ -112,32 +112,9 @@ function formatInlineCode(text: string, linkClass: string): JSX.Element {
   }
 
   return <>{parts}</>;
-}
+};
 
-export function formatLinks(text: string | null, linkClass: string, preventClick = false): JSX.Element {
-  if (!text) return <></>;
-  return (
-    <>
-      {text.split(URL_REGEX).map((part, i) =>
-        i % 2 === 1 ? (
-          <a
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            class={linkClass}
-            onClick={preventClick ? (e) => e.preventDefault() : undefined}
-          >
-            {part}
-          </a>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
-}
-
-function HighlightedCode(props: { code: string }): JSX.Element {
+const HighlightedCode: Component<{ code: string }> = (props) => {
   const tokens = () => tokenize(props.code);
 
   return (
@@ -149,9 +126,9 @@ function HighlightedCode(props: { code: string }): JSX.Element {
       )}
     </For>
   );
-}
+};
 
-function CodeBlock(props: { content: string; language: string }): JSX.Element {
+const CodeBlock: Component<{ content: string; language: string }> = (props) => {
   const handleCopy = async () => {
     await navigator.clipboard.writeText(props.content);
   };
@@ -176,13 +153,36 @@ function CodeBlock(props: { content: string; language: string }): JSX.Element {
       </pre>
     </div>
   );
-}
+};
 
-export function formatMessageText(
+export const formatLinks = (text: string | null, linkClass: string, preventClick = false): JSX.Element => {
+  if (!text) return <></>;
+  return (
+    <>
+      {text.split(URL_REGEX).map((part, i) =>
+        i % 2 === 1 ? (
+          <a
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            class={linkClass}
+            onClick={preventClick ? (e) => e.preventDefault() : undefined}
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+};
+
+export const formatMessageText = (
   text: string | null,
   isOwner: boolean,
   type: "direct" | "channel"
-): JSX.Element {
+): JSX.Element => {
   if (!text) return <></>;
   const linkClass = type === "direct" && isOwner
     ? "text-link hover:text-primary-foreground hover:underline"
@@ -201,9 +201,9 @@ export function formatMessageText(
       )}
     </>
   );
-}
+};
 
-export function extractYoutubeIds(text: string | null): string[] {
+export const extractYoutubeIds = (text: string | null): string[] => {
   if (!text) return [];
-  return Array.from(text.matchAll(YOUTUBE_REGEX), match => match[1]);
-}
+  return Array.from(text.matchAll(YOUTUBE_REGEX), (match) => match[1]);
+};

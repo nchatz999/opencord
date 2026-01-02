@@ -11,7 +11,7 @@ import {
 } from "solid-js";
 import { useChannel, useMessage, useUser, useContext, useReaction } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
-import MessageComponent from "./MessageBubble";
+import MessageComponent from "./Message";
 
 const MESSAGES_LIMIT = 50;
 const SCROLL_THRESHOLD = 5;
