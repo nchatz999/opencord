@@ -48,7 +48,7 @@ export const Tabs: Component<TabsProps> = (props) => {
               class={cn(
                 "py-2 px-4 font-semibold",
                 activeTab() === item.id
-                  ? "text-primary-foreground border-b-2 border-primary"
+                  ? "text-primary border-b-2 border-primary"
                   : "text-tab-inactive"
               )}
               style={{ width: tabWidth() ? `${tabWidth()}px` : undefined }}

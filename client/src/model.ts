@@ -64,12 +64,12 @@ export interface ReactionSummary {
 export interface Message {
   id: number;
   senderId: number;
-  channelId: number | null;
-  recipientId: number | null;
-  messageText: string | null;
+  channelId: number | undefined;
+  recipientId: number | undefined;
+  messageText: string | undefined;
   createdAt: string;
-  modifiedAt: string | null;
-  replyToMessageId: number | null;
+  modifiedAt: string | undefined;
+  replyToMessageId: number | undefined;
 }
 
 export interface MessagesResponse {
@@ -89,7 +89,7 @@ export interface User {
   userId: number;
   username: string;
   createdAt: string;
-  avatarFileId: number | null;
+  avatarFileId: number | undefined;
   roleId: number;
   status: UserStatusType,
 }
@@ -116,8 +116,8 @@ export interface UserStatus {
 
 export interface VoipParticipant {
   userId: number;
-  channelId: number | null;
-  recipientId: number | null;
+  channelId: number | undefined;
+  recipientId: number | undefined;
   localDeafen: boolean;
   localMute: boolean;
   publishScreen: boolean;
@@ -178,7 +178,7 @@ export interface RegisterResponse {
 export interface ServerConfig {
   id: number;
   serverName: string;
-  avatarFileId: number | null;
+  avatarFileId: number | undefined;
 }
 
 export type QualityPreset = "720p" | "1080p" | "1440p" | "4k";

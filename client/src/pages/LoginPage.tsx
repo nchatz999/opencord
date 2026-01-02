@@ -37,7 +37,7 @@ const LoginPage: Component = () => {
       return;
     }
 
-    appActions.setView("loading");
+    appActions.setView({ type: "loading" });
   };
 
   const handleRegister = async (e: Event) => {
@@ -160,7 +160,7 @@ const LoginPage: Component = () => {
   return (
     <div class="min-h-screen bg-popover flex items-center justify-center p-4">
       <div class="w-full max-w-md bg-card p-8 rounded-lg shadow-lg">
-        <h1 class="text-3xl font-bold text-primary-foreground mb-6 text-center">
+        <h1 class="text-3xl font-bold text-foreground-bright mb-6 text-center">
           <Switch>
             <Match when={activeForm() === "login"}>Welcome Back!</Match>
             <Match when={activeForm() === "register"}>Create an Account</Match>

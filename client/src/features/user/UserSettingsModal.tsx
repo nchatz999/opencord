@@ -20,8 +20,9 @@ import {
   Trash2,
   Calendar,
   Settings,
+  Palette,
 } from "lucide-solid";
-import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, useSound, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
+import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, useSound, useTheme, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
 import { getPresetOptions, type QualityPreset } from "../../model";
 import { useApp } from "../../store/app";
 import { Input } from "../../components/Input";
@@ -47,6 +48,7 @@ const UserSettingsModal: Component = () => {
   const [screenShareState, screenShareActions] = useScreenShare();
   const [, outputActions] = useOutput();
   const [, soundActions] = useSound();
+  const [themeState, themeActions] = useTheme();
   const user = () => authActions.getUser();
 
 
@@ -418,6 +420,27 @@ const UserSettingsModal: Component = () => {
       ),
     },
     {
+      id: "appearance",
+      label: "Appearance",
+      icon: <Palette class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Theme" icon={<Palette class="w-4 h-4" />}>
+            <Select
+              label="Color Theme"
+              options={themeActions.getThemes().map((theme) => ({
+                value: theme.name,
+                label: theme.label,
+              }))}
+              value={themeState.current}
+              onChange={(value) => themeActions.setTheme(value as string)}
+              class="w-full"
+            />
+          </Card>
+        </div>
+      ),
+    },
+    {
       id: "sessions",
       label: "Sessions",
       icon: <Monitor class="w-4 h-4" />,
@@ -532,7 +555,7 @@ const UserSettingsModal: Component = () => {
             await authActions.logout();
             await connection.disconnect();
             modalActions.close();
-            appActions.setView("unauthenticated");
+            appActions.setView({ type: "unauthenticated" });
           }}
             variant="destructive">Logout</Button>
           <Button onClick={() => modalActions.close()} variant="secondary">

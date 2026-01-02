@@ -35,7 +35,7 @@ const Button: Component<ButtonProps> = (props) => {
   const variantStyles = {
     primary: "bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring",
     secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover focus:ring-secondary",
-    ghost: "bg-transparent text-foreground hover:bg-secondary hover:text-primary-foreground focus:ring-secondary",
+    ghost: "bg-transparent text-foreground hover:bg-secondary hover:text-foreground-bright focus:ring-secondary",
     destructive: "bg-destructive text-destructive-foreground hover:bg-destructive-hover focus:ring-destructive",
     success: "bg-action-positive text-primary-foreground hover:bg-action-positive-hover focus:ring-action-positive",
   };

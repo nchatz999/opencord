@@ -1,11 +1,11 @@
 import { timerManager } from 'opencord-utils';
 import type { LossEstimator } from '../fec';
 
-const PACING_INTERVAL_MS = 5;
+const PACING_INTERVAL_MS = 10;
 const LOSS_THRESHOLD = 0.10;
 const MIN_INTERVALS = 3;
 const MAX_INTERVALS = 6;
-const MIN_BUDGET_BYTES = 10000;
+const MIN_BUDGET_BYTES = 20000;
 
 export class PacketPacer {
   private queue: Uint8Array[] = [];

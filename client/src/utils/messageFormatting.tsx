@@ -184,9 +184,7 @@ export const formatMessageText = (
   type: "direct" | "channel"
 ): JSX.Element => {
   if (!text) return <></>;
-  const linkClass = type === "direct" && isOwner
-    ? "text-link hover:text-primary-foreground hover:underline"
-    : "text-link hover:text-foreground-bright hover:underline";
+  const linkClass = "text-link hover:text-foreground-bright hover:underline";
 
   const segments = parseSegments(text);
 

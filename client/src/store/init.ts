@@ -187,13 +187,18 @@ connection.onVoipData((frame: VoipPayload) => {
   }
 });
 
-connection.onConnectionError((reason) => {
-  appActions.setView("error", reason);
+connection.onServerError((reason) => {
+  appActions.setView({ type: "error", error: reason });
+});
+
+connection.onConnectionLost(() => {
+  const voipSession = voipActions.findById(authActions.getUser().userId);
+  appActions.setView({ type: "loading", channelId: voipSession?.channelId });
 });
 
 connection.onConnectionClosed(async () => {
   await authActions.logout()
-  appActions.setView("unauthenticated");
+  appActions.setView({ type: "unauthenticated" });
 });
 
 export { connection };

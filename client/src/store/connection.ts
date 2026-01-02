@@ -120,7 +120,8 @@ export interface ConnectionActions {
   onVoipData: (callback: (data: VoipPayload) => void) => () => void;
   onServerEvent: (callback: (event: EventPayload) => void) => () => void;
   onConnectionClosed: (callback: () => void) => () => void;
-  onConnectionError: (callback: (reason: string) => void) => () => void;
+  onServerError: (callback: (reason: string) => void) => () => void;
+  onConnectionLost: (callback: () => void) => () => void;
 }
 
 interface TransportConfig {
@@ -131,7 +132,8 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
   const voipDataCallbacks = new Set<(data: VoipPayload) => void>();
   const serverEventCallbacks = new Set<(event: EventPayload) => void>();
   const closedCallbacks = new Set<() => void>();
-  const errorCallbacks = new Set<(reason: string) => void>();
+  const serverErrorCallbacks = new Set<(reason: string) => void>();
+  const connectionLostCallbacks = new Set<() => void>();
 
   let pendingConnection: {
     resolve: (success: boolean) => void;
@@ -147,9 +149,9 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
       const message = decode(data) as ConnectionMessage;
       handleConnectionMessage(message);
     },
-    async (error: string) => {
+    async () => {
       await actions.disconnect();
-      notifyError(error);
+      notifyConnectionLost();
     }
   );
 
@@ -184,7 +186,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
 
       case "error":
         await actions.disconnect();
-        notifyError(payload.reason);
+        notifyServerError(payload.reason);
         break;
 
       case "connect":
@@ -205,8 +207,12 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     closedCallbacks.forEach((cb) => cb());
   }
 
-  function notifyError(reason: string): void {
-    errorCallbacks.forEach((cb) => cb(reason));
+  function notifyServerError(reason: string): void {
+    serverErrorCallbacks.forEach((cb) => cb(reason));
+  }
+
+  function notifyConnectionLost(): void {
+    connectionLostCallbacks.forEach((cb) => cb());
   }
 
   const actions: ConnectionActions = {
@@ -248,7 +254,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
           token,
         };
 
-        protocol.sendSafe(encode(connectMessage));
+        protocol.sendOrdered(encode(connectMessage));
 
         setTimeout(() => {
           if (pendingConnection) {
@@ -269,7 +275,7 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     },
 
     sendControl(payload: ControlPayload): void {
-      protocol.sendSafe(encode(payload));
+      protocol.sendOrdered(encode(payload));
     },
 
     onVoipData(callback: (data: VoipPayload) => void): () => void {
@@ -287,9 +293,14 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
       return () => closedCallbacks.delete(callback);
     },
 
-    onConnectionError(callback: (reason: string) => void): () => void {
-      errorCallbacks.add(callback);
-      return () => errorCallbacks.delete(callback);
+    onServerError(callback: (reason: string) => void): () => void {
+      serverErrorCallbacks.add(callback);
+      return () => serverErrorCallbacks.delete(callback);
+    },
+
+    onConnectionLost(callback: () => void): () => void {
+      connectionLostCallbacks.add(callback);
+      return () => connectionLostCallbacks.delete(callback);
     },
   };
 

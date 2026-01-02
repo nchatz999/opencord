@@ -1,5 +1,5 @@
 import { type Component, onMount } from "solid-js";
-import { useAuth, useConnection, initializeStores, getWebTransportUrl } from "../store/index";
+import { useAuth, useConnection, initializeStores, getWebTransportUrl, useVoip, useMicrophone, useOutput } from "../store/index";
 import { useApp } from "../store/app";
 import { useToaster } from "../components/Toaster";
 import logo from "../assets/opencord.webp";
@@ -11,9 +11,16 @@ const isChromiumBased = (): boolean => {
   return /Chrome|Chromium/.test(navigator.userAgent);
 };
 
-const LoadingPage: Component = () => {
+interface LoadingPageProps {
+  channelId?: number;
+}
+
+const LoadingPage: Component<LoadingPageProps> = (props) => {
   const [auth, authActions] = useAuth();
   const [, appActions] = useApp();
+  const [, voipActions] = useVoip();
+  const [micState] = useMicrophone();
+  const [, outputActions] = useOutput();
   const connectionActions = useConnection();
   const { addToast } = useToaster();
 
@@ -23,12 +30,12 @@ const LoadingPage: Component = () => {
 
   const connectWithRetry = async () => {
     if (!isChromiumBased()) {
-      appActions.setView("unsupported");
+      appActions.setView({ type: "unsupported" });
       return;
     }
 
     if (!auth.session) {
-      appActions.setView("unauthenticated");
+      appActions.setView({ type: "unauthenticated" });
       return;
     }
 
@@ -41,7 +48,7 @@ const LoadingPage: Component = () => {
       if (connectResult.isErr()) {
         if (connectResult.error === "Connection rejected by server") {
           authActions.logout();
-          appActions.setView("unauthenticated");
+          appActions.setView({ type: "unauthenticated" });
           return;
         }
 
@@ -53,13 +60,16 @@ const LoadingPage: Component = () => {
           continue;
         }
 
-        appActions.setView("error", "Max retries exceeded");
+        appActions.setView({ type: "error", error: "Max retries exceeded" });
         return;
       }
 
       await sleep(100);
       await initializeStores();
-      appActions.setView("app");
+      if (props.channelId) {
+        await voipActions.joinChannel(props.channelId, micState.muted, outputActions.getDeafened());
+      }
+      appActions.setView({ type: "app" });
       return;
     }
   };

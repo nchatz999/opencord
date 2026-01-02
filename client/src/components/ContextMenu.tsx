@@ -170,7 +170,7 @@ export default function ContextMenu(props: ContextMenuProps) {
                           "hover:bg-muted focus:bg-muted focus:outline-none",
                           item.danger
                             ? "text-destructive hover:text-destructive"
-                            : "text-foreground hover:text-primary-foreground",
+                            : "text-foreground hover:text-foreground-bright",
                           item.disabled &&
                           "opacity-50 cursor-not-allowed hover:bg-transparent"
                         )}

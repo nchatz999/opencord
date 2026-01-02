@@ -624,7 +624,7 @@ const ServerSettingsModal: Component = () => {
 
   return (
     <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-popover text-primary-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div class="bg-popover text-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-2xl font-bold">Server Settings</h2>
           <Button onClick={() => modalActions.close()} variant="ghost" size="sm">

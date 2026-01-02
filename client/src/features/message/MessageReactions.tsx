@@ -6,7 +6,7 @@ import { cn } from "../../utils";
 
 interface MessageReactionsProps {
   messageId: number;
-  isOwner: boolean;
+  isAuthor: boolean;
 }
 
 const MessageReactions: Component<MessageReactionsProps> = (props) => {
@@ -46,7 +46,7 @@ const MessageReactions: Component<MessageReactionsProps> = (props) => {
     <Show when={reactionSummaries().length > 0}>
       <div class={cn(
         "flex flex-wrap items-center gap-1 mt-1",
-        props.isOwner ? "justify-end" : "justify-start"
+        props.isAuthor ? "justify-end" : "justify-start"
       )}>
         <For each={reactionSummaries()}>
           {(summary) => (

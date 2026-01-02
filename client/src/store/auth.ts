@@ -189,7 +189,7 @@ function createAuthStore(): AuthStore {
     clearSession();
     clearImageCache();
     setState("session", null);
-    appActions.setView("unauthenticated");
+    appActions.setView({ type: "unauthenticated" });
   });
 
   return [state, actions];

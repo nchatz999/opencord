@@ -15,36 +15,38 @@ import UnsupportedBrowserPage from "./pages/UnsupportedBrowserPage";
 import App from "./App";
 import { useApp } from "./store/app";
 import { useAuth } from "./store/auth";
+import { useTheme } from "./store/theme";
 
 const Root = () => {
   const [app] = useApp();
   const [auth] = useAuth();
+  useTheme();
 
   return (
     <ToasterProvider>
       <ConfirmProvider>
         <DevicePickerProvider>
           <ContextMenuProvider>
-          <Switch>
-            <Match when={app.view === "loading"}>
-              <LoadingPage />
-            </Match>
-            <Match when={app.view === "unauthenticated"}>
-              <LoginPage />
-            </Match>
-            <Match when={app.view === "error"}>
-              <ErrorPage />
-            </Match>
-            <Match when={app.view === "unsupported"}>
-              <UnsupportedBrowserPage />
-            </Match>
-            <Match when={app.view === "app"}>
-              <Show when={auth.session}>
-                <App />
-              </Show>
-            </Match>
-          </Switch>
-        </ContextMenuProvider>
+            <Switch>
+              <Match when={app.view.type === "loading" ? app.view : false}>
+                {(view) => <LoadingPage channelId={view().channelId} />}
+              </Match>
+              <Match when={app.view.type === "unauthenticated"}>
+                <LoginPage />
+              </Match>
+              <Match when={app.view.type === "error" ? app.view : false}>
+                {(view) => <ErrorPage error={view().error} />}
+              </Match>
+              <Match when={app.view.type === "unsupported"}>
+                <UnsupportedBrowserPage />
+              </Match>
+              <Match when={app.view.type === "app"}>
+                <Show when={auth.session}>
+                  <App />
+                </Show>
+              </Match>
+            </Switch>
+          </ContextMenuProvider>
         </DevicePickerProvider>
       </ConfirmProvider>
     </ToasterProvider>

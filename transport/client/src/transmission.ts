@@ -244,10 +244,10 @@ export class MediaTransport {
 
   private writeDatagram(data: Uint8Array): void {
     if (this.closed || !this.outWriter) return;
-    this.outWriter.write(data).catch(() => {});
+    this.outWriter.write(data).catch(() => { });
   }
 
-  public async sendSafe(data: Uint8Array) {
+  public async sendOrdered(data: Uint8Array) {
     if (this.closed || !this.transport) return;
 
     try {
@@ -289,14 +289,6 @@ export class MediaTransport {
         this.buffers.delete(frame.frameId);
       }
     }
-  }
-
-  public cancelRetransmission(sequence: bigint) {
-    NackController.onRtpReceived(this, sequence);
-  }
-
-  private handleGapDetected(start: bigint, end: bigint): void {
-    NackController.onGapDetected(this, start, end);
   }
 
   private runNackCheckInterval() {
@@ -343,7 +335,7 @@ export class MediaTransport {
       }
       frame.addPacket(recoveredPacket);
       this.deliverFrame(frame);
-      this.cancelRetransmission(recoveredPacket.sequenceNumber);
+      NackController.onRtpReceived(this, recoveredPacket.sequenceNumber);
       this.receivedPackets.set(recoveredPacket.sequenceNumber, recoveredPacket);
     }
   }
@@ -367,12 +359,12 @@ export class MediaTransport {
     }
     frame.addPacket(packet);
     if (this.receivedPackets.has(packet.sequenceNumber)) this.duplicatePackets++;
-    this.cancelRetransmission(packet.sequenceNumber);
+    NackController.onRtpReceived(this, packet.sequenceNumber);
     this.receivedPackets.set(packet.sequenceNumber, packet);
     this.deliverFrame(frame)
 
     if (packet.sequenceNumber > this.inSeq) {
-      this.handleGapDetected(this.inSeq, packet.sequenceNumber);
+      NackController.onGapDetected(this, this.inSeq, packet.sequenceNumber);
       this.inSeq = packet.sequenceNumber + 1n;
     }
     else if (packet.sequenceNumber == this.inSeq) this.inSeq += 1n;
@@ -402,7 +394,7 @@ export class MediaTransport {
 
   public runPingInterval(interval: number) {
     this.pingIntervalId = timerManager.setInterval(async () => {
-      if (this.missedPongs >= 5) {
+      if (this.missedPongs >= 15) {
         this.onDisconnect("Connection timed out");
         await this.disconnect()
         return;

@@ -64,4 +64,7 @@ export type { PreferenceStore } from "./preference";
 export { useSound } from "./sound";
 export type { SoundStore } from "./sound";
 
+export { useTheme } from "./theme";
+export type { ThemeStore, Theme } from "./theme";
+
 export { initializeStores, getWebTransportUrl, connection, resetStore } from "./init";
