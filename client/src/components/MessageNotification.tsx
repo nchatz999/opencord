@@ -53,21 +53,28 @@ const MessageNotification: Component = () => {
     prefActions.set("notification:sound", newVal);
   };
 
-  const dismiss = (id: number) => {
-    setMessageIds((prev) => prev.filter((mid) => mid !== id));
-  };
 
   const dismissAll = () => {
     setMessageIds([]);
   };
 
-  const handleClick = (msg: { id: number; channelId: number | null; senderId: number }) => {
+  const dismiss = (channelId?: number, senderId?: number) => {
+    setMessageIds((prev) =>
+      prev.filter((id) => {
+        const m = messageActions.findById(id);
+        if (channelId) return m?.channelId !== channelId;
+        return m?.senderId !== senderId;
+      })
+    );
+  };
+
+  const handleClick = (msg: { channelId?: number; senderId: number }) => {
     if (msg.channelId) {
       contextActions.set({ type: "channel", id: msg.channelId });
     } else {
       contextActions.set({ type: "dm", id: msg.senderId });
     }
-    dismiss(msg.id);
+    dismiss(msg.channelId, msg.senderId);
   };
 
   const getSenderName = (senderId: number) => {
