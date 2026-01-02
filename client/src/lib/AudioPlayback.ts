@@ -142,12 +142,8 @@ export class AudioPlayback {
   ) {
     this.delay = delay;
     this.context = context;
-
     this.gainNode = this.context.createGain();
-
-
     this.gainNode.connect(this.context.destination);
-
     this.workletNode = null;
     this.bufferInterval = null;
 
@@ -176,7 +172,6 @@ export class AudioPlayback {
       error: () => { },
     });
     this.decoder.configure(decoderConfig);
-
     this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
 
@@ -214,7 +209,6 @@ export class AudioPlayback {
       audioData.close();
       return;
     }
-
 
     const audioSamples = new Float32Array(audioData.numberOfFrames);
     audioData.copyTo(audioSamples, { planeIndex: 0 });
@@ -317,6 +311,6 @@ export class AudioPlayback {
 export function createSharedAudioContext(): AudioContext {
   return new AudioContext({
     sampleRate: 48000,
-    latencyHint: "playback",
+    latencyHint: "interactive",
   });
 }

@@ -19,14 +19,14 @@ const UserSection: Component = () => {
     const newMuted = !microphoneState.muted
     microphoneActions.setMuted(newMuted)
     await voipActions.setMuted(newMuted)
-    soundActions.play("/sounds/mute.mp3");
+    soundActions.play(newMuted ? "/sounds/mute.ogg" : "/sounds/unmute.ogg");
   }
 
   const handleDeafenToggle = async () => {
     const newDeafened = !outputActions.getDeafened()
     outputActions.setDeafened(newDeafened)
     await voipActions.setDeafened(newDeafened)
-    soundActions.play("/sounds/deafen.mp3");
+    soundActions.play(newDeafened ? "/sounds/mute.ogg" : "/sounds/unmute.ogg");
   }
 
   const handleUserSettings = async () => {

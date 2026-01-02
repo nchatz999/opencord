@@ -31,7 +31,7 @@ function createSoundStore(): SoundStore {
 
       const audio = new Audio(file);
       audio.volume = state.volume / 100;
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
     },
 
     setVolume(volume: number) {

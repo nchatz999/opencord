@@ -34,6 +34,7 @@ const FileItem: Component<FileProps> = (props) => {
           class="rounded-lg max-w-sm max-h-96 object-contain"
           src={`/message/files/${props.file.fileId}`}
           alt="File preview"
+          expandable
         />
       ) : (
         <div class="bg-sidebar p-4 mt-2 rounded-xl">

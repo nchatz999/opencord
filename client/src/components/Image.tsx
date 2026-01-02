@@ -1,16 +1,19 @@
-import { createSignal, createEffect, splitProps, type Component, type JSX } from 'solid-js';
+import { createSignal, createEffect, splitProps, Show, type Component, type JSX } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { getServerUrlOrDefault } from '../lib/ServerConfig';
-import { getSessionToken } from '../utils';
+import { getSessionToken, cn } from '../utils';
 
 const cache = new Map<string, string>();
 
 interface ImageProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement>, 'onLoad'> {
   onLoad?: () => void;
+  expandable?: boolean;
 }
 
 const Image: Component<ImageProps> = (props) => {
-  const [local, rest] = splitProps(props, ['src', 'onLoad']);
+  const [local, rest] = splitProps(props, ['src', 'onLoad', 'expandable', 'class']);
   const [url, setUrl] = createSignal<string | undefined>(undefined);
+  const [expanded, setExpanded] = createSignal(false);
 
   createEffect(async () => {
     const path = local.src;
@@ -42,7 +45,26 @@ const Image: Component<ImageProps> = (props) => {
     } catch {}
   });
 
-  return <img src={url()} {...rest} />;
+  return (
+    <>
+      <img
+        src={url()}
+        onClick={local.expandable ? () => setExpanded(true) : undefined}
+        class={cn(local.expandable && "cursor-pointer", local.class)}
+        {...rest}
+      />
+      <Show when={expanded()}>
+        <Portal>
+          <div
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-pointer"
+            onClick={() => setExpanded(false)}
+          >
+            <img src={url()} class="max-w-[90vw] max-h-[90vh] object-contain" />
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
 };
 
 export function clearImageCache(): void {

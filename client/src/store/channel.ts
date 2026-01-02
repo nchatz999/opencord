@@ -7,6 +7,7 @@ import { request } from "../utils";
 import { useConnection } from "./connection";
 import { useVoip } from "./voip";
 import { useMessage } from "./message";
+import { useContext } from "./context";
 
 interface ChannelState {
   channels: Channel[];
@@ -42,6 +43,7 @@ function createChannelStore(): ChannelStore {
   const connection = useConnection();
   const [, voipActions] = useVoip();
   const [, messageActions] = useMessage();
+  const [, contextActions] = useContext();
   let cleanupFn: (() => void) | null = null;
 
   const actions: ChannelActions = {
@@ -105,6 +107,7 @@ function createChannelStore(): ChannelStore {
       messageActions.removeByChannel(id);
       voipActions.removeByChannel(id);
       setState("channels", (channels) => channels.filter((c) => c.channelId !== id));
+      contextActions.deleteVisited({ type: "channel", id })
     },
 
     removeByGroup(groupId) {
@@ -112,6 +115,7 @@ function createChannelStore(): ChannelStore {
       for (const id of channelIds) {
         messageActions.removeByChannel(id);
         voipActions.removeByChannel(id);
+        contextActions.deleteVisited({ type: "channel", id })
       }
       setState("channels", (channels) => channels.filter((c) => c.groupId !== groupId));
     },

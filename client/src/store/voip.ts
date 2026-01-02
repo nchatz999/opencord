@@ -72,7 +72,7 @@ function createVoipStore(): VoipStore {
         if (event.type === "voipParticipantCreated") {
           const participant = event.user as VoipParticipant;
           if (myChannelId && participant.channelId === myChannelId) {
-            soundActions.play("/sounds/join.mp3");
+            soundActions.play("/sounds/enter_call.ogg");
           }
           actions.add(participant);
         } else if (event.type === "voipParticipantUpdated") {
@@ -80,7 +80,7 @@ function createVoipStore(): VoipStore {
         } else if (event.type === "voipParticipantDeleted") {
           const participant = actions.findById(event.userId as number);
           if (myChannelId && participant?.channelId === myChannelId) {
-            soundActions.play("/sounds/leave.mp3");
+            soundActions.play("/sounds/leave_call.ogg");
           }
           if (event.userId == authActions.getUser().userId) {
             await microphoneActions.stop()

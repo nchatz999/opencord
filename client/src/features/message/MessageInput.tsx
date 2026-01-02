@@ -106,12 +106,15 @@ const MessageInput: Component<{
     }
   };
 
+  const addFiles = (newFiles: File[]) => {
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles]);
+    }
+  };
+
   const handleFileSelect = (e: Event) => {
     const target = e.target as HTMLInputElement;
-    const selectedFiles = Array.from(target.files || []);
-    if (selectedFiles.length === 0) return;
-
-    setFiles((prev) => [...prev, ...selectedFiles]);
+    addFiles(Array.from(target.files || []));
     if (fileInputRef) fileInputRef.value = "";
   };
 
@@ -134,11 +137,21 @@ const MessageInput: Component<{
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    addFiles(Array.from(e.dataTransfer?.files || []));
+  };
 
-    const droppedFiles = Array.from(e.dataTransfer?.files || []);
-    if (droppedFiles.length > 0) {
-      setFiles((prev) => [...prev, ...droppedFiles]);
+  const handlePaste = (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const pastedFiles: File[] = [];
+    for (const item of items) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) pastedFiles.push(file);
+      }
     }
+    addFiles(pastedFiles);
   };
 
   return (
@@ -215,6 +228,7 @@ const MessageInput: Component<{
             value={content()}
             onInput={setContent}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={placeholder()}
             format={(text) => formatLinks(text, "text-link", true)}
             class="flex-1 min-w-0"

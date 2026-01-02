@@ -19,7 +19,7 @@ export function pushNotification(messageId: number) {
 
   if (soundEnabled()) {
     const [, soundActions] = useSound();
-    soundActions.play("/sounds/notification.mp3");
+    soundActions.play("/sounds/message.ogg");
   }
 }
 

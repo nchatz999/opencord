@@ -6,6 +6,7 @@ interface TextEditorProps {
   value: string;
   onInput: (value: string) => void;
   onKeyDown?: (e: KeyboardEvent) => void;
+  onPaste?: (e: ClipboardEvent) => void;
   placeholder?: string;
   format?: (text: string) => JSX.Element;
   class?: string;
@@ -14,7 +15,7 @@ interface TextEditorProps {
 
 const TextEditor: Component<TextEditorProps> = (props) => {
   const [local, rest] = splitProps(props, [
-    "ref", "value", "onInput", "onKeyDown", "placeholder", "format", "class", "maxHeight",
+    "ref", "value", "onInput", "onKeyDown", "onPaste", "placeholder", "format", "class", "maxHeight",
   ]);
 
   let textareaRef: HTMLTextAreaElement | undefined;
@@ -54,6 +55,7 @@ const TextEditor: Component<TextEditorProps> = (props) => {
         value={local.value}
         onInput={handleInput}
         onKeyDown={local.onKeyDown}
+        onPaste={local.onPaste}
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
         placeholder={local.placeholder}
         rows={1}

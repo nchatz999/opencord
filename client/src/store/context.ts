@@ -17,7 +17,7 @@ interface ContextState {
 
 interface ContextActions {
   get: () => MessageContext | null;
-  set: (ctx: MessageContext) => void;
+  set: (ctx: MessageContext | null) => void;
   clear: () => void;
   isCurrentContext: (type: ContextType, id: number) => boolean;
 
@@ -32,6 +32,7 @@ interface ContextActions {
 
   hasVisited: (ctx: MessageContext) => boolean;
   markVisited: (ctx: MessageContext) => void;
+  deleteVisited: (ctx: MessageContext) => void;
 
   setReplyingTo: (messageId: number | null) => void;
   getReplyingTo: () => number | null;
@@ -62,7 +63,8 @@ function createContextStore(): ContextStore {
 
     set(ctx) {
       setState("context", ctx);
-      this.markRead(ctx.type, ctx.id);
+      if (ctx)
+        this.markRead(ctx.type, ctx.id);
     },
 
     clear() {
@@ -111,6 +113,13 @@ function createContextStore(): ContextStore {
 
     markVisited(ctx) {
       visitedContexts.add(toKey(ctx.type, ctx.id));
+    },
+
+    deleteVisited(ctx) {
+      visitedContexts.delete(toKey(ctx.type, ctx.id));
+      if (this.isCurrentContext(ctx.type, ctx.id)) {
+        setState("context", null);
+      }
     },
 
     setReplyingTo(messageId) {
