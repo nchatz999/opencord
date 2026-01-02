@@ -2,7 +2,6 @@ import {
   createSignal,
   For,
   Show,
-  createMemo,
   onMount,
   type JSX,
   type Component,
@@ -28,10 +27,6 @@ export const Tabs: Component<TabsProps> = (props) => {
   );
   const [tabWidth, setTabWidth] = createSignal<number>();
   const tabRefs: HTMLButtonElement[] = [];
-
-  const activeContent = createMemo(() =>
-    props.items.find((item) => item.id === activeTab())?.content
-  );
 
   onMount(() => {
     const maxWidth = Math.max(...tabRefs.map((ref) => ref?.offsetWidth || 0));
@@ -62,7 +57,16 @@ export const Tabs: Component<TabsProps> = (props) => {
           )}
         </For>
       </div>
-      <div class="flex-grow">{activeContent()}</div>
+      <For each={props.items}>
+        {(item) => (
+          <div
+            class="flex-grow"
+            classList={{ hidden: activeTab() !== item.id }}
+          >
+            {item.content}
+          </div>
+        )}
+      </For>
     </div>
   );
 };
