@@ -16,6 +16,8 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use uuid::Uuid;
 
+const MAX_INVALID_VOIP_PACKETS: u32 = 1000;
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum DomainError {
     #[error("Internal error: {0}")]
@@ -23,11 +25,13 @@ pub enum DomainError {
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
-pub enum SessionError {
-    #[error("Bad Request: {0}")]
-    BadRequest(String),
-    #[error("Internal error")]
-    InternalError(#[from] DomainError),
+#[error("{0}")]
+pub struct SessionError(String);
+
+impl From<DomainError> for SessionError {
+    fn from(err: DomainError) -> Self {
+        SessionError(err.to_string())
+    }
 }
 
 pub struct ServerError;
@@ -456,6 +460,7 @@ pub struct SubscriberHandler {
     sender: mpsc::Sender<SubscriberMessage>,
     session_token: String,
     identifier: String,
+    invalid_voip_count: u32,
 }
 
 impl SubscriberHandler {
@@ -533,7 +538,7 @@ impl<L: LogManager> SubscriberSession<L> {
                 self.connection.send_unordered(bytes.into()).await;
             }
             SubscriberMessage::Error(reason) => {
-                self.send_error(reason).await;
+                return Err(SessionError(reason));
             }
             SubscriberMessage::Close => {
                 let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
@@ -541,7 +546,7 @@ impl<L: LogManager> SubscriberSession<L> {
                 })
                 .expect("serialization");
                 self.connection.send_ordered(bytes.into()).await;
-                return Err(SessionError::BadRequest("Close".to_string()));
+                return Err(SessionError("Close".to_string()));
             }
         }
         Ok(())
@@ -553,7 +558,7 @@ impl<L: LogManager> SubscriberSession<L> {
                 if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                     return self.handle_voip_message(voip_msg).await;
                 }
-                Err(SessionError::BadRequest(
+                Err(SessionError(
                     "Invalid VoIP message format".to_string(),
                 ))
             }
@@ -561,7 +566,7 @@ impl<L: LogManager> SubscriberSession<L> {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
                     return self.handle_control_message(ctr_msg).await;
                 }
-                Err(SessionError::BadRequest(
+                Err(SessionError(
                     "Invalid control message format".to_string(),
                 ))
             }
@@ -572,7 +577,7 @@ impl<L: LogManager> SubscriberSession<L> {
         let user_session = self
             .may_session
             .clone()
-            .ok_or_else(|| SessionError::BadRequest("No user authenticated".to_string()))?;
+            .ok_or_else(|| SessionError("No user authenticated".to_string()))?;
 
         let now = std::time::Instant::now();
         if now.duration_since(self.window_start).as_millis() > RATE_LIMIT_WINDOW_MS {
@@ -587,7 +592,7 @@ impl<L: LogManager> SubscriberSession<L> {
 
         self.bytes_this_window += payload_size;
         if self.bytes_this_window > MAX_BYTES_PER_SECOND {
-            return Err(SessionError::BadRequest("VoIP abuse detected".to_string()));
+            return Err(SessionError("VoIP abuse detected".to_string()));
         }
 
         self.send_to_server(ServerMessage::Voip(payload, user_session.user_id))
@@ -640,14 +645,14 @@ impl<L: LogManager> SubscriberSession<L> {
                     }
                 }
             }
-            ControlPayload::Answer { .. } => Err(SessionError::BadRequest(
+            ControlPayload::Answer { .. } => Err(SessionError(
                 "Unexpected answer payload".to_string(),
             )),
             ControlPayload::Close => {
-                return Err(SessionError::BadRequest("Session End".to_string()));
+                return Err(SessionError("Session End".to_string()));
             }
             ControlPayload::Error { .. } => {
-                return Err(SessionError::BadRequest(
+                return Err(SessionError(
                     "Received error from client".to_string(),
                 ));
             }
@@ -813,6 +818,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             sender,
             identifier,
             session_token,
+            invalid_voip_count: 0,
         };
         self.observers.push(subscriber);
         let _ = self
@@ -859,7 +865,25 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         }
     }
 
-    async fn handle_voip(&self, payload: VoipPayload, sender_id: i64) -> Result<(), ServerError> {
+    fn increment_invalid_voip(&mut self, user_id: i64) -> bool {
+        if let Some(subscriber) = self.observers.iter_mut().find(|o| o.user_id() == user_id) {
+            subscriber.invalid_voip_count += 1;
+            return subscriber.invalid_voip_count > MAX_INVALID_VOIP_PACKETS;
+        }
+        false
+    }
+
+    fn reset_invalid_voip(&mut self, user_id: i64) {
+        if let Some(subscriber) = self.observers.iter_mut().find(|o| o.user_id() == user_id) {
+            subscriber.invalid_voip_count = 0;
+        }
+    }
+
+    async fn handle_voip(
+        &mut self,
+        payload: VoipPayload,
+        sender_id: i64,
+    ) -> Result<(), ServerError> {
         match payload {
             VoipPayload::Speech { is_speaking, .. } => {
                 self.handle_speech(sender_id, is_speaking).await
@@ -899,10 +923,17 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         }
     }
 
-    async fn handle_speech(&self, sender_id: i64, is_speaking: bool) -> Result<(), ServerError> {
-        let Some(sender_participant) = self.get_cached_voip(sender_id) else {
-            self.send_error_to_user(sender_id, "Not in VoIP session".into())
-                .await;
+    async fn handle_speech(
+        &mut self,
+        sender_id: i64,
+        is_speaking: bool,
+    ) -> Result<(), ServerError> {
+        let Some(sender_participant) = self.get_cached_voip(sender_id).cloned() else {
+            if self.increment_invalid_voip(sender_id) {
+                self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                    .await;
+                self.handle_disconnect_user(sender_id).await?;
+            }
             return Ok(());
         };
 
@@ -913,10 +944,14 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
 
         if let Some(channel_id) = sender_participant.channel_id {
             if self.get_cached_channel_rights(channel_id, sender_id) <= 2 {
-                self.send_error_to_user(sender_id, "Insufficient permissions".into())
-                    .await;
+                if self.increment_invalid_voip(sender_id) {
+                    self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                        .await;
+                    self.handle_disconnect_user(sender_id).await?;
+                }
                 return Ok(());
             }
+            self.reset_invalid_voip(sender_id);
             for subscriber in &self.observers {
                 if self.get_cached_channel_rights(channel_id, subscriber.user_id()) >= 1 {
                     subscriber
@@ -925,6 +960,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 }
             }
         } else if let Some(recipient_id) = sender_participant.recipient_id {
+            self.reset_invalid_voip(sender_id);
             for subscriber in &self.observers {
                 if subscriber.user_id() == recipient_id || subscriber.user_id() == sender_id {
                     subscriber
@@ -938,7 +974,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
     }
 
     async fn handle_voice(
-        &self,
+        &mut self,
         sender_id: i64,
         data: Vec<u8>,
         timestamp: u64,
@@ -946,9 +982,12 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         key: KeyType,
         sequence: u64,
     ) -> Result<(), ServerError> {
-        let Some(sender_participant) = self.get_cached_voip(sender_id) else {
-            self.send_error_to_user(sender_id, "Not in VoIP session".into())
-                .await;
+        let Some(sender_participant) = self.get_cached_voip(sender_id).cloned() else {
+            if self.increment_invalid_voip(sender_id) {
+                self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                    .await;
+                self.handle_disconnect_user(sender_id).await?;
+            }
             return Ok(());
         };
 
@@ -964,10 +1003,14 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
 
         if let Some(channel_id) = sender_participant.channel_id {
             if self.get_cached_channel_rights(channel_id, sender_id) <= 2 {
-                self.send_error_to_user(sender_id, "Insufficient permissions".into())
-                    .await;
+                if self.increment_invalid_voip(sender_id) {
+                    self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                        .await;
+                    self.handle_disconnect_user(sender_id).await?;
+                }
                 return Ok(());
             }
+            self.reset_invalid_voip(sender_id);
             for subscriber in &self.observers {
                 if let Some(participant) = self.get_cached_voip(subscriber.user_id()) {
                     if participant.channel_id == Some(channel_id)
@@ -981,6 +1024,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 }
             }
         } else if let Some(recipient_id) = sender_participant.recipient_id {
+            self.reset_invalid_voip(sender_id);
             for subscriber in &self.observers {
                 if let Some(participant) = self.get_cached_voip(subscriber.user_id()) {
                     if participant.recipient_id.is_some()
