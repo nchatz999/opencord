@@ -1,10 +1,10 @@
 import type { Component } from "solid-js";
 import { For, Show } from "solid-js";
-import { Hash, Volume2 } from "lucide-solid";
+import { Hash, Volume2, Lock } from "lucide-solid";
 
 import { VoipChannelMember } from "../voip/VoipChannelMember";
 import { ChannelType, type Channel } from "../../model";
-import { useContext, useModal, useVoip, usePlayback, useMicrophone, useScreenShare, useCamera, useOutput } from "../../store/index";
+import { useContext, useModal, useVoip, usePlayback, useMicrophone, useScreenShare, useCamera, useOutput, useAcl, useAuth } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 
 export const ChannelEntry: Component<{
@@ -19,8 +19,12 @@ export const ChannelEntry: Component<{
   const [, outputActions] = useOutput()
   const [screenShareState, screenShareActions] = useScreenShare();
   const [cameraState, cameraActions] = useCamera();
+  const [, aclActions] = useAcl();
+  const [, authActions] = useAuth();
 
   const { addToast } = useToaster();
+
+  const isReadOnly = () => aclActions.getChannelRights(props.channel.channelId, authActions.getUser().roleId) === 1;
 
   const handleChannelClick = async (channel: Channel) => {
     if (channel.channelType === ChannelType.Text) {
@@ -62,7 +66,8 @@ export const ChannelEntry: Component<{
       <button
         onClick={async () => await handleChannelClick(props.channel)}
         onContextMenu={handleContextMenu}
-        class="flex items-center gap-2 w-full px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all group"
+        class="flex items-center gap-2 w-full px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all group disabled:opacity-50 disabled:pointer-events-none"
+        disabled={isReadOnly()}
       >
         <Show
           when={props.channel.channelType === "VoIP"}
@@ -70,12 +75,12 @@ export const ChannelEntry: Component<{
         >
           <Volume2 size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />
         </Show>
-        <span
-          class="text-sm truncate"
-          classList={{ "text-foreground font-medium": hasUnread() }}
-        >
+        <span class="text-sm truncate" classList={{ "text-foreground font-medium": hasUnread() }}>
           {props.channel.channelName}
         </span>
+        <Show when={isReadOnly()}>
+          <Lock size={12} class="shrink-0 ml-auto" />
+        </Show>
       </button>
 
       <Show

@@ -5,17 +5,20 @@ import {
   ChevronRight,
   Hash,
   Users as UsersIcon,
+  Lock,
 } from "lucide-solid";
 
 import { ChannelEntry } from "./ChannelEntry";
 import type { Group } from "../../model";
-import { useModal, useChannel } from "../../store/index";
+import { useModal, useChannel, useAcl, useAuth } from "../../store/index";
 
 export const ChannelBrowser: Component<{
   groups: Group[];
 }> = (props) => {
   const [, modalActions] = useModal();
   const [, channelActions] = useChannel();
+  const [, aclActions] = useAcl();
+  const [, authActions] = useAuth();
 
   const [collapsedGroups, setCollapsedGroups] = createSignal<Set<number>>(
     new Set()
@@ -69,6 +72,7 @@ export const ChannelBrowser: Component<{
         {(group) => {
           const groupChannels = () => channelActions.findByGroup(group.groupId);
           const isCollapsed = () => collapsedGroups().has(group.groupId);
+          const isReadOnly = () => aclActions.getGroupRights(group.groupId, authActions.getUser().roleId) === 1;
 
           return (
             <div class="mb-4">
@@ -78,7 +82,8 @@ export const ChannelBrowser: Component<{
                   e.preventDefault();
                   modalActions.open({ type: "groupSettings", groupId: group.groupId });
                 }}
-                class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors"
+                class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                disabled={isReadOnly()}
               >
                 <Show
                   when={!isCollapsed()}
@@ -87,6 +92,9 @@ export const ChannelBrowser: Component<{
                   <ChevronDown size={12} />
                 </Show>
                 {group.groupName}
+                <Show when={isReadOnly()}>
+                  <Lock size={12} class="ml-auto" />
+                </Show>
               </button>
 
               <Show when={!isCollapsed()}>
