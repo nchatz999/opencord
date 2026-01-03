@@ -23,6 +23,7 @@ const Slider: Component<SliderProps> = (props) => {
   );
 
   const [isDragging, setIsDragging] = createSignal(false);
+  let trackRef: HTMLDivElement | undefined;
 
   const value = () => props.value ?? internalValue();
 
@@ -53,12 +54,9 @@ const Slider: Component<SliderProps> = (props) => {
   };
 
   const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging() || props.disabled) return;
-    const track = document.getElementById('slider-track');
-    if (track) {
-      const rect = track.getBoundingClientRect();
-      updateValue(e.clientX, rect);
-    }
+    if (!isDragging() || props.disabled || !trackRef) return;
+    const rect = trackRef.getBoundingClientRect();
+    updateValue(e.clientX, rect);
   };
 
   const handleMouseUp = () => {
@@ -88,7 +86,7 @@ const Slider: Component<SliderProps> = (props) => {
       </Show>
       <div class="flex items-center gap-3">
         <div
-          id="slider-track"
+          ref={trackRef}
           class={`relative flex-1 h-2 bg-background-dark rounded-full cursor-pointer ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           onMouseDown={handleMouseDown}
