@@ -81,6 +81,7 @@ pub enum ServerMessage {
     Voip(VoipPayload, i64),
     InvalidateVoip,
     InvalidateAcl,
+    InvalidateSubscriptions,
 }
 
 pub enum SubscriberMessage {
@@ -170,17 +171,11 @@ pub trait Repository: Send + Sync + Clone {
         user_id: i64,
     ) -> Result<Vec<Subscription>, DatabaseError>;
 
-    async fn is_subscribed_to_media(
-        &self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<bool, DatabaseError>;
-
     async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError>;
     async fn find_all_group_role_rights(&self) -> Result<Vec<GroupRoleRights>, DatabaseError>;
     async fn find_all_users(&self) -> Result<Vec<User>, DatabaseError>;
     async fn find_all_channels(&self) -> Result<Vec<Channel>, DatabaseError>;
+    async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError>;
 }
 
 #[derive(Clone)]
@@ -263,18 +258,6 @@ impl<L: LogManager> Service<L> {
         Ok(subscriptions)
     }
 
-    pub async fn is_subscribed_to_media(
-        &self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<bool, DomainError> {
-        self.repository
-            .is_subscribed_to_media(user_id, publisher_id, media_type)
-            .await
-            .map_err(DomainError::from)
-    }
-
     pub async fn get_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DomainError> {
         self.repository
             .find_all_voip_participants()
@@ -299,6 +282,13 @@ impl<L: LogManager> Service<L> {
     pub async fn get_all_channels(&self) -> Result<Vec<Channel>, DomainError> {
         self.repository
             .find_all_channels()
+            .await
+            .map_err(DomainError::from)
+    }
+
+    pub async fn get_all_subscriptions(&self) -> Result<Vec<Subscription>, DomainError> {
+        self.repository
+            .find_all_subscriptions()
             .await
             .map_err(DomainError::from)
     }
@@ -387,26 +377,6 @@ impl Repository for Postgre {
         Ok(subscriptions)
     }
 
-    async fn is_subscribed_to_media(
-        &self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<bool, DatabaseError> {
-        let result = sqlx::query_scalar!(
-            r#"SELECT EXISTS(
-                SELECT 1 FROM subscriptions
-                WHERE user_id = $1 AND publisher_id = $2 AND media_type = $3
-            ) as "exists!""#,
-            user_id,
-            publisher_id,
-            media_type as MediaType
-        )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
     async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError> {
         let result = sqlx::query_as!(
             VoipParticipant,
@@ -447,6 +417,17 @@ impl Repository for Postgre {
             r#"SELECT channel_id, channel_name, group_id,
                       channel_type as "channel_type: _"
                FROM channels"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Subscription,
+            r#"SELECT user_id, publisher_id, media_type as "media_type: MediaType", created_at
+               FROM subscriptions"#
         )
         .fetch_all(&self.pool)
         .await?;
@@ -558,17 +539,13 @@ impl<L: LogManager> SubscriberSession<L> {
                 if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
                     return self.handle_voip_message(voip_msg).await;
                 }
-                Err(SessionError(
-                    "Invalid VoIP message format".to_string(),
-                ))
+                Err(SessionError("Invalid VoIP message format".to_string()))
             }
             Message::Ordered(bytes) => {
                 if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
                     return self.handle_control_message(ctr_msg).await;
                 }
-                Err(SessionError(
-                    "Invalid control message format".to_string(),
-                ))
+                Err(SessionError("Invalid control message format".to_string()))
             }
         }
     }
@@ -645,16 +622,14 @@ impl<L: LogManager> SubscriberSession<L> {
                     }
                 }
             }
-            ControlPayload::Answer { .. } => Err(SessionError(
-                "Unexpected answer payload".to_string(),
-            )),
+            ControlPayload::Answer { .. } => {
+                Err(SessionError("Unexpected answer payload".to_string()))
+            }
             ControlPayload::Close => {
                 return Err(SessionError("Session End".to_string()));
             }
             ControlPayload::Error { .. } => {
-                return Err(SessionError(
-                    "Received error from client".to_string(),
-                ));
+                return Err(SessionError("Received error from client".to_string()));
             }
         }
     }
@@ -687,6 +662,7 @@ pub struct RealtimeServer<L: LogManager> {
     acl_cache: Vec<GroupRoleRights>,
     user_cache: Vec<User>,
     channel_cache: Vec<Channel>,
+    subscription_cache: Vec<Subscription>,
 }
 
 impl<L: LogManager + 'static> RealtimeServer<L> {
@@ -705,6 +681,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             acl_cache: vec![],
             user_cache: vec![],
             channel_cache: vec![],
+            subscription_cache: vec![],
         }
     }
 
@@ -733,8 +710,25 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         }
     }
 
+    async fn reload_subscription_cache(&mut self) {
+        if let Ok(subscriptions) = self.service.get_all_subscriptions().await {
+            self.subscription_cache = subscriptions;
+        }
+    }
+
     fn get_cached_voip(&self, user_id: i64) -> Option<&VoipParticipant> {
         self.voip_cache.iter().find(|p| p.user_id == user_id)
+    }
+
+    fn is_cached_subscribed(
+        &self,
+        user_id: i64,
+        publisher_id: i64,
+        media_type: &MediaType,
+    ) -> bool {
+        self.subscription_cache.iter().any(|s| {
+            s.user_id == user_id && s.publisher_id == publisher_id && s.media_type == *media_type
+        })
     }
 
     fn get_cached_channel_rights(&self, channel_id: i64, user_id: i64) -> i64 {
@@ -928,7 +922,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         sender_id: i64,
         is_speaking: bool,
     ) -> Result<(), ServerError> {
-        let Some(sender_participant) = self.get_cached_voip(sender_id).cloned() else {
+        let Some(sender_participant) = self.get_cached_voip(sender_id) else {
             if self.increment_invalid_voip(sender_id) {
                 self.send_error_to_user(sender_id, "VoIP abuse detected".into())
                     .await;
@@ -982,7 +976,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         key: KeyType,
         sequence: u64,
     ) -> Result<(), ServerError> {
-        let Some(sender_participant) = self.get_cached_voip(sender_id).cloned() else {
+        let Some(sender_participant) = self.get_cached_voip(sender_id) else {
             if self.increment_invalid_voip(sender_id) {
                 self.send_error_to_user(sender_id, "VoIP abuse detected".into())
                     .await;
@@ -1069,12 +1063,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         };
 
         for subscriber in &self.observers {
-            let is_subscribed = self
-                .service
-                .is_subscribed_to_media(subscriber.user_id(), sender_id, db_media_type.clone())
-                .await?;
-
-            if is_subscribed {
+            if self.is_cached_subscribed(subscriber.user_id(), sender_id, &db_media_type) {
                 subscriber
                     .send(SubscriberMessage::Voip(payload.clone()))
                     .await;
@@ -1156,6 +1145,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
 
         self.reload_voip_cache().await;
         self.reload_acl_cache().await;
+        self.reload_subscription_cache().await;
 
         let sender = self.subscribe_channel().await;
         let mut session_check_interval = interval(Duration::from_secs(5));
@@ -1169,6 +1159,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                         ServerMessage::Voip(voip_payload, sender_id) => self.handle_voip(voip_payload, sender_id).await?,
                         ServerMessage::InvalidateVoip => self.reload_voip_cache().await,
                         ServerMessage::InvalidateAcl => self.reload_acl_cache().await,
+                        ServerMessage::InvalidateSubscriptions => self.reload_subscription_cache().await,
                     }
                 }
                 Some(req)= server.get_request() => {

@@ -1080,6 +1080,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             )
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateSubscriptions).await;
+
         Ok(())
     }
 
@@ -1133,6 +1135,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             format!("Media unsubscribed: user_id={}, session_id={}, publisher_id={}, media_type={:?}", user_id, session_id, publisher_id, media_type),
             "voip".to_string(),
         ).await;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateSubscriptions).await;
 
         Ok(())
     }

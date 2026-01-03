@@ -210,16 +210,14 @@ export class AudioPlayback {
       return;
     }
 
-    const audioSamples = new Float32Array(audioData.numberOfFrames);
-    audioData.copyTo(audioSamples, { planeIndex: 0 });
-
-
-    this.workletNode.port.postMessage({
-      type: "audioData",
-      data: audioSamples,
-    });
-
+    const samples = new Float32Array(audioData.numberOfFrames);
+    audioData.copyTo(samples, { planeIndex: 0 });
     audioData.close();
+
+    this.workletNode.port.postMessage(
+      { type: "audioData", data: samples },
+      [samples.buffer]
+    );
   }
 
   pushChunk(chunk: EncodedAudioChunk, timestamp: number) {
