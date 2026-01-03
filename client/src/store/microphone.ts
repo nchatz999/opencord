@@ -2,7 +2,7 @@ import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 import { createVADNode } from "../lib/Vad";
 import { usePreference } from "./preference";
-import { safelyCancelReader, closeEncoder, stopStreamTracks, convertToMono } from "../utils";
+import { safelyCancelReader, closeEncoder, stopStreamTracks, createMonoConverter } from "../utils";
 
 export interface MicrophoneConstraints {
   echoCancellation?: boolean;
@@ -117,6 +117,7 @@ function createMicrophoneStore(): MicrophoneStore {
   let encoder: AudioEncoder | null = null;
   let reader: ReadableStreamDefaultReader<AudioData> | null = null;
   let isProcessing = false;
+  const convertMono = createMonoConverter();
 
   function notifyEncodedData(chunk: EncodedAudioChunk): void {
     encodedDataCallbacks.forEach((cb) => cb(chunk, sequence++));
@@ -148,7 +149,14 @@ function createMicrophoneStore(): MicrophoneStore {
           if (encoder?.state === "configured") {
             const needsMonoConversion =
               value.numberOfChannels === 2 && DEFAULT_ENCODER_CONFIG.numberOfChannels === 1;
-            encoder.encode(needsMonoConversion ? convertToMono(value) : value);
+
+            if (needsMonoConversion) {
+              const monoData = convertMono(value);
+              encoder.encode(monoData);
+              monoData.close();
+            } else {
+              encoder.encode(value);
+            }
           }
           value.close();
         }

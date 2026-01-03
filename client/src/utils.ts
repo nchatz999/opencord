@@ -38,6 +38,28 @@ export function convertToMono(value: AudioData): AudioData {
   });
 }
 
+export function createMonoConverter(): (value: AudioData) => AudioData {
+  let buffer: ArrayBuffer | null = null;
+
+  return (value: AudioData): AudioData => {
+    const requiredSize = value.numberOfFrames * 4;
+    if (!buffer || buffer.byteLength != requiredSize) {
+      buffer = new ArrayBuffer(requiredSize);
+    }
+
+    value.copyTo(buffer, { planeIndex: 0 });
+
+    return new AudioData({
+      format: value.format,
+      sampleRate: value.sampleRate,
+      numberOfFrames: value.numberOfFrames,
+      numberOfChannels: 1,
+      timestamp: value.timestamp,
+      data: buffer,
+    });
+  };
+}
+
 export function getStatusColor(status: UserStatusType, type: "bg" | "text" = "text") {
   const colors = {
     [UserStatusType.Online]: "status-online",

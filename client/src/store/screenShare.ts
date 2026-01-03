@@ -2,7 +2,7 @@ import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 import { type QualityPreset, QUALITY_PRESETS, DEFAULT_PRESET } from "../model";
 import { usePreference } from "./preference";
-import { safelyCancelReader, closeEncoder, stopStreamTracks, convertToMono } from "../utils";
+import { safelyCancelReader, closeEncoder, stopStreamTracks, createMonoConverter } from "../utils";
 
 export interface ScreenShareConstraints {
   width?: number;
@@ -130,6 +130,7 @@ function createScreenShareStore(): ScreenShareStore {
   let audioEncoder: AudioEncoder | null = null;
   let audioReader: ReadableStreamDefaultReader<AudioData> | null = null;
   let isProcessing = false;
+  const convertMono = createMonoConverter();
 
   function notifyEncodedVideoData(chunk: EncodedVideoChunk): void {
     encodedVideoDataCallbacks.forEach((cb) => cb(chunk, videoSequence++));
@@ -177,7 +178,14 @@ function createScreenShareStore(): ScreenShareStore {
           if (audioEncoder?.state === "configured") {
             const needsMonoConversion =
               value.numberOfChannels === 2 && DEFAULT_AUDIO_ENCODER_CONFIG.numberOfChannels === 1;
-            audioEncoder.encode(needsMonoConversion ? convertToMono(value) : value);
+
+            if (needsMonoConversion) {
+              const monoData = convertMono(value);
+              audioEncoder.encode(monoData);
+              monoData.close();
+            } else {
+              audioEncoder.encode(value);
+            }
           }
           value.close();
         }
