@@ -733,6 +733,8 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
 
         self.repository.commit(tx).await?;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateAcl).await;
+
         let _ = self
             .logger
             .log_entry(
@@ -922,6 +924,8 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
         }
 
         self.repository.commit(tx).await?;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateAcl).await;
 
         let _ = self
             .notifier

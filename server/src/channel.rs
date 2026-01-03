@@ -341,6 +341,8 @@ impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, 
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateAcl).await;
+
         let _ = self.logger.log_entry(
             format!("Channel created: user_id={}, session_id={}, channel_id={}, group_id={}, type={:?}", user_id, session_id, channel.channel_id, group_id, channel_type),
             "channel".to_string(),
@@ -532,6 +534,8 @@ impl<R: ChannelRepository, N: NotifierManager, G: LogManager> ChannelService<R, 
                 },
             ))
             .await;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateAcl).await;
 
         let _ = self
             .logger

@@ -588,6 +588,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
+
         let _ = self
             .logger
             .log_entry(
@@ -659,6 +661,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
+
         let _ = self
             .logger
             .log_entry(
@@ -717,6 +721,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
                 ControlRoutingPolicy::Broadcast,
             ))
             .await;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
 
         let _ = self
             .logger
@@ -829,6 +835,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
+
         let _ = self
             .logger
             .log_entry(
@@ -869,6 +877,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
                 ControlRoutingPolicy::Broadcast,
             ))
             .await;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
 
         let _ = self
             .logger
@@ -911,6 +921,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
+
         let _ = self
             .logger
             .log_entry(
@@ -952,6 +964,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
+
         let _ = self
             .logger
             .log_entry(
@@ -992,6 +1006,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
                 ControlRoutingPolicy::Broadcast,
             ))
             .await;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateVoip).await;
 
         let _ = self
             .logger
