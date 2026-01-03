@@ -26,7 +26,7 @@ const UserSection: Component = () => {
     const newDeafened = !outputActions.getDeafened()
     outputActions.setDeafened(newDeafened)
     await voipActions.setDeafened(newDeafened)
-    soundActions.play(newDeafened ? "/sounds/mute.ogg" : "/sounds/unmute.ogg");
+    soundActions.play(newDeafened ? "/sounds/deafen.ogg" : "/sounds/undeafen.ogg");
   }
 
   const handleUserSettings = async () => {

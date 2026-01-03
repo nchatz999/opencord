@@ -166,6 +166,7 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+      soundActions.play("/sounds/enter_call_me.ogg");
       return ok(undefined);
     },
 
@@ -182,6 +183,7 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+      soundActions.play("/sounds/enter_call_me.ogg");
       return ok(undefined);
     },
 

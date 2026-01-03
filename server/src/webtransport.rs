@@ -10,9 +10,17 @@ use crate::{
 use opencord_transport_server::{Connection, Message, Server};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use uuid::Uuid;
+
+fn server_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum DomainError {
