@@ -19,8 +19,8 @@ export class VideoPlayback {
   writer: WritableStreamDefaultWriter;
   stream: MediaStream;
   bufferInterval: number | null;
+  statsInterval: number | null;
   private frameCount: number = 0;
-  private lastFpsTime: number = Date.now();
 
   private lastSequence: number = -1;
   private droppedFrames: number = 0;
@@ -55,9 +55,8 @@ export class VideoPlayback {
     this.buffer = new MinHeap<BufferItem>((a, b) => a.timestamp - b.timestamp);
 
 
-    this.bufferInterval = timerManager.setInterval(() => {
-      this.processBuffer();
-    }, 10);
+    this.bufferInterval = timerManager.setInterval(() => this.processBuffer(), 10);
+    this.statsInterval = timerManager.setInterval(() => this.updateStats(), 1000);
   }
 
   private createDecoder(): VideoDecoder {
@@ -98,14 +97,12 @@ export class VideoPlayback {
         this.droppedFrames += item.sequence - this.lastSequence - 1;
       }
       this.lastSequence = item.sequence;
-      this.updateDropRate();
 
       try {
         if (item.frame.type == "key") this.hasReceivedKeyFrame = true
         if (this.hasReceivedKeyFrame && this.decoder.state === 'configured') {
           this.decoder.decode(item.frame);
           this.frameCount++;
-          this.updateFPS();
         }
       } catch (error) {
         console.error('Failed to decode video frame:', error);
@@ -113,28 +110,17 @@ export class VideoPlayback {
     }
   }
 
-  private updateDropRate() {
+  private updateStats() {
+    this.setFpsSignal(this.frameCount);
+    this.frameCount = 0;
+
     const total = this.receivedFrames + this.droppedFrames;
-    const dropRate = total > 0 ? Math.round((this.droppedFrames / total) * 100) : 0;
-    this.setDropRateSignal(dropRate);
-  }
-
-  private updateFPS() {
-    const now = Date.now();
-    const elapsed = (now - this.lastFpsTime) / 1000;
-
-    if (elapsed >= 1) {
-      const newFps = Math.round(this.frameCount / elapsed);
-      this.setFpsSignal(newFps);
-      this.frameCount = 0;
-      this.lastFpsTime = now;
-    }
+    if (total > 0) this.setDropRateSignal(Math.round((this.droppedFrames / total) * 100));
   }
 
   resetTimestamps() {
     this.hasReceivedKeyFrame = false;
     this.frameCount = 0;
-    this.lastFpsTime = Date.now();
     this.lastSequence = -1;
     this.droppedFrames = 0;
     this.receivedFrames = 0;
@@ -156,10 +142,13 @@ export class VideoPlayback {
   }
 
   cleanup() {
-
     if (this.bufferInterval !== null) {
       timerManager.clearInterval(this.bufferInterval);
       this.bufferInterval = null;
+    }
+    if (this.statsInterval !== null) {
+      timerManager.clearInterval(this.statsInterval);
+      this.statsInterval = null;
     }
 
     this.clearBuffer();
