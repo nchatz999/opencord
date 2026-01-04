@@ -8,7 +8,7 @@ interface BufferItem {
 }
 
 const DEFAULT_DECODER_CONFIG: VideoDecoderConfig = {
-  codec: 'vp8',
+  codec: 'avc1.64002A',
 };
 
 export class VideoPlayback {
@@ -30,6 +30,7 @@ export class VideoPlayback {
   private setFpsSignal: (value: number) => number;
   private getDropRateSignal: () => number;
   private setDropRateSignal: (value: number) => number;
+  private decoderConfig: VideoDecoderConfig;
 
 
   constructor(
@@ -45,18 +46,8 @@ export class VideoPlayback {
     this.setDropRateSignal = setDropRate;
 
     this.delay = delay;
-    this.decoder = new VideoDecoder({
-      output: async (frame) => {
-        try {
-          await this.writer.write(frame);
-        } catch {
-          frame.close();
-        }
-      },
-      error: (e) => console.error('Video decoder error:', e)
-    });
-
-    this.decoder.configure(decoderConfig);
+    this.decoderConfig = decoderConfig;
+    this.decoder = this.createDecoder();
 
     const generator = new MediaStreamTrackGenerator({ kind: "video" });
     this.writer = generator.writable.getWriter();
@@ -67,6 +58,21 @@ export class VideoPlayback {
     this.bufferInterval = timerManager.setInterval(() => {
       this.processBuffer();
     }, 10);
+  }
+
+  private createDecoder(): VideoDecoder {
+    const decoder = new VideoDecoder({
+      output: (frame) => this.writer.write(frame).finally(() => frame.close()),
+      error: () => this.reset()
+    });
+    decoder.configure(this.decoderConfig);
+    return decoder;
+  }
+
+  reset() {
+    if (this.decoder.state !== 'closed') this.decoder.close();
+    this.decoder = this.createDecoder();
+    this.clearBuffer();
   }
 
   pushFrame(frame: EncodedVideoChunk, timestamp: number, sequence: number) {

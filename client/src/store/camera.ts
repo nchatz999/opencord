@@ -44,12 +44,13 @@ const DEFAULT_CONSTRAINTS: CameraConstraints = {
 };
 
 const DEFAULT_ENCODER_CONFIG: VideoEncoderConfig = {
-  codec: "vp8",
+  codec: "avc1.64002A",
   width: QUALITY_PRESETS[DEFAULT_PRESET].width,
   height: QUALITY_PRESETS[DEFAULT_PRESET].height,
   bitrate: DEFAULT_VIDEO_BITRATE,
   framerate: 30,
   latencyMode: "realtime",
+  avc: { format: "annexb" },
 };
 
 function buildMediaConstraints(constraints: CameraConstraints): MediaStreamConstraints {
