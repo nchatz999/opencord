@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
 import { Show } from "solid-js";
 import { Hash, Settings, UsersIcon } from "lucide-solid";
-import { useGroup, useModal, useUser, useServer, useAuth, useContext } from "../store/index";
+import { useGroup, useModal, useUser, useServer, useAuth, useContext, useNotification } from "../store/index";
 import { ChannelBrowser } from "../features/channel/ChannelBrowser";
 import { UserBrowser } from "../features/user/UserBrowser";
 import { Tabs } from "../components/Tabs";
@@ -16,6 +16,7 @@ const LeftPanel: Component = () => {
   const [, serverActions] = useServer();
   const [, authActions] = useAuth();
   const [, contextActions] = useContext();
+  const notification = useNotification();
 
   const user = () => authActions.getUser();
   const serverConfig = () => serverActions.get();
@@ -26,7 +27,7 @@ const LeftPanel: Component = () => {
       icon: (
         <div class="relative">
           <Hash size={16} />
-          <Show when={contextActions.hasAnyUnread("channel")}>
+          <Show when={notification.hasAnyChannel()}>
             <div class="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
           </Show>
         </div>
@@ -45,7 +46,7 @@ const LeftPanel: Component = () => {
       icon: (
         <div class="relative">
           <UsersIcon size={16} />
-          <Show when={contextActions.hasAnyUnread("dm")}>
+          <Show when={notification.hasAnyDM()}>
             <div class="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
           </Show>
         </div>

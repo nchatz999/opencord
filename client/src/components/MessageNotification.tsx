@@ -1,27 +1,9 @@
 import type { Component } from "solid-js";
-import { createSignal, For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { MessageSquare, ChevronDown, X, Volume2, VolumeX } from "lucide-solid";
-import { useContext, useUser, useChannel, useMessage } from "../store/index";
-import { useSound } from "../store/sound";
+import { useContext, useUser, useChannel, useMessage, useNotification } from "../store/index";
 import { usePreference } from "../store/preference";
-
-const MAX_MESSAGES = 5;
-
-const [messageIds, setMessageIds] = createSignal<number[]>([]);
-const [collapsed, setCollapsed] = createSignal(false);
-const [soundEnabled, setSoundEnabled] = createSignal(true);
-
-export function pushNotification(messageId: number) {
-  setMessageIds((prev) => {
-    if (prev.includes(messageId)) return prev;
-    return [messageId, ...prev].slice(0, MAX_MESSAGES);
-  });
-
-  if (soundEnabled()) {
-    const [, soundActions] = useSound();
-    soundActions.play("/sounds/message.ogg");
-  }
-}
+import type { Message } from "../model";
 
 const MessageNotification: Component = () => {
   const [, contextActions] = useContext();
@@ -29,59 +11,44 @@ const MessageNotification: Component = () => {
   const [, channelActions] = useChannel();
   const [, messageActions] = useMessage();
   const [, prefActions] = usePreference();
+  const notification = useNotification();
 
   const savedCollapsed = prefActions.get<boolean>("notification:collapsed");
   const savedSound = prefActions.get<boolean>("notification:sound");
-  if (savedCollapsed !== null) setCollapsed(savedCollapsed);
-  if (savedSound !== null) setSoundEnabled(savedSound);
+  if (savedCollapsed !== null) notification.setCollapsed(savedCollapsed);
+  if (savedSound !== null) notification.setSound(savedSound);
 
   const validMessages = createMemo(() => {
-    return messageIds()
+    return notification.messages()
       .map((id) => messageActions.findById(id))
       .filter((m) => m !== undefined);
   });
 
   const toggleCollapsed = () => {
-    const newVal = !collapsed();
-    setCollapsed(newVal);
-    prefActions.set("notification:collapsed", newVal);
+    notification.toggleCollapsed();
+    prefActions.set("notification:collapsed", notification.collapsed());
   };
 
   const toggleSound = () => {
-    const newVal = !soundEnabled();
-    setSoundEnabled(newVal);
-    prefActions.set("notification:sound", newVal);
+    notification.toggleSound();
+    prefActions.set("notification:sound", notification.soundEnabled());
   };
 
-
-  const dismissAll = () => {
-    setMessageIds([]);
-  };
-
-  const dismiss = (channelId?: number, senderId?: number) => {
-    setMessageIds((prev) =>
-      prev.filter((id) => {
-        const m = messageActions.findById(id);
-        if (channelId) return m?.channelId !== channelId;
-        return m?.senderId !== senderId;
-      })
-    );
-  };
-
-  const handleClick = (msg: { channelId?: number; senderId: number }) => {
+  const handleClick = (msg: Message) => {
     if (msg.channelId) {
       contextActions.set({ type: "channel", id: msg.channelId });
+      notification.clearChannel(msg.channelId);
     } else {
       contextActions.set({ type: "dm", id: msg.senderId });
+      notification.clearDM(msg.senderId);
     }
-    dismiss(msg.channelId, msg.senderId);
   };
 
   const getSenderName = (senderId: number) => {
     return userActions.findById(senderId)?.username ?? "Unknown";
   };
 
-  const getContextName = (msg: { channelId: number | null; senderId: number }) => {
+  const getContextName = (msg: Message) => {
     if (msg.channelId) {
       return `#${channelActions.findById(msg.channelId)?.channelName ?? "unknown"}`;
     }
@@ -92,7 +59,7 @@ const MessageNotification: Component = () => {
     <Show when={validMessages().length > 0}>
       <div class="absolute top-2 right-4 z-40">
         <Show
-          when={!collapsed()}
+          when={!notification.collapsed()}
           fallback={
             <button
               onClick={toggleCollapsed}
@@ -116,14 +83,14 @@ const MessageNotification: Component = () => {
                 <button
                   onClick={toggleSound}
                   class="p-1 text-muted-foreground hover:text-foreground transition-colors"
-                  title={soundEnabled() ? "Mute notifications" : "Unmute notifications"}
+                  title={notification.soundEnabled() ? "Mute notifications" : "Unmute notifications"}
                 >
-                  <Show when={soundEnabled()} fallback={<VolumeX size={12} />}>
+                  <Show when={notification.soundEnabled()} fallback={<VolumeX size={12} />}>
                     <Volume2 size={12} />
                   </Show>
                 </button>
                 <button
-                  onClick={dismissAll}
+                  onClick={() => notification.clearAll()}
                   class="p-1 text-muted-foreground hover:text-foreground transition-colors"
                   title="Dismiss all"
                 >

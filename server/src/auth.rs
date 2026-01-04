@@ -16,7 +16,7 @@ use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
 use crate::user::{User, UserStatusType};
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
 use bcrypt::{DEFAULT_COST, hash, verify};
 use time::Duration;
@@ -761,7 +761,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         let _ = self
             .notifier
             .notify(ServerMessage::Command(
-                crate::webtransport::CommandPayload::Disconnect(user_id, session_token.to_string()),
+                crate::transport::CommandPayload::Disconnect(user_id, session_token.to_string()),
             ))
             .await;
 

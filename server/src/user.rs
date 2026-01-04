@@ -18,7 +18,7 @@ use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
 use crate::voip::VoipParticipant;
-use crate::webtransport::{CommandPayload, ControlRoutingPolicy, ServerMessage};
+use crate::transport::{CommandPayload, ControlRoutingPolicy, ServerMessage};
 
 use base64::{Engine as _, engine::general_purpose};
 use sha2::{Digest, Sha256};

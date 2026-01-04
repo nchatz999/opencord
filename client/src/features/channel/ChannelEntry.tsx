@@ -4,14 +4,15 @@ import { Hash, Volume2, Lock } from "lucide-solid";
 
 import { VoipChannelMember } from "../voip/VoipChannelMember";
 import { ChannelType, type Channel } from "../../model";
-import { useContext, useModal, useVoip, usePlayback, useMicrophone, useScreenShare, useCamera, useOutput, useAcl, useAuth } from "../../store/index";
+import { useContext, useModal, useVoip, usePlayback, useMicrophone, useScreenShare, useCamera, useOutput, useAcl, useAuth, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 
 export const ChannelEntry: Component<{
   channel: Channel;
 }> = (props) => {
   const [, contextActions] = useContext();
-  const hasUnread = () => props.channel.channelType === ChannelType.Text && contextActions.hasUnread("channel", props.channel.channelId);
+  const notification = useNotification();
+  const hasUnread = () => props.channel.channelType === ChannelType.Text && notification.hasChannel(props.channel.channelId);
   const [, modalActions] = useModal();
   const [, voipActions] = useVoip();
   const [, playbackActions] = usePlayback();
@@ -29,6 +30,7 @@ export const ChannelEntry: Component<{
   const handleChannelClick = async (channel: Channel) => {
     if (channel.channelType === ChannelType.Text) {
       contextActions.set({ type: "channel", id: channel.channelId });
+      notification.clearChannel(channel.channelId);
     }
 
     if (channel.channelType === ChannelType.VoIP) {

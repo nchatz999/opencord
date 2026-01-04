@@ -11,7 +11,6 @@ interface MessageContext {
 
 interface ContextState {
   context: MessageContext | null;
-  unread: ContextKey[];
   replyingToMessageId: number | null;
 }
 
@@ -20,12 +19,6 @@ interface ContextActions {
   set: (ctx: MessageContext | null) => void;
   clear: () => void;
   isCurrentContext: (type: ContextType, id: number) => boolean;
-
-  markUnread: (type: ContextType, id: number) => void;
-  markRead: (type: ContextType, id: number) => void;
-  hasUnread: (type: ContextType, id: number) => boolean;
-  hasAnyUnread: (type: ContextType) => boolean;
-  clearAllUnread: () => void;
 
   getScrollPosition: (ctx: MessageContext) => number | undefined;
   setScrollPosition: (ctx: MessageContext, position: number) => void;
@@ -49,7 +42,6 @@ function toKey(type: ContextType, id: number): ContextKey {
 function createContextStore(): ContextStore {
   const [state, setState] = createStore<ContextState>({
     context: null,
-    unread: [],
     replyingToMessageId: null,
   });
 
@@ -63,8 +55,6 @@ function createContextStore(): ContextStore {
 
     set(ctx) {
       setState("context", ctx);
-      if (ctx)
-        this.markRead(ctx.type, ctx.id);
     },
 
     clear() {
@@ -73,30 +63,6 @@ function createContextStore(): ContextStore {
 
     isCurrentContext(type, id) {
       return state.context?.type === type && state.context?.id === id;
-    },
-
-    markUnread(type, id) {
-      const key = toKey(type, id);
-      if (!state.unread.includes(key)) {
-        setState("unread", [...state.unread, key]);
-      }
-    },
-
-    markRead(type, id) {
-      const key = toKey(type, id);
-      setState("unread", state.unread.filter((k) => k !== key));
-    },
-
-    hasUnread(type, id) {
-      return state.unread.includes(toKey(type, id));
-    },
-
-    hasAnyUnread(type) {
-      return state.unread.some((key) => key.startsWith(`${type}-`));
-    },
-
-    clearAllUnread() {
-      setState("unread", []);
     },
 
     getScrollPosition(ctx) {
@@ -132,7 +98,6 @@ function createContextStore(): ContextStore {
 
     cleanup() {
       setState("context", null);
-      setState("unread", []);
       setState("replyingToMessageId", null);
       scrollPositions.clear();
       visitedContexts.clear();

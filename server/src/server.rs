@@ -12,7 +12,7 @@ use crate::middleware::{AuthorizeService, authorize};
 use crate::model::{EventPayload, ServerConfig};
 use crate::role::ADMIN_ROLE_ID;
 use crate::user::AvatarFile;
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
 use base64::{Engine as _, engine::general_purpose};
 use sha2::{Digest, Sha256};

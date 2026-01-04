@@ -231,10 +231,8 @@ function createMicrophoneStore(): MicrophoneStore {
     },
 
     async start() {
-      if (state.isRecording) {
-        console.warn("Already recording");
-        return;
-      }
+      await this.stop()
+
 
       try {
         stream = await navigator.mediaDevices.getUserMedia(

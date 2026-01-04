@@ -20,7 +20,7 @@ use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
 use crate::user::User;
 use crate::voip::VoipParticipant;
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
 use axum::Json;
 use axum::extract::{Extension, Path, State};

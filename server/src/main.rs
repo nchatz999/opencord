@@ -9,11 +9,13 @@ mod managers;
 mod message;
 mod middleware;
 mod model;
+mod realtime_server;
 mod role;
 mod server;
+mod subscriber_session;
 mod user;
 mod voip;
-mod webtransport;
+mod transport;
 
 use acl::{AclService, acl_routes};
 use auth::{AuthService, auth_routes};
@@ -44,7 +46,7 @@ use utoipa_axum::router::OpenApiRouter;
 
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::webtransport::RealtimeServer;
+use crate::realtime_server::RealtimeServer;
 
 pub const CHANNEL_TAG: &str = "channel";
 pub const AUTH_TAG: &str = "auth";

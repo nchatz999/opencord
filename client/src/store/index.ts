@@ -67,4 +67,7 @@ export type { SoundStore } from "./sound";
 export { useTheme } from "./theme";
 export type { ThemeStore, Theme } from "./theme";
 
+export { useNotification } from "./notification";
+export type { NotificationStore } from "./notification";
+
 export { initializeStores, getWebTransportUrl, connection, resetStore } from "./init";

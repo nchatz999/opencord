@@ -565,7 +565,7 @@ impl PasswordValidator for DefaultPasswordValidator {
     }
 }
 
-use crate::webtransport::ServerMessage;
+use crate::transport::ServerMessage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]

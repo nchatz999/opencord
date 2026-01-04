@@ -19,7 +19,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
   const [auth, authActions] = useAuth();
   const [, appActions] = useApp();
   const [, voipActions] = useVoip();
-  const [micState] = useMicrophone();
+  const [micState, micActions] = useMicrophone();
   const [, outputActions] = useOutput();
   const connectionActions = useConnection();
   const { addToast } = useToaster();
@@ -68,6 +68,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
       await initializeStores();
       if (props.channelId) {
         await voipActions.joinChannel(props.channelId, micState.muted, outputActions.getDeafened());
+        await micActions.start()
       }
       appActions.setView({ type: "app" });
       return;

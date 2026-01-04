@@ -13,7 +13,7 @@ use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextL
 use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
 use axum::http::StatusCode;
 use axum::Json;

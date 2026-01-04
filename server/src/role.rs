@@ -12,7 +12,7 @@ use crate::error::{ApiError, DatabaseError};
 use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
-use crate::webtransport::{ControlRoutingPolicy, ServerMessage};
+use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
 use axum::http::StatusCode;
 use axum::Json;

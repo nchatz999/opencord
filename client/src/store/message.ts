@@ -9,7 +9,7 @@ import { useFile } from "./file";
 import { useReaction } from "./reaction";
 import { useAuth } from "./auth";
 import { useContext } from "./context";
-import { pushNotification } from "../components/MessageNotification";
+import { useNotification } from "./notification";
 
 interface MessageState {
   messages: Message[];
@@ -65,6 +65,7 @@ function createMessageStore(): MessageStore {
   const [, reactionActions] = useReaction();
   const [, authActions] = useAuth();
   const [, context] = useContext();
+  const notification = useNotification();
   let cleanupFn: (() => void) | null = null;
 
   const actions: MessageActions = {
@@ -96,11 +97,10 @@ function createMessageStore(): MessageStore {
           const currentUserId = authActions.getUser().userId;
           if (senderId !== currentUserId) {
             if (messageType.type === "Channel" && !context.isCurrentContext("channel", channelId)) {
-              context.markUnread("channel", channelId);
+              notification.pushChannel(messageId, channelId);
             } else if (messageType.type === "Direct" && !context.isCurrentContext("dm", senderId)) {
-              context.markUnread("dm", senderId);
+              notification.pushDM(messageId, senderId);
             }
-            pushNotification(messageId);
           }
         } else if (event.type === "messageUpdated") {
           const { messageId, messageText } = event as any;

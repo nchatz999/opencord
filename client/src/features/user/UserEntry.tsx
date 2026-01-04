@@ -2,7 +2,7 @@ import { type Component, Show } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
 import Avatar from "../../components/Avatar";
 import { UserStatusType, type User } from "../../model";
-import { useVoip, usePlayback, useContext, useMicrophone, useScreenShare, useCamera, useOutput } from "../../store/index";
+import { useVoip, usePlayback, useContext, useMicrophone, useScreenShare, useCamera, useOutput, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 
 const UnreadBadge = () => (
@@ -16,7 +16,8 @@ export const UserEntry: Component<{ user: User; }> = (
   const [, voipActions] = useVoip();
   const [, playbackActions] = usePlayback();
   const [, contextActions] = useContext();
-  const hasUnread = () => contextActions.hasUnread("dm", props.user.userId);
+  const notification = useNotification();
+  const hasUnread = () => notification.hasDM(props.user.userId);
   const [microphoneState, microphoneActions] = useMicrophone();
   const [, outputActions] = useOutput()
   const [screenShareState, screenShareActions] = useScreenShare();
@@ -47,6 +48,7 @@ export const UserEntry: Component<{ user: User; }> = (
 
   const handleUserClick = async (user: User) => {
     contextActions.set({ type: "dm", id: user.userId });
+    notification.clearDM(user.userId);
   };
 
   const handleVoiceCall = async (e: MouseEvent) => {

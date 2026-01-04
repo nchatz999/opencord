@@ -1,38 +1,24 @@
-use crate::{
-    auth::Session,
-    channel::Channel,
-    db::Postgre,
-    error::DatabaseError,
-    group::GroupRoleRights,
-    managers::LogManager,
-    model::EventPayload,
-    user::{User, UserStatusType},
-    voip::{MediaType, Subscription, VoipParticipant},
+use crate::auth::Session;
+use crate::channel::Channel;
+use crate::db::Postgre;
+use crate::error::DatabaseError;
+use crate::group::GroupRoleRights;
+use crate::managers::LogManager;
+use crate::model::EventPayload;
+use crate::subscriber_session::{SessionService, SubscriberSession};
+use crate::transport::{
+    CommandPayload, ControlRoutingPolicy, DomainError, ServerMessage, SubscriberHandler,
+    SubscriberMessage, VoipDataType, VoipPayload,
 };
-use opencord_transport_server::{Connection, Message, Server};
-use serde::{Deserialize, Serialize};
+use crate::user::{User, UserStatusType};
+use crate::voip::{MediaType, Subscription, VoipParticipant};
+use opencord_transport_server::Server;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use uuid::Uuid;
 
 const MAX_INVALID_VOIP_PACKETS: u32 = 1000;
-
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum DomainError {
-    #[error("Internal error: {0}")]
-    InternalError(#[from] DatabaseError),
-}
-
-#[derive(Debug, Clone, thiserror::Error)]
-#[error("{0}")]
-pub struct SessionError(String);
-
-impl From<DomainError> for SessionError {
-    fn from(err: DomainError) -> Self {
-        SessionError(err.to_string())
-    }
-}
 
 pub struct ServerError;
 
@@ -48,129 +34,25 @@ impl From<DatabaseError> for ServerError {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum ControlRoutingPolicy {
-    GroupRights {
-        group_id: i64,
-        minimun_rights: i64,
-    },
-    ChannelRights {
-        channel_id: i64,
-        minimun_rights: i64,
-    },
-    User {
-        user_id: i64,
-    },
-    Role {
-        role_id: i64,
-    },
-    Broadcast,
-}
+// ═══════════════════════════════════════════════════════════════════════════════
+// REPOSITORY
+// ═══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone)]
-pub enum CommandPayload {
-    Connect(i64, i64, mpsc::Sender<SubscriberMessage>, String, String),
-    Timeout(i64, String),
-    Disconnect(i64, String),
-    DisconnectUser(i64),
-}
-
-pub enum ServerMessage {
-    Command(CommandPayload),
-    Control(EventPayload, ControlRoutingPolicy),
-    Voip(VoipPayload, i64),
-    InvalidateVoip,
-    InvalidateAcl,
-    InvalidateSubscriptions,
-}
-
-pub enum SubscriberMessage {
-    Voip(VoipPayload),
-    Event(EventPayload),
-    Error(String),
-    Close,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "camelCase")]
-pub enum AnswerPayload {
-    Accept,
-    Decline { reason: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "camelCase")]
-pub enum ControlPayload {
-    Connect { token: String },
-    Answer { answer: AnswerPayload },
-    Close,
-    Error { reason: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "camelCase")]
-pub enum ConnectionMessage {
-    Voip { payload: VoipPayload },
-    Event { payload: EventPayload },
-    Control { payload: ControlPayload },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum VoipDataType {
-    Voice,
-    Camera,
-    Screen,
-    ScreenSound,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum KeyType {
-    Key,
-    Delta,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
-pub enum VoipPayload {
-    #[serde(rename_all = "camelCase")]
-    Speech { user_id: u64, is_speaking: bool },
-    #[serde(rename_all = "camelCase")]
-    Media {
-        user_id: u64,
-        media_type: VoipDataType,
-        #[serde(with = "serde_bytes")]
-        data: Vec<u8>,
-        timestamp: u64,
-        real_timestamp: u64,
-        key: KeyType,
-        sequence: u64,
-    },
-}
-
-pub trait Repository: Send + Sync + Clone {
+pub trait ServerRepository: Send + Sync + Clone {
     async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError>;
-
     async fn update_user_status(
         &mut self,
         user_id: i64,
         status: UserStatusType,
     ) -> Result<Option<User>, DatabaseError>;
-
     async fn remove_voip_participant(
         &mut self,
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
-
     async fn remove_subscriptions(
         &mut self,
         user_id: i64,
     ) -> Result<Vec<Subscription>, DatabaseError>;
-
     async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError>;
     async fn find_all_group_role_rights(&self) -> Result<Vec<GroupRoleRights>, DatabaseError>;
     async fn find_all_users(&self) -> Result<Vec<User>, DatabaseError>;
@@ -178,14 +60,159 @@ pub trait Repository: Send + Sync + Clone {
     async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError>;
 }
 
+impl ServerRepository for Postgre {
+    async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Session,
+            r#"SELECT * FROM sessions
+               WHERE session_token = $1
+               AND (expires_at IS NULL OR expires_at > NOW())"#,
+            session_token
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn update_user_status(
+        &mut self,
+        user_id: i64,
+        status: UserStatusType,
+    ) -> Result<Option<User>, DatabaseError> {
+        let result = sqlx::query_as!(
+            User,
+            r#"UPDATE users
+               SET status = $2
+               WHERE user_id = $1
+               RETURNING
+                   user_id,
+                   username,
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
+                   avatar_file_id,
+                   created_at,
+                   server_mute,
+                   server_deafen,
+                   role_id"#,
+            user_id,
+            status as UserStatusType
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn remove_voip_participant(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
+        let result = sqlx::query_as!(
+            VoipParticipant,
+            r#"DELETE FROM voip_participants
+               WHERE user_id = $1
+               RETURNING
+                   user_id,
+                   channel_id,
+                   recipient_id,
+                   local_deafen,
+                   local_mute,
+                   publish_screen,
+                   publish_camera,
+                   created_at"#,
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(DatabaseError::from)?;
+
+        Ok(result)
+    }
+
+    async fn remove_subscriptions(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<Subscription>, DatabaseError> {
+        let subscriptions = sqlx::query_as!(
+            Subscription,
+            r#"DELETE FROM subscriptions
+               WHERE user_id = $1 OR publisher_id = $1
+               RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(subscriptions)
+    }
+
+    async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError> {
+        let result = sqlx::query_as!(
+            VoipParticipant,
+            r#"SELECT user_id, channel_id, recipient_id, local_deafen, local_mute,
+                      publish_screen, publish_camera, created_at
+               FROM voip_participants"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_all_group_role_rights(&self) -> Result<Vec<GroupRoleRights>, DatabaseError> {
+        let result = sqlx::query_as!(
+            GroupRoleRights,
+            r#"SELECT group_id, role_id, rights FROM group_role_rights"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_all_users(&self) -> Result<Vec<User>, DatabaseError> {
+        let result = sqlx::query_as!(
+            User,
+            r#"SELECT user_id, username, created_at, avatar_file_id, role_id,
+                      status as "status: UserStatusType", server_mute, server_deafen
+               FROM users"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_all_channels(&self) -> Result<Vec<Channel>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Channel,
+            r#"SELECT channel_id, channel_name, group_id,
+                      channel_type as "channel_type: _"
+               FROM channels"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError> {
+        let result = sqlx::query_as!(
+            Subscription,
+            r#"SELECT user_id, publisher_id, media_type as "media_type: MediaType", created_at
+               FROM subscriptions"#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(result)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SERVICE
+// ═══════════════════════════════════════════════════════════════════════════════
+
 #[derive(Clone)]
-pub struct Service<L: LogManager> {
-    repository: Postgre,
+pub struct ServerService<R: ServerRepository, L: LogManager> {
+    repository: R,
     pub logger: L,
 }
 
-impl<L: LogManager> Service<L> {
-    pub fn new(repository: Postgre, logger: L) -> Self {
+impl<R: ServerRepository, L: LogManager> ServerService<R, L> {
+    pub fn new(repository: R, logger: L) -> Self {
         Self { repository, logger }
     }
 
@@ -193,7 +220,7 @@ impl<L: LogManager> Service<L> {
         &self,
         session_token: &str,
     ) -> Result<Option<Session>, DomainError> {
-        return Ok(self.repository.find_session(session_token).await?);
+        Ok(self.repository.find_session(session_token).await?)
     }
 
     pub async fn update_user_status(
@@ -294,366 +321,14 @@ impl<L: LogManager> Service<L> {
     }
 }
 
-impl Repository for Postgre {
-    async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Session,
-            r#"SELECT * FROM sessions
-               WHERE session_token = $1
-               AND (expires_at IS NULL OR expires_at > NOW())"#,
-            session_token
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
-    async fn update_user_status(
-        &mut self,
-        user_id: i64,
-        status: UserStatusType,
-    ) -> Result<Option<User>, DatabaseError> {
-        let result = sqlx::query_as!(
-            User,
-            r#"UPDATE users
-               SET status = $2
-               WHERE user_id = $1
-               RETURNING
-                   user_id,
-                   username, 
-                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType",
-                   avatar_file_id,
-                   created_at,
-                   server_mute,
-                   server_deafen,
-                   role_id"#,
-            user_id,
-            status as UserStatusType
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
-    async fn remove_voip_participant(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Option<VoipParticipant>, DatabaseError> {
-        let result = sqlx::query_as!(
-            VoipParticipant,
-            r#"DELETE FROM voip_participants
-               WHERE user_id = $1
-               RETURNING 
-                   user_id, 
-                   channel_id, 
-                   recipient_id, 
-                   local_deafen, 
-                   local_mute, 
-                   publish_screen, 
-                   publish_camera, 
-                   created_at"#,
-            user_id
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(DatabaseError::from)?;
-
-        Ok(result)
-    }
-
-    async fn remove_subscriptions(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError> {
-        let subscriptions = sqlx::query_as!(
-            Subscription,
-            r#"DELETE FROM subscriptions
-               WHERE user_id = $1 OR publisher_id = $1
-               RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
-            user_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(subscriptions)
-    }
-
-    async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError> {
-        let result = sqlx::query_as!(
-            VoipParticipant,
-            r#"SELECT user_id, channel_id, recipient_id, local_deafen, local_mute,
-                      publish_screen, publish_camera, created_at
-               FROM voip_participants"#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
-    async fn find_all_group_role_rights(&self) -> Result<Vec<GroupRoleRights>, DatabaseError> {
-        let result = sqlx::query_as!(
-            GroupRoleRights,
-            r#"SELECT group_id, role_id, rights FROM group_role_rights"#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
-    async fn find_all_users(&self) -> Result<Vec<User>, DatabaseError> {
-        let result = sqlx::query_as!(
-            User,
-            r#"SELECT user_id, username, created_at, avatar_file_id, role_id,
-                      status as "status: UserStatusType", server_mute, server_deafen
-               FROM users"#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
-    async fn find_all_channels(&self) -> Result<Vec<Channel>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Channel,
-            r#"SELECT channel_id, channel_name, group_id,
-                      channel_type as "channel_type: _"
-               FROM channels"#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(result)
-    }
-
-    async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Subscription,
-            r#"SELECT user_id, publisher_id, media_type as "media_type: MediaType", created_at
-               FROM subscriptions"#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(result)
-    }
-}
-
-pub struct SubscriberHandler {
-    user_id: i64,
-    session_id: i64,
-    sender: mpsc::Sender<SubscriberMessage>,
-    session_token: String,
-    identifier: String,
-    invalid_voip_count: u32,
-}
-
-impl SubscriberHandler {
-    pub fn user_id(&self) -> i64 {
-        self.user_id
-    }
-
-    async fn send(&self, msg: SubscriberMessage) -> bool {
-        self.sender.send(msg).await.is_ok()
-    }
-
-    async fn send_error(&self, reason: String) {
-        let _ = self.sender.send(SubscriberMessage::Error(reason)).await;
-    }
-}
-
-const MAX_BYTES_PER_SECOND: u64 = 30_000_000;
-const RATE_LIMIT_WINDOW_MS: u128 = 1000;
-
-struct SubscriberSession<L: LogManager> {
-    may_session: Option<Session>,
-    observer_tx: mpsc::Sender<ServerMessage>,
-    server_tx: mpsc::Sender<SubscriberMessage>,
-    pub server_rx: mpsc::Receiver<SubscriberMessage>,
-    service: Service<L>,
-    pub connection: Connection,
-    identifier: String,
-    bytes_this_window: u64,
-    window_start: std::time::Instant,
-}
-
-impl<L: LogManager> SubscriberSession<L> {
-    fn new(
-        observer_tx: mpsc::Sender<ServerMessage>,
-        service: Service<L>,
-        conn: Connection,
-        token: String,
-    ) -> Self {
-        let (server_tx, server_rx): (
-            mpsc::Sender<SubscriberMessage>,
-            mpsc::Receiver<SubscriberMessage>,
-        ) = mpsc::channel(10000);
-        Self {
-            may_session: None,
-            observer_tx,
-            server_tx,
-            server_rx,
-            service,
-            connection: conn,
-            identifier: token,
-            bytes_this_window: 0,
-            window_start: std::time::Instant::now(),
-        }
-    }
-
-    async fn send_error(&mut self, reason: String) {
-        let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
-            payload: ControlPayload::Error { reason },
-        })
-        .expect("serialization");
-        self.connection.send_ordered(bytes.into()).await;
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-
-    async fn handle_server_message(&mut self, msg: SubscriberMessage) -> Result<(), SessionError> {
-        match msg {
-            SubscriberMessage::Event(payload) => {
-                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Event { payload })
-                    .expect("serialization");
-                self.connection.send_ordered(bytes.into()).await;
-            }
-            SubscriberMessage::Voip(payload) => {
-                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Voip { payload })
-                    .expect("serialization");
-                self.connection.send_unordered(bytes.into()).await;
-            }
-            SubscriberMessage::Error(reason) => {
-                return Err(SessionError(reason));
-            }
-            SubscriberMessage::Close => {
-                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
-                    payload: ControlPayload::Close,
-                })
-                .expect("serialization");
-                self.connection.send_ordered(bytes.into()).await;
-                return Err(SessionError("Close".to_string()));
-            }
-        }
-        Ok(())
-    }
-
-    async fn handle_connection_message(&mut self, msg: Message) -> Result<(), SessionError> {
-        match msg {
-            Message::Unordered(bytes) => {
-                if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
-                    return self.handle_voip_message(voip_msg).await;
-                }
-                Err(SessionError("Invalid VoIP message format".to_string()))
-            }
-            Message::Ordered(bytes) => {
-                if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
-                    return self.handle_control_message(ctr_msg).await;
-                }
-                Err(SessionError("Invalid control message format".to_string()))
-            }
-        }
-    }
-
-    async fn handle_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
-        let user_session = self
-            .may_session
-            .clone()
-            .ok_or_else(|| SessionError("No user authenticated".to_string()))?;
-
-        let now = std::time::Instant::now();
-        if now.duration_since(self.window_start).as_millis() > RATE_LIMIT_WINDOW_MS {
-            self.bytes_this_window = 0;
-            self.window_start = now;
-        }
-
-        let payload_size = match &payload {
-            VoipPayload::Speech { .. } => 32,
-            VoipPayload::Media { data, .. } => data.len() as u64,
-        };
-
-        self.bytes_this_window += payload_size;
-        if self.bytes_this_window > MAX_BYTES_PER_SECOND {
-            return Err(SessionError("VoIP abuse detected".to_string()));
-        }
-
-        self.send_to_server(ServerMessage::Voip(payload, user_session.user_id))
-            .await;
-
-        Ok(())
-    }
-
-    async fn handle_control_message(
-        &mut self,
-        payload: ControlPayload,
-    ) -> Result<(), SessionError> {
-        match payload {
-            ControlPayload::Connect { token } => {
-                match self.service.authenticate_session(&token).await? {
-                    Some(ref session) => {
-                        self.may_session = Some(session.clone());
-                        self.send_to_server(ServerMessage::Command(CommandPayload::Connect(
-                            session.user_id,
-                            session.session_id,
-                            self.server_tx.clone(),
-                            self.identifier.clone(),
-                            session.session_token.clone(),
-                        )))
-                        .await;
-                        self.send_to_connection(
-                            ConnectionMessage::Control {
-                                payload: ControlPayload::Answer {
-                                    answer: AnswerPayload::Accept,
-                                },
-                            },
-                            true,
-                        )
-                        .await;
-                        Ok(())
-                    }
-                    None => {
-                        self.send_to_connection(
-                            ConnectionMessage::Control {
-                                payload: ControlPayload::Answer {
-                                    answer: AnswerPayload::Decline {
-                                        reason: "Bad Credentials".to_string(),
-                                    },
-                                },
-                            },
-                            true,
-                        )
-                        .await;
-                        Ok(())
-                    }
-                }
-            }
-            ControlPayload::Answer { .. } => {
-                Err(SessionError("Unexpected answer payload".to_string()))
-            }
-            ControlPayload::Close => {
-                return Err(SessionError("Session End".to_string()));
-            }
-            ControlPayload::Error { .. } => {
-                return Err(SessionError("Received error from client".to_string()));
-            }
-        }
-    }
-
-    async fn send_to_connection<T>(&mut self, payload: T, ordered: bool)
-    where
-        T: serde::Serialize,
-    {
-        let bytes = rmp_serde::to_vec_named(&payload).expect("serialization");
-        if ordered {
-            self.connection.send_ordered(bytes.into()).await;
-        } else {
-            self.connection.send_unordered(bytes.into()).await;
-        }
-    }
-
-    async fn send_to_server(&mut self, payload: ServerMessage) {
-        let _ = self.observer_tx.send(payload).await;
-    }
-}
+// ═══════════════════════════════════════════════════════════════════════════════
+// SERVER
+// ═══════════════════════════════════════════════════════════════════════════════
 
 pub struct RealtimeServer<L: LogManager> {
     observers: Vec<SubscriberHandler>,
-    service: Service<L>,
+    service: ServerService<Postgre, L>,
+    session_service: SessionService<Postgre, L>,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
     cert_path: PathBuf,
@@ -672,7 +347,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
 
         Self {
             observers: vec![],
-            service: Service::new(repository, logger),
+            service: ServerService::new(repository.clone(), logger.clone()),
+            session_service: SessionService::new(repository, logger),
             receiver: server_rx,
             sender: server_tx,
             cert_path,
@@ -853,8 +529,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         Ok(())
     }
 
-    async fn send_error_to_user(&self, user_id: i64, reason: String) {
-        if let Some(subscriber) = self.observers.iter().find(|o| o.user_id() == user_id) {
+    async fn send_error_to_session(&self, identifier: &str, reason: String) {
+        if let Some(subscriber) = self.observers.iter().find(|o| o.identifier == identifier) {
             subscriber.send_error(reason).await;
         }
     }
@@ -876,41 +552,54 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
     async fn handle_voip(
         &mut self,
         payload: VoipPayload,
-        sender_id: i64,
+        identifier: String,
     ) -> Result<(), ServerError> {
         match payload {
-            VoipPayload::Speech { is_speaking, .. } => {
-                self.handle_speech(sender_id, is_speaking).await
+            VoipPayload::Speech {
+                user_id,
+                is_speaking,
+            } => {
+                self.handle_speech(user_id as i64, is_speaking, &identifier)
+                    .await
             }
             VoipPayload::Media {
+                user_id,
                 media_type: VoipDataType::Voice,
                 data,
                 timestamp,
                 real_timestamp,
                 key,
                 sequence,
-                ..
             } => {
-                self.handle_voice(sender_id, data, timestamp, real_timestamp, key, sequence)
-                    .await
+                self.handle_voice(
+                    user_id as i64,
+                    data,
+                    timestamp,
+                    real_timestamp,
+                    key,
+                    sequence,
+                    &identifier,
+                )
+                .await
             }
             VoipPayload::Media {
+                user_id,
                 media_type,
                 data,
                 timestamp,
                 real_timestamp,
                 key,
                 sequence,
-                ..
             } => {
                 self.handle_media(
-                    sender_id,
+                    user_id as i64,
                     media_type,
                     data,
                     timestamp,
                     real_timestamp,
                     key,
                     sequence,
+                    &identifier,
                 )
                 .await
             }
@@ -921,12 +610,12 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         &mut self,
         sender_id: i64,
         is_speaking: bool,
+        identifier: &str,
     ) -> Result<(), ServerError> {
         let Some(sender_participant) = self.get_cached_voip(sender_id) else {
             if self.increment_invalid_voip(sender_id) {
-                self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                self.send_error_to_session(identifier, "VoIP abuse detected".into())
                     .await;
-                self.handle_disconnect_user(sender_id).await?;
             }
             return Ok(());
         };
@@ -939,9 +628,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         if let Some(channel_id) = sender_participant.channel_id {
             if self.get_cached_channel_rights(channel_id, sender_id) <= 2 {
                 if self.increment_invalid_voip(sender_id) {
-                    self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                    self.send_error_to_session(identifier, "VoIP abuse detected".into())
                         .await;
-                    self.handle_disconnect_user(sender_id).await?;
                 }
                 return Ok(());
             }
@@ -973,14 +661,14 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         data: Vec<u8>,
         timestamp: u64,
         real_timestamp: u64,
-        key: KeyType,
+        key: crate::transport::KeyType,
         sequence: u64,
+        identifier: &str,
     ) -> Result<(), ServerError> {
         let Some(sender_participant) = self.get_cached_voip(sender_id) else {
             if self.increment_invalid_voip(sender_id) {
-                self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                self.send_error_to_session(identifier, "VoIP abuse detected".into())
                     .await;
-                self.handle_disconnect_user(sender_id).await?;
             }
             return Ok(());
         };
@@ -998,9 +686,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         if let Some(channel_id) = sender_participant.channel_id {
             if self.get_cached_channel_rights(channel_id, sender_id) <= 2 {
                 if self.increment_invalid_voip(sender_id) {
-                    self.send_error_to_user(sender_id, "VoIP abuse detected".into())
+                    self.send_error_to_session(identifier, "VoIP abuse detected".into())
                         .await;
-                    self.handle_disconnect_user(sender_id).await?;
                 }
                 return Ok(());
             }
@@ -1037,15 +724,25 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
     }
 
     async fn handle_media(
-        &self,
+        &mut self,
         sender_id: i64,
         media_type: VoipDataType,
         data: Vec<u8>,
         timestamp: u64,
         real_timestamp: u64,
-        key: KeyType,
+        key: crate::transport::KeyType,
         sequence: u64,
+        identifier: &str,
     ) -> Result<(), ServerError> {
+        if self.get_cached_voip(sender_id).is_none() {
+            if self.increment_invalid_voip(sender_id) {
+                self.send_error_to_session(identifier, "VoIP abuse detected".into())
+                    .await;
+            }
+            return Ok(());
+        }
+        self.reset_invalid_voip(sender_id);
+
         let db_media_type = if matches!(media_type, VoipDataType::Camera) {
             MediaType::Camera
         } else {
@@ -1131,7 +828,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                     .await;
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     pub async fn run(mut self) -> Result<(), ServerError> {
@@ -1156,7 +853,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                     match msg{
                         ServerMessage::Command(payload) => self.handle_command(payload).await?,
                         ServerMessage::Control(control_payload, control_routing_policy) => self.handle_control(control_payload,control_routing_policy).await?,
-                        ServerMessage::Voip(voip_payload, sender_id) => self.handle_voip(voip_payload, sender_id).await?,
+                        ServerMessage::Voip(voip_payload, identifier) => self.handle_voip(voip_payload, identifier).await?,
                         ServerMessage::InvalidateVoip => self.reload_voip_cache().await,
                         ServerMessage::InvalidateAcl => self.reload_acl_cache().await,
                         ServerMessage::InvalidateSubscriptions => self.reload_subscription_cache().await,
@@ -1164,10 +861,10 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 }
                 Some(req)= server.get_request() => {
                     if let Some(conn) = server.accept_request(req).await{
-                        let service = self.service.clone();
+                        let service = self.session_service.clone();
                         let tx = sender.clone();
                         tokio::spawn(async move {
-                            RealtimeServer::handle_subscriber_session(conn, service, tx).await;
+                            Self::handle_subscriber_session(conn, service, tx).await;
                         });
                     }
                 }
@@ -1256,7 +953,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 .authenticate_session(&observer.session_token)
                 .await?;
 
-            if let None = session {
+            if session.is_none() {
                 expired_sessions.push((observer.user_id, observer.session_token.clone()));
             }
         }
@@ -1277,8 +974,8 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
     }
 
     async fn handle_subscriber_session(
-        connection: Connection,
-        service: Service<L>,
+        connection: opencord_transport_server::Connection,
+        service: SessionService<Postgre, L>,
         observer_tx: mpsc::Sender<ServerMessage>,
     ) {
         let session_token = Uuid::new_v4().to_string();

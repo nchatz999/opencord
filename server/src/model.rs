@@ -8,7 +8,7 @@ use crate::{
     role::Role,
     user::User,
     voip::{Subscription, VoipParticipant},
-    webtransport::VoipDataType,
+    transport::VoipDataType,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
