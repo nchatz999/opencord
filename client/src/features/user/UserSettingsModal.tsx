@@ -58,7 +58,6 @@ const UserSettingsModal: Component = () => {
   const [newPassword, setNewPassword] = createSignal("");
   const [confirmPassword, setConfirmPassword] = createSignal("");
   const [passwordError, setPasswordError] = createSignal("");
-
   const [sessions, setSessions] = createSignal<Session[]>([]);
 
   const { addToast } = useToaster();
@@ -79,6 +78,7 @@ const UserSettingsModal: Component = () => {
 
   onMount(() => {
     loadSessions();
+    livekit.refreshDevices();
   });
 
   const loadSessions = async () => {

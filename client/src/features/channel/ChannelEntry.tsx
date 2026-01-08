@@ -4,8 +4,9 @@ import { Hash, Volume2, Lock } from "lucide-solid";
 
 import { VoipChannelMember } from "../voip/VoipChannelMember";
 import { ChannelType, type Channel } from "../../model";
-import { useContext, useModal, useVoip, useOutput, useAcl, useAuth, useNotification } from "../../store/index";
+import { useContext, useModal, useVoip, useAcl, useAuth, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
+import { getLiveKitManager } from "../../lib/livekit";
 
 export const ChannelEntry: Component<{
   channel: Channel;
@@ -15,9 +16,9 @@ export const ChannelEntry: Component<{
   const hasUnread = () => props.channel.channelType === ChannelType.Text && notification.hasChannel(props.channel.channelId);
   const [, modalActions] = useModal();
   const [, voipActions] = useVoip();
-  const [, outputActions] = useOutput()
   const [, aclActions] = useAcl();
   const [, authActions] = useAuth();
+  const livekit = getLiveKitManager();
 
   const { addToast } = useToaster();
 
@@ -32,8 +33,8 @@ export const ChannelEntry: Component<{
     if (channel.channelType === ChannelType.VoIP) {
       const result = await voipActions.joinChannel(
         channel.channelId,
-        false,
-        outputActions.getDeafened()
+        livekit.getMuted(),
+        livekit.getDeafened()
       );
       if (result.isErr()) {
         addToast(`Failed to join channel: ${result.error}`, "error");

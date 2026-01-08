@@ -28,7 +28,7 @@ interface PlaybackActions {
   setVolume: (userId: number, volume: number) => void;
   getVolume: (userId: number) => number;
   setScreenVolume: (userId: number, volume: number) => void;
-  getScreenVolume: (userId: number) => number;
+  getScreenVolume: (userId: number) => number | undefined;
 }
 
 export type PlaybackStore = [PlaybackState, PlaybackActions];
@@ -109,7 +109,7 @@ function createPlaybackStore(): PlaybackStore {
     setVolume: (userId, volume) => updateVolume(userId, Track.Source.Microphone, volume),
     getVolume: (userId) => readVolume(userId, Track.Source.Microphone),
     setScreenVolume: (userId, volume) => updateVolume(userId, Track.Source.ScreenShareAudio, volume),
-    getScreenVolume: (userId) => readVolume(userId, Track.Source.ScreenShareAudio),
+    getScreenVolume: (userId) => state.audio[toKey(userId, Track.Source.ScreenShareAudio)]?.volume,
   };
 
   return [state, actions];

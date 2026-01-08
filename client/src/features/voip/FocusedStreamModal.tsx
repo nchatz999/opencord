@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { Show, createSignal } from "solid-js";
-import { X, Maximize2, Minimize2, Volume2, Camera, Monitor } from "lucide-solid";
+import { X, Maximize2, Minimize2, Volume2, VolumeX, Camera, Monitor } from "lucide-solid";
 import { useModal, usePlayback } from "../../store/index";
 import type { CallType } from "../../store/modal";
 import { MediaType } from "../../model";
@@ -19,17 +19,16 @@ const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
   const [, playbackActions] = usePlayback();
   const [isFullscreen, setIsFullscreen] = createSignal(false);
 
-  const screenVolume = () => Math.round(playbackActions.getScreenVolume(props.publisherId));
+  const screenVolume = () => playbackActions.getScreenVolume(props.publisherId);
   const isCamera = () => props.mediaType === MediaType.Camera;
 
   return (
     <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div
-        class={`bg-popover rounded-lg overflow-hidden flex flex-col ${
-          isFullscreen()
-            ? "w-full h-full rounded-none m-0"
-            : "w-full max-w-5xl max-h-[90vh] mx-4"
-        }`}
+        class={`bg-popover rounded-lg overflow-hidden flex flex-col ${isFullscreen()
+          ? "w-full h-full rounded-none m-0"
+          : "w-full max-w-5xl max-h-[90vh] mx-4"
+          }`}
       >
         <div class="flex justify-between items-center p-6 pb-4">
           <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -53,17 +52,27 @@ const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
 
         <Show when={!isCamera()}>
           <div class="flex items-center gap-3 px-6 pb-4">
-            <Volume2 size={18} class="text-muted-foreground shrink-0" />
-            <Slider
-              min={0}
-              max={200}
-              value={screenVolume()}
-              onChange={(v) => playbackActions.setScreenVolume(props.publisherId, v)}
-              class="w-64"
-            />
-            <span class="text-sm text-muted-foreground w-12">
-              {screenVolume()}%
-            </span>
+            <Show
+              when={screenVolume() !== undefined}
+              fallback={
+                <div class="flex items-center gap-2 text-muted-foreground">
+                  <VolumeX size={18} />
+                  <span class="text-sm">No audio</span>
+                </div>
+              }
+            >
+              <Volume2 size={18} class="text-muted-foreground shrink-0" />
+              <Slider
+                min={0}
+                max={200}
+                value={screenVolume()!}
+                onChange={(v) => playbackActions.setScreenVolume(props.publisherId, v)}
+                class="w-64"
+              />
+              <span class="text-sm text-muted-foreground w-12">
+                {Math.round(screenVolume()!)}%
+              </span>
+            </Show>
           </div>
         </Show>
 

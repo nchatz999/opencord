@@ -223,12 +223,15 @@ function createVoipStore(): VoipStore {
     },
 
     async setMuted(muted) {
-      const result = await request("/voip/mute", {
-        method: "PUT",
-        body: { mute: muted },
-      });
-      if (result.isErr()) {
-        return err(result.error.reason);
+      let inVoip = actions.findById(authActions.getUser().userId)
+      if (inVoip) {
+        const result = await request("/voip/mute", {
+          method: "PUT",
+          body: { mute: muted },
+        });
+        if (result.isErr()) {
+          return err(result.error.reason);
+        }
       }
 
       await livekit.setMicMuted(muted);

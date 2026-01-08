@@ -59,8 +59,8 @@ const [activeInput, setActiveInput] = createSignal<string>("");
 const [activeOutput, setActiveOutput] = createSignal<string>("");
 const [videoQuality, setVideoQuality] = createSignal<VideoQuality>("1080p30");
 const [muted, setMuted] = createSignal<boolean>(true);
+const [deafened, setDeafened] = createSignal<boolean>(false);
 const [noiseCancellation, setNoiseCancellation] = createSignal<boolean>(true);
-
 export class LiveKitManager {
   private room: Room;
   private publications = new Map<PublicationKey, RemoteTrackPublication>();
@@ -193,13 +193,14 @@ export class LiveKitManager {
     if (!this.room?.localParticipant) return;
     if (enabled) {
       await this.room.localParticipant.setMicrophoneEnabled(true);
-      const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
-      if (micPub) {
-        if (micPub.track) {
-          await micPub.track.setProcessor(this.noiseProcessor);
+      const track = this.room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+      if (track) {
+        if (muted()) {
+          await track.mute();
+        } else {
+          await track.setProcessor(this.noiseProcessor);
           this.noiseProcessor.enabled = noiseCancellation();
         }
-        if (muted()) await micPub.mute();
       }
     } else {
       await this.room.localParticipant.setMicrophoneEnabled(false);
@@ -208,10 +209,16 @@ export class LiveKitManager {
 
   async setMicMuted(isMuted: boolean): Promise<void> {
     setMuted(isMuted);
-    const micPub = this.room?.localParticipant?.getTrackPublication(Track.Source.Microphone);
-    if (micPub) {
-      if (isMuted) await micPub.mute();
-      else await micPub.unmute();
+    const track = this.room?.localParticipant?.getTrackPublication(Track.Source.Microphone)?.track;
+    if (!track) return;
+
+    if (isMuted) {
+      await track.stopProcessor();
+      await track.mute();
+    } else {
+      await track.unmute();
+      await track.setProcessor(this.noiseProcessor);
+      this.noiseProcessor.enabled = noiseCancellation();
     }
   }
 
@@ -234,6 +241,9 @@ export class LiveKitManager {
 
   getMuted = muted;
   setMuted = setMuted;
+
+  getDeafened = deafened;
+  setDeafened = setDeafened;
 
   getNoiseCancellation = noiseCancellation;
   setNoiseCancellation = (enabled: boolean) => {

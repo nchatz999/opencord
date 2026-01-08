@@ -2,8 +2,9 @@ import { type Component, Show } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
 import Avatar from "../../components/Avatar";
 import { UserStatusType, type User } from "../../model";
-import { useVoip, useContext, useOutput, useNotification } from "../../store/index";
+import { useVoip, useContext, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
+import { getLiveKitManager } from "../../lib/livekit";
 
 const UnreadBadge = () => (
   <span class="w-2 h-2 bg-primary rounded-full shrink-0" />
@@ -17,7 +18,7 @@ export const UserEntry: Component<{ user: User; }> = (
   const [, contextActions] = useContext();
   const notification = useNotification();
   const hasUnread = () => notification.hasDM(props.user.userId);
-  const [, outputActions] = useOutput()
+  const livekit = getLiveKitManager();
 
   const statusColors: Record<UserStatusType | number, string> = {
     [UserStatusType.Online]: "bg-status-online",
@@ -52,8 +53,8 @@ export const UserEntry: Component<{ user: User; }> = (
 
     const result = await voipActions.joinPrivate(
       props.user.userId,
-      false,
-      outputActions.getDeafened()
+      livekit.getMuted(),
+      livekit.getDeafened()
     );
 
     if (result.isErr()) {

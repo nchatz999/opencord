@@ -42,9 +42,6 @@ export { useConnection } from "./connection";
 export { useAuth } from "./auth";
 export type { AuthStore, AuthState, AuthActions } from "./auth";
 
-export { useOutput } from "./output";
-export type { OutputStore, AudioOutputDevice } from "./output";
-
 export { usePreference } from "./preference";
 export type { PreferenceStore } from "./preference";
 

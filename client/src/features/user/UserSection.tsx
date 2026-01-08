@@ -3,19 +3,18 @@ import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, HeadphoneOff, Settings, Circle } from 'lucide-solid'
 import Avatar from '../../components/Avatar'
 import Button from '../../components/Button'
-import { useAuth, useVoip, useModal, useOutput, useSound } from '../../store/index'
+import { useAuth, useVoip, useModal, useSound } from '../../store/index'
 import { getStatusColor } from '../../utils'
+import { getLiveKitManager } from '../../lib/livekit'
 
 const UserSection: Component = () => {
   const [, authActions] = useAuth()
   const [, voipActions] = useVoip()
   const [, modalActions] = useModal()
-  const [, outputActions] = useOutput()
   const [, soundActions] = useSound();
+  const livekit = getLiveKitManager();
   const currentUser = () => authActions.getUser()
-
-  const currentVoip = () => voipActions.findById(currentUser().userId)
-  const isMuted = () => currentVoip()?.localMute ?? false
+  const isMuted = () => livekit.getMuted()
 
   const handleMuteToggle = async () => {
     const newMuted = !isMuted()
@@ -24,8 +23,8 @@ const UserSection: Component = () => {
   }
 
   const handleDeafenToggle = async () => {
-    const newDeafened = !outputActions.getDeafened()
-    outputActions.setDeafened(newDeafened)
+    const newDeafened = !livekit.getDeafened()
+    livekit.setDeafened(newDeafened)
     await voipActions.setDeafened(newDeafened)
     soundActions.play(newDeafened ? "/sounds/deafen.ogg" : "/sounds/undeafen.ogg");
   }
@@ -72,12 +71,12 @@ const UserSection: Component = () => {
 
         <Button
           onClick={handleDeafenToggle}
-          variant={outputActions.getDeafened() ? "destructive" : "secondary"}
+          variant={livekit.getDeafened() ? "destructive" : "secondary"}
           size="sm"
           class="p-2"
-          title={outputActions.getDeafened() ? 'Undeafen' : 'Deafen'}
+          title={livekit.getDeafened() ? 'Undeafen' : 'Deafen'}
         >
-          <Show when={outputActions.getDeafened()} fallback={<Headphones size={16} />}>
+          <Show when={livekit.getDeafened()} fallback={<Headphones size={16} />}>
             <HeadphoneOff size={16} />
           </Show>
         </Button>
