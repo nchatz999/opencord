@@ -43,8 +43,8 @@ pub struct LiveKitService {
 }
 
 impl LiveKitService {
-    pub fn new(api_key: &str, api_secret: &str) -> Self {
-        let client = Arc::new(RoomClient::with_api_key("http://localhost:7880", api_key, api_secret));
+    pub fn new(url: &str, api_key: &str, api_secret: &str) -> Self {
+        let client = Arc::new(RoomClient::with_api_key(&format!("https://{}", url), api_key, api_secret));
         let verifier = TokenVerifier::with_api_key(api_key, api_secret);
         let webhook_receiver = Arc::new(WebhookReceiver::new(verifier));
 
@@ -53,7 +53,7 @@ impl LiveKitService {
             webhook_receiver,
             api_key: api_key.to_string(),
             api_secret: api_secret.to_string(),
-            ws_url: "ws://localhost:7880".to_string(),
+            ws_url: format!("wss://{}", url),
         }
     }
 

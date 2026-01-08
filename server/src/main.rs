@@ -137,6 +137,7 @@ async fn main() -> Result<(), sqlx::Error> {
         log_manager.clone(),
     );
     let livekit_service = LiveKitService::new(
+        &std::env::var("LIVEKIT_URL").expect("LIVEKIT_URL not set"),
         &std::env::var("LIVEKIT_API_KEY").expect("LIVEKIT_API_KEY not set"),
         &std::env::var("LIVEKIT_API_SECRET").expect("LIVEKIT_API_SECRET not set"),
     );

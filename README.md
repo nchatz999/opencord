@@ -99,6 +99,7 @@ The first user should register using the invite code `OWNER_INVITE_2024` to beco
 | `CERT_PATH` | Path to TLS certificate | required |
 | `KEY_PATH` | Path to TLS private key | required |
 | `SERVE_CLIENT` | Serve frontend from server | false |
+| `LIVEKIT_URL` | LiveKit server domain (without protocol) | required |
 | `LIVEKIT_API_KEY` | LiveKit API key | required |
 | `LIVEKIT_API_SECRET` | LiveKit API secret | required |
 
