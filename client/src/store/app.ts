@@ -11,8 +11,6 @@ export type AppView = {
 } | {
   type: "error",
   error: string
-} | {
-  type: "unsupported"
 }
 
 

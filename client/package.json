@@ -21,9 +21,10 @@
     "@types/dom-mediacapture-transform": "^0.1.11",
     "clsx": "^2.1.1",
     "electron-updater": "^6.6.2",
+    "livekit-client": "^2.16.1",
     "lucide-solid": "^0.523.0",
-    "opencord-transport": "workspace:*",
     "opencord-utils": "workspace:*",
+    "rnnoise-wasm": "github:nchatz999/rnnoise-wasm",
     "solid-js": "^1.9.7",
     "tailwind-merge": "^3.3.1"
   },

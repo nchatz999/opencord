@@ -11,7 +11,6 @@ import { ContextMenuProvider } from "./components/ContentMenu";
 import LoginPage from "./pages/LoginPage";
 import LoadingPage from "./pages/LoadingPage";
 import ErrorPage from "./pages/ErrorPage";
-import UnsupportedBrowserPage from "./pages/UnsupportedBrowserPage";
 import App from "./App";
 import { useApp } from "./store/app";
 import { useAuth } from "./store/auth";
@@ -36,9 +35,6 @@ const Root = () => {
               </Match>
               <Match when={app.view.type === "error" ? app.view : false}>
                 {(view) => <ErrorPage error={view().error} />}
-              </Match>
-              <Match when={app.view.type === "unsupported"}>
-                <UnsupportedBrowserPage />
               </Match>
               <Match when={app.view.type === "app"}>
                 <Show when={auth.session}>

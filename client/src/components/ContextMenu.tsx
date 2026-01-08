@@ -43,7 +43,6 @@ export default function ContextMenu(props: ContextMenuProps) {
 
     const rect = triggerRef?.getBoundingClientRect();
     if (rect) {
-
       setPosition({
         x: e.clientX,
         y: e.clientY,
@@ -54,48 +53,41 @@ export default function ContextMenu(props: ContextMenuProps) {
 
   const handleItemClick = (item: ContextMenuItem) => {
     if (item.disabled) return;
-
     item.onClick();
     setIsOpen(false);
   };
 
+  const stopEvents = (e: Event) => {
+    e.stopPropagation();
+  };
 
   createEffect(() => {
     if (isOpen()) {
       const handleClickOutside = (event: MouseEvent) => {
-        if (menuRef) {
-          const rect = menuRef.getBoundingClientRect();
-          const x = event.clientX;
-          const y = event.clientY;
-
-          const isOutside = (
-            x < rect.left ||
-            x > rect.right ||
-            y < rect.top ||
-            y > rect.bottom
-          );
-
-          if (isOutside) {
-            setIsOpen(false);
-          }
+        if (menuRef && !menuRef.contains(event.target as Node)) {
+          setIsOpen(false);
         }
       };
       const handleScroll = () => {
         setIsOpen(false);
       };
 
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("scroll", handleScroll, true);
-      document.addEventListener("contextmenu", handleClickOutside);
+      // Use setTimeout to avoid the immediate trigger
+      setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+        document.addEventListener("pointerdown", handleClickOutside as EventListener);
+        document.addEventListener("scroll", handleScroll, true);
+        document.addEventListener("contextmenu", handleClickOutside);
+      }, 0);
 
       onCleanup(() => {
         document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("pointerdown", handleClickOutside as EventListener);
         document.removeEventListener("scroll", handleScroll, true);
         document.removeEventListener("contextmenu", handleClickOutside);
       });
     }
   });
-
 
   createEffect(() => {
     if (isOpen() && menuRef) {
@@ -107,7 +99,6 @@ export default function ContextMenu(props: ContextMenuProps) {
       let adjustedX = pos.x;
       let adjustedY = pos.y;
 
-
       if (pos.x + menuRect.width > viewportWidth) {
         adjustedX = viewportWidth - menuRect.width - 8;
       }
@@ -115,7 +106,6 @@ export default function ContextMenu(props: ContextMenuProps) {
       if (pos.y + menuRect.height > viewportHeight) {
         adjustedY = viewportHeight - menuRect.height - 8;
       }
-
 
       adjustedX = Math.max(8, adjustedX);
       adjustedY = Math.max(8, adjustedY);
@@ -129,7 +119,7 @@ export default function ContextMenu(props: ContextMenuProps) {
   return (
     <>
       <div
-        ref={triggerRef}
+        ref={(el) => { triggerRef = el; }}
         onContextMenu={handleContextMenu}
         class={cn("cursor-pointer", merged.class)}
       >
@@ -138,56 +128,61 @@ export default function ContextMenu(props: ContextMenuProps) {
 
       <Show when={isOpen()}>
         <Portal>
-          <>
-            <div
-              ref={menuRef}
-              class="fixed z-50 min-w-[180px] bg-context-menu rounded-md shadow-lg border border-border-subtle py-1"
-              style={{
-                left: `${position().x}px`,
-                top: `${position().y}px`,
-              }}
-            >
-              <For each={merged.items}>
-                {(item, index) => (
+          <div
+            ref={(el) => { menuRef = el; }}
+            class="fixed z-50 min-w-[180px] bg-context-menu rounded-md shadow-lg border border-border-subtle py-1"
+            style={{
+              left: `${position().x}px`,
+              top: `${position().y}px`,
+            }}
+          >
+            <For each={merged.items}>
+              {(item) => (
+                <Show
+                  when={!item.separator}
+                  fallback={<div class="h-px bg-border-subtle my-1 mx-2" />}
+                >
                   <Show
-                    when={!item.separator}
-                    fallback={<div class="h-px bg-border-subtle my-1 mx-2" />}
-                  >
-                    <Show
-                      when={!item.customContent}
-
-                      fallback={
-                        <div class="px-3 py-2"
-
-                        >{item.customContent}</div>
-                      }
-                    >
-                      <button
-                        onClick={() => handleItemClick(item)}
-                        disabled={item.disabled}
-                        class={cn(
-                          "w-full px-3 py-2 text-sm text-left flex items-center gap-3 transition-colors",
-                          "hover:bg-muted focus:bg-muted focus:outline-none",
-                          item.danger
-                            ? "text-destructive hover:text-destructive"
-                            : "text-foreground hover:text-foreground-bright",
-                          item.disabled &&
-                          "opacity-50 cursor-not-allowed hover:bg-transparent"
-                        )}
+                    when={!item.customContent}
+                    fallback={
+                      <div
+                        class="px-3 py-2"
+                        ref={(el) => {
+                          // Use native event listeners for reliable propagation stopping
+                          el.addEventListener('mousedown', stopEvents);
+                          el.addEventListener('pointerdown', stopEvents);
+                          el.addEventListener('click', stopEvents);
+                        }}
                       >
-                        <Show when={item.icon}>
-                          <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                            {item.icon}
-                          </span>
-                        </Show>
-                        <span class="flex-1 truncate">{item.label}</span>
-                      </button>
-                    </Show>
+                        {item.customContent}
+                      </div>
+                    }
+                  >
+                    <button
+                      onClick={() => handleItemClick(item)}
+                      disabled={item.disabled}
+                      class={cn(
+                        "w-full px-3 py-2 text-sm text-left flex items-center gap-3 transition-colors",
+                        "hover:bg-muted focus:bg-muted focus:outline-none",
+                        item.danger
+                          ? "text-destructive hover:text-destructive"
+                          : "text-foreground hover:text-foreground-bright",
+                        item.disabled &&
+                        "opacity-50 cursor-not-allowed hover:bg-transparent"
+                      )}
+                    >
+                      <Show when={item.icon}>
+                        <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                          {item.icon}
+                        </span>
+                      </Show>
+                      <span class="flex-1 truncate">{item.label}</span>
+                    </button>
                   </Show>
-                )}
-              </For>
-            </div>
-          </>
+                </Show>
+              )}
+            </For>
+          </div>
         </Portal>
       </Show>
     </>

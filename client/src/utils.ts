@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { Result } from 'opencord-utils'
 import { err, ok } from 'opencord-utils'
-import { getServerUrlOrDefault } from './lib/ServerConfig'
+import { getHttpUrl } from './lib/ServerConfig'
 import { UserStatusType } from './model'
 
 export async function safelyCancelReader<T>(
@@ -79,7 +79,7 @@ type ErrorResponse = {
 };
 
 const getBaseUrl = () => {
-  return getServerUrlOrDefault();
+  return getHttpUrl();
 };
 
 const SESSION_KEY = "opencord_session";

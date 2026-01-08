@@ -5,7 +5,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 CERT_DIR="certs"
 mkdir -p "$CERT_DIR"
 
-# Check if domain is provided
 if [ -z "${1:-}" ]; then
     echo "Usage: $0 <domain>"
     echo "Example: $0 example.com"
@@ -14,7 +13,6 @@ fi
 
 DOMAIN="$1"
 
-# Check if certbot is installed
 if ! command -v certbot &> /dev/null; then
     echo "Error: certbot is not installed"
     echo "Install it with: sudo apt install certbot (Debian/Ubuntu)"
@@ -25,10 +23,8 @@ fi
 
 echo "Generating Let's Encrypt certificate for $DOMAIN..."
 
-# Generate certificate using certbot standalone mode
 sudo certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
 
-# Copy certificates to project directory
 LETSENCRYPT_DIR="/etc/letsencrypt/live/$DOMAIN"
 sudo cp "$LETSENCRYPT_DIR/fullchain.pem" "$CERT_DIR/$DOMAIN.crt"
 sudo cp "$LETSENCRYPT_DIR/privkey.pem" "$CERT_DIR/$DOMAIN.key"
@@ -37,14 +33,10 @@ chmod 600 "$CERT_DIR/$DOMAIN.key"
 
 echo ""
 echo "Production certificate generated successfully for $DOMAIN"
-echo "Certificate: $CERT_DIR/$DOMAIN.crt"
-echo "Key: $CERT_DIR/$DOMAIN.key"
 echo ""
 echo "Add the following to your .env file:"
 echo "  CERT_PATH=certs/$DOMAIN.crt"
 echo "  KEY_PATH=certs/$DOMAIN.key"
-echo ""
-echo "Note: Remove any VITE_CERT_HASH line - not needed for trusted certificates."
 echo ""
 echo "Let's Encrypt certificates expire in 90 days."
 echo "Set up auto-renewal with: sudo certbot renew --dry-run"

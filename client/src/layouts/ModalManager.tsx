@@ -10,13 +10,16 @@ import UserSettingsModal from "../features/user/UserSettingsModal";
 import UserInfoModal from "../features/user/UserInfoModal";
 import { RoleSettingsModal } from "../features/role/RoleSettingsModal";
 import ChannelSettingsModal from "../features/channel/ChannelSettingsModal";
+import VoipUserSettingsModal from "../features/voip/VoipUserSettingsModal";
+import FocusedStreamModal from "../features/voip/FocusedStreamModal";
+import type { CallType } from "../store/modal";
+import type { MediaType } from "../model";
 
 const ModalManager: Component = () => {
   const [modalState] = useModal();
   const [, channelActions] = useChannel();
   const [, groupActions] = useGroup();
   const [, roleActions] = useRole();
-  const [, userActions] = useUser();
 
   const current = createMemo(() => modalState.modal);
 
@@ -62,6 +65,21 @@ const ModalManager: Component = () => {
       </Match>
       <Match when={current()?.type === "serverSettings"}>
         <ServerSettingsModal />
+      </Match>
+
+      <Match when={current()?.type === "voipUserSettings"}>
+        <VoipUserSettingsModal
+          publisherId={(current() as { type: "voipUserSettings"; publisherId: number; callType: CallType }).publisherId}
+          callType={(current() as { type: "voipUserSettings"; publisherId: number; callType: CallType }).callType}
+        />
+      </Match>
+
+      <Match when={current()?.type === "focusedStream"}>
+        <FocusedStreamModal
+          publisherId={(current() as { type: "focusedStream"; publisherId: number; mediaType: MediaType; callType: CallType }).publisherId}
+          mediaType={(current() as { type: "focusedStream"; publisherId: number; mediaType: MediaType; callType: CallType }).mediaType}
+          callType={(current() as { type: "focusedStream"; publisherId: number; mediaType: MediaType; callType: CallType }).callType}
+        />
       </Match>
     </Switch>
   );

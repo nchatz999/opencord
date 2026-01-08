@@ -3,13 +3,13 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use serde::{Deserialize, Serialize};
-use sqlx::Type;
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 
 use crate::auth::Session;
 use crate::db::Postgre;
 use crate::error::{ApiError, DatabaseError};
+use crate::livekit::{LiveKitService, room_name_for_channel, room_name_for_private};
 use crate::managers::{DefaultNotifierManager, LogManager, NotifierManager, TextLogManager};
 use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
@@ -39,23 +39,6 @@ pub struct VoipParticipant {
     pub created_at: OffsetDateTime,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema)]
-#[sqlx(type_name = "media_type", rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum MediaType {
-    Screen,
-    Camera,
-    Audio,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Subscription {
-    pub user_id: i64,
-    pub publisher_id: i64,
-    pub media_type: MediaType,
-    pub created_at: OffsetDateTime,
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ERROR
@@ -71,6 +54,9 @@ pub enum DomainError {
 
     #[error("Internal error")]
     InternalError(#[from] DatabaseError),
+
+    #[error("LiveKit error: {0}")]
+    LiveKitError(String),
 }
 
 impl From<DomainError> for ApiError {
@@ -80,6 +66,10 @@ impl From<DomainError> for ApiError {
             DomainError::PermissionDenied(msg) => ApiError::UnprocessableEntity(msg),
             DomainError::InternalError(db_err) => {
                 tracing::error!("Database error: {}", db_err);
+                ApiError::InternalServerError("Internal server error".to_string())
+            }
+            DomainError::LiveKitError(msg) => {
+                tracing::error!("LiveKit error: {}", msg);
                 ApiError::InternalServerError("Internal server error".to_string())
             }
         }
@@ -107,20 +97,6 @@ pub trait VoipTransaction: Send + Sync {
         local_deafen: bool,
     ) -> Result<VoipParticipant, DatabaseError>;
 
-    async fn subscribe_to_media(
-        &mut self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<Option<Subscription>, DatabaseError>;
-
-    async fn unsubscribe_from_media(
-        &mut self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<Option<Subscription>, DatabaseError>;
-
     async fn local_mute(
         &mut self,
         user_id: i64,
@@ -137,11 +113,6 @@ pub trait VoipTransaction: Send + Sync {
         &mut self,
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
-
-    async fn remove_all_subscriptions(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError>;
 
     async fn set_publish_screen(
         &mut self,
@@ -169,11 +140,6 @@ pub trait VoipRepository: Send + Sync + Clone {
         &self,
         requesting_user_id: i64,
     ) -> Result<Vec<VoipParticipant>, DatabaseError>;
-
-    async fn find_voip_subscriptions(
-        &self,
-        requesting_user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError>;
 
     async fn find_user_channel_rights(
         &self,
@@ -234,62 +200,6 @@ impl VoipTransaction for PgVoipTransaction {
         Ok(participant)
     }
 
-    async fn subscribe_to_media(
-        &mut self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<Option<Subscription>, DatabaseError> {
-        let subscription = sqlx::query_as!(
-            Subscription,
-            r#"INSERT INTO subscriptions (user_id, publisher_id, media_type)
-            SELECT $1, $2, $3
-            WHERE EXISTS (
-                SELECT 1
-                FROM voip_participants subscriber
-                JOIN voip_participants publisher ON (
-                    (subscriber.channel_id = publisher.channel_id
-                     AND subscriber.channel_id IS NOT NULL)
-                    OR
-                    (subscriber.recipient_id = publisher.user_id
-                     AND publisher.recipient_id = subscriber.user_id)
-                )
-                WHERE subscriber.user_id = $1
-                    AND publisher.user_id = $2
-            )
-            ON CONFLICT (user_id, publisher_id, media_type) DO UPDATE SET created_at = subscriptions.created_at
-            RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
-            user_id,
-            publisher_id,
-            media_type as MediaType
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(subscription)
-    }
-
-    async fn unsubscribe_from_media(
-        &mut self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<Option<Subscription>, DatabaseError> {
-        let subscription = sqlx::query_as!(
-            Subscription,
-            r#"DELETE FROM subscriptions
-            WHERE user_id = $1 AND publisher_id = $2 AND media_type = $3
-            RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
-            user_id,
-            publisher_id,
-            media_type as MediaType
-        )
-        .fetch_optional(&mut *self.transaction)
-        .await?;
-
-        Ok(subscription)
-    }
-
     async fn local_mute(
         &mut self,
         user_id: i64,
@@ -344,23 +254,6 @@ impl VoipTransaction for PgVoipTransaction {
         .await?;
 
         Ok(participant)
-    }
-
-    async fn remove_all_subscriptions(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError> {
-        let subscriptions = sqlx::query_as!(
-            Subscription,
-            r#"DELETE FROM subscriptions
-               WHERE user_id = $1 OR publisher_id = $1
-               RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
-            user_id
-        )
-        .fetch_all(&mut *self.transaction)
-        .await?;
-
-        Ok(subscriptions)
     }
 
     async fn set_publish_screen(
@@ -445,22 +338,6 @@ impl VoipRepository for Postgre {
         Ok(results)
     }
 
-    async fn find_voip_subscriptions(
-        &self,
-        requesting_user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError> {
-        let results = sqlx::query_as!(
-            Subscription,
-            r#"SELECT user_id, publisher_id, media_type as "media_type: MediaType", created_at
-            FROM subscriptions
-            WHERE user_id = $1 OR publisher_id = $1"#,
-            requesting_user_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(results)
-    }
-
     async fn find_user_channel_rights(
         &self,
         channel_id: i64,
@@ -498,15 +375,47 @@ pub struct VoipService<R: VoipRepository, N: NotifierManager, G: LogManager> {
     repository: R,
     notifier: N,
     logger: G,
+    livekit: LiveKitService,
 }
 
 impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> {
-    pub fn new(repository: R, notifier: N, logger: G) -> Self {
+    pub fn new(repository: R, notifier: N, logger: G, livekit: LiveKitService) -> Self {
         Self {
             repository,
             notifier,
             logger,
+            livekit,
         }
+    }
+
+    pub fn ws_url(&self) -> &str {
+        &self.livekit.ws_url
+    }
+
+    pub fn create_channel_token(&self, user_id: i64, channel_id: i64, can_publish: bool) -> Result<String, DomainError> {
+        let room = room_name_for_channel(channel_id);
+        self.livekit
+            .create_join_token(user_id, &room, can_publish)
+            .map_err(|e| DomainError::LiveKitError(e.to_string()))
+    }
+
+    pub fn create_private_token(&self, user_id: i64, recipient_id: i64) -> Result<String, DomainError> {
+        let room = room_name_for_private(user_id, recipient_id);
+        self.livekit
+            .create_join_token(user_id, &room, true)
+            .map_err(|e| DomainError::LiveKitError(e.to_string()))
+    }
+
+    pub async fn remove_from_room(&self, user_id: i64, channel_id: Option<i64>, recipient_id: Option<i64>) -> Result<(), DomainError> {
+        let room = match (channel_id, recipient_id) {
+            (Some(ch), _) => room_name_for_channel(ch),
+            (_, Some(r)) => room_name_for_private(user_id, r),
+            _ => return Ok(()),
+        };
+        self.livekit
+            .remove_participant(&room, &user_id.to_string())
+            .await
+            .map_err(|e| DomainError::LiveKitError(e.to_string()))
     }
 
     pub async fn get_voip_participants(
@@ -521,18 +430,6 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
         Ok(participants)
     }
 
-    pub async fn get_voip_subscriptions(
-        &self,
-        requesting_user_id: i64,
-    ) -> Result<Vec<Subscription>, DomainError> {
-        let subscriptions = self
-            .repository
-            .find_voip_subscriptions(requesting_user_id)
-            .await?;
-
-        Ok(subscriptions)
-    }
-
     pub async fn join_channel_voip(
         &self,
         user_id: i64,
@@ -540,7 +437,7 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
         channel_id: i64,
         local_mute: bool,
         local_deafen: bool,
-    ) -> Result<(), DomainError> {
+    ) -> Result<bool, DomainError> {
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, user_id)
@@ -554,6 +451,8 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
                 "Insufficient permissions to join voice channel".to_string(),
             ));
         }
+
+        let can_publish = rights > 2;
 
         let mut tx = self.repository.begin().await?;
 
@@ -601,7 +500,7 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
             )
             .await;
 
-        Ok(())
+        Ok(can_publish)
     }
 
     pub async fn join_private_voip(
@@ -680,37 +579,12 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
     pub async fn leave_voip(&self, user_id: i64, session_id: i64) -> Result<(), DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let subscriptions = tx.remove_all_subscriptions(user_id).await?;
         let participant = tx.remove_participant(user_id).await?;
 
         self.repository.commit(tx).await?;
 
         if participant.is_none() {
             return Ok(());
-        }
-
-        for subscription in subscriptions {
-            let event = EventPayload::MediaUnsubscription {
-                subscription: subscription.clone(),
-            };
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event.clone(),
-                    ControlRoutingPolicy::User {
-                        user_id: subscription.user_id,
-                    },
-                ))
-                .await;
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event,
-                    ControlRoutingPolicy::User {
-                        user_id: subscription.publisher_id,
-                    },
-                ))
-                .await;
         }
 
         let event = EventPayload::VoipParticipantDeleted { user_id };
@@ -743,7 +617,6 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
     ) -> Result<VoipParticipant, DomainError> {
         let mut tx = self.repository.begin().await?;
 
-        let subscriptions = tx.remove_all_subscriptions(target_user_id).await?;
         let participant =
             tx.remove_participant(target_user_id)
                 .await?
@@ -795,30 +668,6 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
         }
 
         self.repository.commit(tx).await?;
-
-        for subscription in subscriptions {
-            let event = EventPayload::MediaUnsubscription {
-                subscription: subscription.clone(),
-            };
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event.clone(),
-                    ControlRoutingPolicy::User {
-                        user_id: subscription.user_id,
-                    },
-                ))
-                .await;
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event,
-                    ControlRoutingPolicy::User {
-                        user_id: subscription.publisher_id,
-                    },
-                ))
-                .await;
-        }
 
         let event = EventPayload::VoipParticipantDeleted {
             user_id: target_user_id,
@@ -1022,124 +871,6 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
 
         Ok(())
     }
-
-    pub async fn subscribe_to_media(
-        &self,
-        user_id: i64,
-        session_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<(), DomainError> {
-        let mut tx = self.repository.begin().await?;
-
-        let subscription = tx
-            .subscribe_to_media(user_id, publisher_id, media_type)
-            .await
-            .map_err(|e| match &e {
-                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "user_id" => DomainError::BadRequest(format!("User {} not found", user_id)),
-                    "publisher_id" => {
-                        DomainError::BadRequest(format!("Publisher {} not found", publisher_id))
-                    }
-                    _ => DomainError::InternalError(e),
-                },
-                _ => DomainError::InternalError(e),
-            })?
-            .ok_or(DomainError::BadRequest(
-                "Cannot subscribe to media - participants not in same session".to_string(),
-            ))?;
-
-        self.repository.commit(tx).await?;
-
-        let event = EventPayload::MediaSubscription { subscription };
-        let _ = self
-            .notifier
-            .notify(ServerMessage::Control(
-                event.clone(),
-                ControlRoutingPolicy::User { user_id },
-            ))
-            .await;
-        let _ = self
-            .notifier
-            .notify(ServerMessage::Control(
-                event,
-                ControlRoutingPolicy::User {
-                    user_id: publisher_id,
-                },
-            ))
-            .await;
-
-        let _ = self
-            .logger
-            .log_entry(
-                format!(
-                    "Media subscribed: user_id={}, session_id={}, publisher_id={}, media_type={:?}",
-                    user_id, session_id, publisher_id, media_type
-                ),
-                "voip".to_string(),
-            )
-            .await;
-
-        let _ = self.notifier.notify(ServerMessage::InvalidateSubscriptions).await;
-
-        Ok(())
-    }
-
-    pub async fn unsubscribe_from_media(
-        &self,
-        user_id: i64,
-        session_id: i64,
-        publisher_id: i64,
-        media_type: MediaType,
-    ) -> Result<(), DomainError> {
-        let mut tx = self.repository.begin().await?;
-
-        let subscription = tx
-            .unsubscribe_from_media(user_id, publisher_id, media_type)
-            .await
-            .map_err(|e| match &e {
-                DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "user_id" => DomainError::BadRequest(format!("User {} not found", user_id)),
-                    "publisher_id" => {
-                        DomainError::BadRequest(format!("Publisher {} not found", publisher_id))
-                    }
-                    _ => DomainError::InternalError(e),
-                },
-                _ => DomainError::InternalError(e),
-            })?
-            .ok_or(DomainError::BadRequest(
-                "Subscription not found".to_string(),
-            ))?;
-
-        self.repository.commit(tx).await?;
-
-        let event = EventPayload::MediaUnsubscription { subscription };
-        let _ = self
-            .notifier
-            .notify(ServerMessage::Control(
-                event.clone(),
-                ControlRoutingPolicy::User { user_id },
-            ))
-            .await;
-        let _ = self
-            .notifier
-            .notify(ServerMessage::Control(
-                event,
-                ControlRoutingPolicy::User {
-                    user_id: publisher_id,
-                },
-            ))
-            .await;
-
-        let _ = self.logger.log_entry(
-            format!("Media unsubscribed: user_id={}, session_id={}, publisher_id={}, media_type={:?}", user_id, session_id, publisher_id, media_type),
-            "voip".to_string(),
-        ).await;
-
-        let _ = self.notifier.notify(ServerMessage::InvalidateSubscriptions).await;
-
-        Ok(())
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1172,16 +903,9 @@ pub struct SetPublishCameraRequest {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeToMediaRequest {
-    pub publisher_id: i64,
-    pub media_type: MediaType,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UnsubscribeFromMediaRequest {
-    pub publisher_id: i64,
-    pub media_type: MediaType,
+pub struct JoinVoipResponse {
+    pub token: String,
+    pub server_url: String,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1201,9 +925,6 @@ pub fn voip_routes(
         .routes(routes!(set_local_deafen_handler))
         .routes(routes!(set_publish_screen_handler))
         .routes(routes!(set_publish_camera_handler))
-        .routes(routes!(subscribe_to_media_handler))
-        .routes(routes!(unsubscribe_from_media_handler))
-        .routes(routes!(get_voip_subscriptions_handler))
         .routes(routes!(kick_participant_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(voip_service)
@@ -1242,7 +963,7 @@ async fn get_voip_participants_handler(
         ("channel_id", Path, description = "The ID of the channel to join"),
     ),
     responses(
-        (status = 200, description = "Successfully joined channel VoIP"),
+        (status = 200, description = "Successfully joined channel VoIP", body = JoinVoipResponse),
         (status = 403, description = "Permission denied", body = ApiError),
         (status = 500, description = "Internal Server Error", body = ApiError),
     ),
@@ -1252,8 +973,8 @@ async fn join_channel_voip_handler(
     State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
     Extension(session): Extension<Session>,
     Path((channel_id, local_mute, local_deafen)): Path<(i64, bool, bool)>,
-) -> Result<(), ApiError> {
-    service
+) -> Result<Json<JoinVoipResponse>, ApiError> {
+    let can_publish = service
         .join_channel_voip(
             session.user_id,
             session.session_id,
@@ -1263,7 +984,14 @@ async fn join_channel_voip_handler(
         )
         .await
         .map_err(ApiError::from)?;
-    Ok(())
+    let token = service
+        .create_channel_token(session.user_id, channel_id, can_publish)
+        .map_err(ApiError::from)?;
+
+    Ok(Json(JoinVoipResponse {
+        token,
+        server_url: service.ws_url().to_string(),
+    }))
 }
 
 #[utoipa::path(
@@ -1274,7 +1002,7 @@ async fn join_channel_voip_handler(
         ("recipient_user_id", Path, description = "The ID of the recipient user"),
     ),
     responses(
-        (status = 200, description = "Successfully joined private VoIP"),
+        (status = 200, description = "Successfully joined private VoIP", body = JoinVoipResponse),
         (status = 500, description = "Internal Server Error", body = ApiError),
     ),
     security(("api_key" = []))
@@ -1283,7 +1011,7 @@ async fn join_private_voip_handler(
     State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
     Extension(session): Extension<Session>,
     Path((recipient_user_id, local_mute, local_deafen)): Path<(i64, bool, bool)>,
-) -> Result<(), ApiError> {
+) -> Result<Json<JoinVoipResponse>, ApiError> {
     service
         .join_private_voip(
             session.user_id,
@@ -1294,7 +1022,15 @@ async fn join_private_voip_handler(
         )
         .await
         .map_err(ApiError::from)?;
-    Ok(())
+
+    let token = service
+        .create_private_token(session.user_id, recipient_user_id)
+        .map_err(ApiError::from)?;
+
+    Ok(Json(JoinVoipResponse {
+        token,
+        server_url: service.ws_url().to_string(),
+    }))
 }
 
 #[utoipa::path(
@@ -1418,85 +1154,6 @@ async fn set_publish_camera_handler(
 #[utoipa::path(
     post,
     tag = "voip",
-    path = "/subscribe",
-    request_body = SubscribeToMediaRequest,
-    responses(
-        (status = 200, description = "Successfully subscribed to media"),
-        (status = 400, description = "Bad request - cannot subscribe", body = ApiError),
-        (status = 500, description = "Internal Server Error", body = ApiError),
-    ),
-    security(("api_key" = []))
-)]
-async fn subscribe_to_media_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
-    Extension(session): Extension<Session>,
-    Json(payload): Json<SubscribeToMediaRequest>,
-) -> Result<(), ApiError> {
-    service
-        .subscribe_to_media(
-            session.user_id,
-            session.session_id,
-            payload.publisher_id,
-            payload.media_type,
-        )
-        .await
-        .map_err(ApiError::from)?;
-    Ok(())
-}
-
-#[utoipa::path(
-    post,
-    tag = "voip",
-    path = "/unsubscribe",
-    request_body = UnsubscribeFromMediaRequest,
-    responses(
-        (status = 200, description = "Successfully unsubscribed from media"),
-        (status = 400, description = "Bad request - subscription not found", body = ApiError),
-        (status = 500, description = "Internal Server Error", body = ApiError),
-    ),
-    security(("api_key" = []))
-)]
-async fn unsubscribe_from_media_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
-    Extension(session): Extension<Session>,
-    Json(payload): Json<UnsubscribeFromMediaRequest>,
-) -> Result<(), ApiError> {
-    service
-        .unsubscribe_from_media(
-            session.user_id,
-            session.session_id,
-            payload.publisher_id,
-            payload.media_type,
-        )
-        .await
-        .map_err(ApiError::from)?;
-    Ok(())
-}
-
-#[utoipa::path(
-    get,
-    tag = "voip",
-    path = "/subscriptions",
-    responses(
-        (status = 200, description = "Successfully retrieved VoIP subscriptions", body = Vec<Subscription>),
-        (status = 500, description = "Internal Server Error", body = ApiError),
-    ),
-    security(("api_key" = []))
-)]
-async fn get_voip_subscriptions_handler(
-    State(service): State<VoipService<Postgre, DefaultNotifierManager, TextLogManager>>,
-    Extension(session): Extension<Session>,
-) -> Result<Json<Vec<Subscription>>, ApiError> {
-    let subscriptions = service
-        .get_voip_subscriptions(session.user_id)
-        .await
-        .map_err(ApiError::from)?;
-    Ok(Json(subscriptions))
-}
-
-#[utoipa::path(
-    post,
-    tag = "voip",
     path = "/kick/{target_user_id}",
     params(
         ("target_user_id", Path, description = "The ID of the user to kick"),
@@ -1518,5 +1175,10 @@ async fn kick_participant_handler(
         .kick_participant(session.user_id, session.session_id, target_user_id)
         .await
         .map_err(ApiError::from)?;
+
+    let _ = service
+        .remove_from_room(target_user_id, participant.channel_id, participant.recipient_id)
+        .await;
+
     Ok(Json(participant))
 }

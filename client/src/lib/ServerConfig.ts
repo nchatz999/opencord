@@ -1,26 +1,36 @@
-const SERVER_URL_KEY = 'server_url';
-const DEFAULT_SERVER_URL = 'https://localhost';
+const SERVER_DOMAIN_KEY = 'server_domain';
+const DEFAULT_DOMAIN = 'localhost';
 
-const getServerUrl = (): string | null => {
-  return localStorage.getItem(SERVER_URL_KEY);
+const getDomain = (): string => {
+  return localStorage.getItem(SERVER_DOMAIN_KEY) || DEFAULT_DOMAIN;
 };
 
-const getServerUrlOrDefault = (): string => {
-  return localStorage.getItem(SERVER_URL_KEY) || DEFAULT_SERVER_URL;
+const setDomain = (domain: string): void => {
+  localStorage.setItem(SERVER_DOMAIN_KEY, domain);
 };
 
-const setServerUrl = (url: string): void => {
-  localStorage.setItem(SERVER_URL_KEY, url);
+const clearDomain = (): void => {
+  localStorage.removeItem(SERVER_DOMAIN_KEY);
 };
 
-const clearServerUrl = (): void => {
-  localStorage.removeItem(SERVER_URL_KEY);
+const getHttpUrl = (): string => {
+  return `https://${getDomain()}:3000`;
+};
+
+const getWsUrl = (): string => {
+  return `wss://${getDomain()}:3000`;
+};
+
+const getLiveKitUrl = (): string => {
+  return `wss://${getDomain()}:7880`;
 };
 
 export {
-  getServerUrl,
-  getServerUrlOrDefault,
-  setServerUrl,
-  clearServerUrl,
-  DEFAULT_SERVER_URL,
+  getDomain,
+  setDomain,
+  clearDomain,
+  getHttpUrl,
+  getWsUrl,
+  getLiveKitUrl,
+  DEFAULT_DOMAIN,
 };

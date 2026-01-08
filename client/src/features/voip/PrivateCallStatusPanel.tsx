@@ -38,7 +38,7 @@ const PrivateCallStatusPanel: Component = () => {
   const volume = () => {
     const info = privateCallInfo()
     if (!info) return 100
-    return Math.round(playbackActions.getVolume(info.otherUser.userId, "private"))
+    return Math.round(playbackActions.getVolume(info.otherUser.userId))
   }
 
   return (
@@ -103,7 +103,7 @@ const PrivateCallStatusPanel: Component = () => {
               min={0}
               max={200}
               onChange={(value) => {
-                playbackActions.adjustVolume(info().otherUser.userId, value, "private")
+                playbackActions.setVolume(info().otherUser.userId, value)
               }}
             />
           </div>

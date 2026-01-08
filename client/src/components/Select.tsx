@@ -16,8 +16,8 @@ export interface SelectOption {
 
 interface SelectProps {
   options: SelectOption[];
-  value: string | number | null;
-  onChange: (value: string | number | null) => void;
+  value: string | number | undefined;
+  onChange: (value: string | number) => void;
   placeholder?: string;
   label?: string;
   class?: string;
@@ -38,16 +38,15 @@ export default function Select(props: SelectProps) {
   let dropdownRef: HTMLDivElement | undefined;
 
   const selectedLabel = createMemo(() => {
-    if (props.value === null) {
+    if (props.value === undefined) {
       return props.placeholder || "Select an option";
     }
     const option = props.options.find((option) => option.value === props.value);
     return option?.label || props.placeholder || "Select an option";
   });
 
-  const handleSelect = (optionValue: string | number | null) => {
-    if (optionValue)
-      props.onChange(optionValue);
+  const handleSelect = (value: string | number) => {
+    props.onChange(value);
     setIsOpen(false);
   };
 
@@ -126,10 +125,8 @@ export default function Select(props: SelectProps) {
             isOpen() ? "ring-2 ring-ring focus:border-transparent" : ""
           )}
           onClick={() => {
-            if (!isOpen() && props.options.length !== 0) {
-              setIsOpen(true);
-            } else {
-              handleSelect(null);
+            if (props.options.length > 0) {
+              setIsOpen(!isOpen());
             }
           }}
           role="button"

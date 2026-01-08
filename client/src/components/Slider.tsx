@@ -78,7 +78,7 @@ const Slider: Component<SliderProps> = (props) => {
   });
 
   return (
-    <div class={`w-full ${props.class || ''}`}>
+    <div class={props.class || 'w-full'}>
       <Show when={props.title}>
         <label class="block mb-2 text-sm font-medium text-foreground">
           {props.title}

@@ -10,6 +10,7 @@ use crate::channel::{Channel, ChannelType};
 use crate::db::Postgre;
 use crate::error::{ApiError, DatabaseError};
 use crate::group::{Group, GroupRoleRights};
+use crate::livekit::{LiveKitService, room_name_for_channel};
 use crate::managers::{
     DefaultNotifierManager, FileError, FileManager, LocalFileManager, LogManager, NotifierManager,
     TextLogManager,
@@ -18,9 +19,9 @@ use crate::message::File;
 use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
+use crate::transport::{ControlRoutingPolicy, ServerMessage};
 use crate::user::User;
 use crate::voip::VoipParticipant;
-use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
 use axum::Json;
 use axum::extract::{Extension, Path, State};
@@ -79,7 +80,13 @@ pub trait AclTransaction: Send + Sync {
         &mut self,
         role_id: i64,
         group_id: i64,
-    ) -> Result<Vec<i64>, DatabaseError>;
+    ) -> Result<Vec<VoipParticipant>, DatabaseError>;
+
+    async fn find_voip_participants_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<Vec<VoipParticipant>, DatabaseError>;
 
     async fn delete_messages_by_role(
         &mut self,
@@ -103,7 +110,13 @@ pub trait AclTransaction: Send + Sync {
         &mut self,
         user_id: i64,
         group_id: i64,
-    ) -> Result<Option<i64>, DatabaseError>;
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
+
+    async fn find_voip_participant_by_user(
+        &mut self,
+        user_id: i64,
+        group_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 
     async fn delete_messages_by_user(
         &mut self,
@@ -189,15 +202,16 @@ impl AclTransaction for PgAclTransaction {
         &mut self,
         role_id: i64,
         group_id: i64,
-    ) -> Result<Vec<i64>, DatabaseError> {
-        let deleted = sqlx::query_scalar!(
+    ) -> Result<Vec<VoipParticipant>, DatabaseError> {
+        let deleted = sqlx::query_as!(
+            VoipParticipant,
             r#"DELETE FROM voip_participants
             USING users u, channels c
             WHERE voip_participants.user_id = u.user_id
             AND voip_participants.channel_id = c.channel_id
             AND u.role_id = $1
             AND c.group_id = $2
-            RETURNING voip_participants.user_id"#,
+            RETURNING voip_participants.*"#,
             role_id,
             group_id
         )
@@ -205,6 +219,28 @@ impl AclTransaction for PgAclTransaction {
         .await?;
 
         Ok(deleted)
+    }
+
+    async fn find_voip_participants_by_role(
+        &mut self,
+        role_id: i64,
+        group_id: i64,
+    ) -> Result<Vec<VoipParticipant>, DatabaseError> {
+        let participants = sqlx::query_as!(
+            VoipParticipant,
+            r#"SELECT vp.*
+            FROM voip_participants vp
+            JOIN users u ON vp.user_id = u.user_id
+            JOIN channels c ON vp.channel_id = c.channel_id
+            WHERE u.role_id = $1
+            AND c.group_id = $2"#,
+            role_id,
+            group_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+
+        Ok(participants)
     }
 
     async fn delete_messages_by_role(
@@ -278,14 +314,35 @@ impl AclTransaction for PgAclTransaction {
         &mut self,
         user_id: i64,
         group_id: i64,
-    ) -> Result<Option<i64>, DatabaseError> {
-        let result = sqlx::query_scalar!(
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
+        let result = sqlx::query_as!(
+            VoipParticipant,
             r#"DELETE FROM voip_participants
                USING channels c
                WHERE voip_participants.channel_id = c.channel_id
                AND voip_participants.user_id = $1
                AND c.group_id = $2
-               RETURNING voip_participants.user_id"#,
+               RETURNING voip_participants.*"#,
+            user_id,
+            group_id
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_voip_participant_by_user(
+        &mut self,
+        user_id: i64,
+        group_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
+        let result = sqlx::query_as!(
+            VoipParticipant,
+            r#"SELECT vp.*
+               FROM voip_participants vp
+               JOIN channels c ON vp.channel_id = c.channel_id
+               WHERE vp.user_id = $1
+               AND c.group_id = $2"#,
             user_id,
             group_id
         )
@@ -490,15 +547,51 @@ pub struct AclService<R: AclRepository, N: NotifierManager, G: LogManager, F: Fi
     notifier: N,
     logger: G,
     file_manager: F,
+    livekit: LiveKitService,
 }
 
 impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclService<R, N, G, F> {
-    pub fn new(repository: R, notifier: N, logger: G, file_manager: F) -> Self {
+    pub fn new(
+        repository: R,
+        notifier: N,
+        logger: G,
+        file_manager: F,
+        livekit: LiveKitService,
+    ) -> Self {
         Self {
             repository,
             notifier,
             logger,
             file_manager,
+            livekit,
+        }
+    }
+
+    pub async fn remove_from_channel_room(&self, user_id: i64, channel_id: i64) {
+        let room = room_name_for_channel(channel_id);
+        let _ = self
+            .livekit
+            .remove_participant(&room, &user_id.to_string())
+            .await;
+    }
+
+    pub async fn update_channel_publish_permission(
+        &self,
+        user_id: i64,
+        channel_id: i64,
+        can_publish: bool,
+    ) {
+        let room = room_name_for_channel(channel_id);
+
+        if let Err(e) = self
+            .livekit
+            .update_permissions(&room, &user_id.to_string(), can_publish, true)
+            .await
+        {
+            println!(
+                "Failed to update LiveKit permissions for user {}: {}",
+                user_id, e
+            );
         }
     }
 
@@ -620,6 +713,24 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
                 ))
                 .await;
 
+            let had_publish = previous_rights > 2;
+            let has_publish = acl.rights > 2;
+            if had_publish != has_publish && acl.rights > 0 {
+                let participants = tx
+                    .find_voip_participants_by_role(acl.role_id, acl.group_id)
+                    .await?;
+                for participant in participants {
+                    if let Some(channel_id) = participant.channel_id {
+                        self.update_channel_publish_permission(
+                            participant.user_id,
+                            channel_id,
+                            has_publish,
+                        )
+                        .await;
+                    }
+                }
+            }
+
             if previous_rights > 0 && acl.rights == 0 {
                 let deleted_participants = tx
                     .delete_voip_participants_by_role(acl.role_id, acl.group_id)
@@ -638,11 +749,17 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
                     minimun_rights: 1,
                 };
 
-                for user_id in deleted_participants {
+                for participant in deleted_participants {
+                    if let Some(channel_id) = participant.channel_id {
+                        self.remove_from_channel_room(participant.user_id, channel_id)
+                            .await;
+                    }
                     let _ = self
                         .notifier
                         .notify(ServerMessage::Control(
-                            EventPayload::VoipParticipantDeleted { user_id },
+                            EventPayload::VoipParticipantDeleted {
+                                user_id: participant.user_id,
+                            },
                             routing.clone(),
                         ))
                         .await;
@@ -814,6 +931,24 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
             let new = new_rights.iter().find(|r| r.group_id == old.group_id);
             let new_right = new.map(|r| r.rights).unwrap_or(0);
 
+            let had_publish = old.rights > 2;
+            let has_publish = new_right > 2;
+            if had_publish != has_publish && new_right > 0 {
+                if let Some(participant) = tx
+                    .find_voip_participant_by_user(target_user_id, old.group_id)
+                    .await?
+                {
+                    if let Some(channel_id) = participant.channel_id {
+                        self.update_channel_publish_permission(
+                            target_user_id,
+                            channel_id,
+                            has_publish,
+                        )
+                        .await;
+                    }
+                }
+            }
+
             if old.rights > 0 && new_right == 0 {
                 let deleted_participant = tx
                     .delete_voip_participant_by_user(target_user_id, old.group_id)
@@ -834,7 +969,11 @@ impl<R: AclRepository, N: NotifierManager, G: LogManager, F: FileManager> AclSer
                     minimun_rights: 1,
                 };
 
-                if deleted_participant.is_some() {
+                if let Some(participant) = deleted_participant {
+                    if let Some(channel_id) = participant.channel_id {
+                        self.remove_from_channel_room(participant.user_id, channel_id)
+                            .await;
+                    }
                     let _ = self
                         .notifier
                         .notify(ServerMessage::Control(

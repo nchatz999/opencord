@@ -4,6 +4,7 @@ mod channel;
 mod db;
 mod error;
 mod group;
+mod livekit;
 mod log;
 mod managers;
 mod message;
@@ -33,20 +34,24 @@ use middleware::AuthorizeService;
 use role::{RoleService, role_routes};
 use server::{ServerService, server_routes};
 use user::{UserService, user_routes};
+use livekit::{LiveKitService, livekit_webhook_routes};
 use voip::{VoipService, voip_routes};
+use subscriber_session::SessionService;
+use realtime_server::{RealtimeServer, WebSocketState, websocket_handler};
+use transport::ServerMessage;
 
 use axum::extract::DefaultBodyLimit;
+use axum::routing::get;
 use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use tokio::sync::mpsc;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
 use utoipa_swagger_ui::SwaggerUi;
-
-use crate::realtime_server::RealtimeServer;
 
 pub const CHANNEL_TAG: &str = "channel";
 pub const AUTH_TAG: &str = "auth";
@@ -89,18 +94,28 @@ async fn main() -> Result<(), sqlx::Error> {
 
     let postgre = Postgre { pool: db.clone() };
     let log_manager = TextLogManager::default();
-    let mut server = RealtimeServer::new(
+
+    let (observer_tx, observer_rx): (mpsc::Sender<ServerMessage>, mpsc::Receiver<ServerMessage>) =
+        mpsc::channel(1000);
+
+    let realtime_server = RealtimeServer::new(
         postgre.clone(),
         log_manager.clone(),
-        cert_path.clone(),
-        key_path.clone(),
+        observer_rx,
+        observer_tx.clone(),
     );
 
     let file_manager = LocalFileManager::new("server/files");
     let avatar_manager = LocalFileManager::new("server/avatars");
-    let notifier_manager = DefaultNotifierManager::new(server.subscribe_channel().await);
+    let notifier_manager = DefaultNotifierManager::new(observer_tx.clone());
     let lockout_manager = DefaultLockoutManager::default();
     let password_validator = DefaultPasswordValidator::default();
+
+    let session_service = SessionService::new(postgre.clone(), log_manager.clone());
+    let ws_state = WebSocketState {
+        session_service,
+        observer_tx,
+    };
 
     let auth_service = AuthService::new(
         postgre.clone(),
@@ -121,11 +136,16 @@ async fn main() -> Result<(), sqlx::Error> {
         notifier_manager.clone(),
         log_manager.clone(),
     );
+    let livekit_service = LiveKitService::new(
+        &std::env::var("LIVEKIT_API_KEY").expect("LIVEKIT_API_KEY not set"),
+        &std::env::var("LIVEKIT_API_SECRET").expect("LIVEKIT_API_SECRET not set"),
+    );
     let acl_service = AclService::new(
         postgre.clone(),
         notifier_manager.clone(),
         log_manager.clone(),
         file_manager.clone(),
+        livekit_service.clone(),
     );
     let role_service = RoleService::new(
         postgre.clone(),
@@ -147,6 +167,7 @@ async fn main() -> Result<(), sqlx::Error> {
         postgre.clone(),
         notifier_manager.clone(),
         log_manager.clone(),
+        livekit_service.clone(),
     );
     let log_service = LogService::new(log_manager.clone(), postgre.clone());
     let server_service = ServerService::new(
@@ -168,7 +189,7 @@ async fn main() -> Result<(), sqlx::Error> {
         .allow_headers(AllowHeaders::any());
 
     tokio::spawn(async move {
-        let _ = server.run().await;
+        let _ = realtime_server.run().await;
     });
 
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
@@ -199,7 +220,7 @@ async fn main() -> Result<(), sqlx::Error> {
         )
         .nest(
             "/voip",
-            voip_routes(voip_service, authorize_service.clone()),
+            voip_routes(voip_service.clone(), authorize_service.clone()),
         )
         .nest("/log", log_routes(log_service, authorize_service.clone()))
         .nest(
@@ -211,7 +232,11 @@ async fn main() -> Result<(), sqlx::Error> {
         .with_state(postgre)
         .split_for_parts();
 
-    let router = router.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api));
+    let livekit_routes = livekit_webhook_routes(livekit_service, voip_service);
+    let router = router
+        .merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api))
+        .nest("/livekit", livekit_routes)
+        .route("/ws", get(websocket_handler::<TextLogManager>).with_state(ws_state));
 
     let serve_client = std::env::var("SERVE_CLIENT")
         .map(|v| v == "true")
@@ -235,7 +260,7 @@ async fn main() -> Result<(), sqlx::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
 
     println!("HTTPS server listening on https://0.0.0.0:3000");
-    println!("WebTransport server listening on https://localhost:4443");
+    println!("WebSocket endpoint at wss://0.0.0.0:3000/ws");
     println!("Swagger UI available at https://0.0.0.0:3000/swagger-ui");
 
     axum_server::bind_rustls(addr, tls_config)

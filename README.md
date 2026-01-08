@@ -10,8 +10,8 @@ A modern real-time communication platform built with Rust and SolidJS.
 
 ## Features
 
-- Real-time messaging with WebTransport
-- Voice and video communication
+- Real-time messaging with WebSocket
+- Voice and video communication powered by LiveKit
 - Channel-based organization
 - Role-based permissions
 - File sharing
@@ -23,10 +23,8 @@ A modern real-time communication platform built with Rust and SolidJS.
 |----------|---------|
 | Electron | Full support |
 | Chrome/Chromium | Full support |
-| Firefox | Not supported |
-| Safari | Not supported |
-
-> **Note:** Opencord requires a Chromium-based browser for WebTransport, WebCodecs, and Insertable Streams for MediaStreamTrack API support. Firefox and Safari are not supported. For the best experience, download the desktop app.
+| Firefox | Full support |
+| Safari | Full support |
 
 ## Prerequisites
 
@@ -35,8 +33,8 @@ A modern real-time communication platform built with Rust and SolidJS.
 - Rust 1.85+
 - PostgreSQL
 - OpenSSL
-- xxd
 - sqlx-cli (`cargo install sqlx-cli`)
+- LiveKit server
 - certbot (production only)
 
 ## Development
@@ -47,7 +45,7 @@ A modern real-time communication platform built with Rust and SolidJS.
 git clone <repository-url>
 cd opencord
 cp .env.example .env
-# Edit .env with your DATABASE_URL
+# Edit .env with your DATABASE_URL and LiveKit credentials
 ./generate-dev-certs  # Add the output to .env
 ```
 
@@ -75,7 +73,7 @@ Client runs at `https://localhost:5173`, server at `https://localhost:3000`
 git clone <repository-url>
 cd opencord
 cp .env.example .env
-# Edit .env with your DATABASE_URL
+# Edit .env with your DATABASE_URL and LiveKit credentials
 # Set SERVE_CLIENT=true to serve frontend from server
 ./generate-prod-certs yourdomain.com  # Add the output to .env
 ```
@@ -101,6 +99,8 @@ The first user should register using the invite code `OWNER_INVITE_2024` to beco
 | `CERT_PATH` | Path to TLS certificate | required |
 | `KEY_PATH` | Path to TLS private key | required |
 | `SERVE_CLIENT` | Serve frontend from server | false |
+| `LIVEKIT_API_KEY` | LiveKit API key | required |
+| `LIVEKIT_API_SECRET` | LiveKit API secret | required |
 
 ## Make Commands
 
@@ -127,7 +127,6 @@ The first user should register using the invite code `OWNER_INVITE_2024` to beco
 opencord/
 ├── client/          # SolidJS frontend
 ├── server/          # Rust backend
-├── transport/       # WebTransport implementation
 ├── utils/           # Shared utilities
 ├── certs/           # TLS certificates
 └── Makefile         # Build automation
@@ -165,7 +164,7 @@ Opencord uses a role-based permission system where users belong to roles, and ro
 | Send messages | Write (4) | |
 | Speak in voice | Write (4) | |
 | Join voice channel | Read (2) | |
-| Share screen/camera | Write (4) | Chromium browsers only |
+| Share screen/camera | Write (4) | |
 | Delete any message | ACL (8) | |
 | Kick users from voice | ACL (8) | Cannot kick Owner/Admin unless you are Owner |
 | Modify permissions | ACL (8) | Only Owner/Admin can grant/remove ACL rights |

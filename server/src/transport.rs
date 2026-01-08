@@ -51,14 +51,12 @@ pub enum CommandPayload {
 pub enum ServerMessage {
     Command(CommandPayload),
     Control(EventPayload, ControlRoutingPolicy),
-    Voip(VoipPayload, String),
     InvalidateVoip,
     InvalidateAcl,
-    InvalidateSubscriptions,
+    InvalidateUsers,
 }
 
 pub enum SubscriberMessage {
-    Voip(VoipPayload),
     Event(EventPayload),
     Error(String),
     Close,
@@ -67,66 +65,10 @@ pub enum SubscriberMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
-pub enum AnswerPayload {
-    Accept,
-    Decline { reason: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "camelCase")]
-pub enum ControlPayload {
-    Connect { token: String },
-    Answer { answer: AnswerPayload },
-    Close,
-    Error { reason: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "camelCase")]
 pub enum ConnectionMessage {
-    Voip { payload: VoipPayload },
+    Ping { timestamp: u64 },
+    Pong { timestamp: u64 },
     Event { payload: EventPayload },
-    Control { payload: ControlPayload },
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// VOIP
-// ═══════════════════════════════════════════════════════════════════════════════
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum VoipDataType {
-    Voice,
-    Camera,
-    Screen,
-    ScreenSound,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum KeyType {
-    Key,
-    Delta,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
-pub enum VoipPayload {
-    #[serde(rename_all = "camelCase")]
-    Speech { user_id: u64, is_speaking: bool },
-    #[serde(rename_all = "camelCase")]
-    Media {
-        user_id: u64,
-        media_type: VoipDataType,
-        #[serde(with = "serde_bytes")]
-        data: Vec<u8>,
-        timestamp: u64,
-        real_timestamp: u64,
-        key: KeyType,
-        sequence: u64,
-    },
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -139,7 +81,6 @@ pub struct SubscriberHandler {
     pub sender: mpsc::Sender<SubscriberMessage>,
     pub session_token: String,
     pub identifier: String,
-    pub invalid_voip_count: u32,
 }
 
 impl SubscriberHandler {

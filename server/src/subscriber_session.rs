@@ -3,11 +3,27 @@ use crate::db::Postgre;
 use crate::error::DatabaseError;
 use crate::managers::LogManager;
 use crate::transport::{
-    AnswerPayload, CommandPayload, ConnectionMessage, ControlPayload, DomainError, ServerMessage,
-    SubscriberMessage, VoipPayload,
+    CommandPayload, ConnectionMessage, DomainError, ServerMessage, SubscriberMessage,
 };
-use opencord_transport_server::{Connection, Message};
+use axum::extract::ws::{CloseFrame, Message, WebSocket};
+use futures_util::{SinkExt, StreamExt};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
+use tokio::time::interval;
+
+const CLOSE_CODE_DISCONNECTED: u16 = 4002;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+pub const PING_INTERVAL_MS: u64 = 5000;
+pub const PONG_TIMEOUT_MS: u64 = 10000;
+pub const MAX_MISSED_PONGS: usize = 3;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ERROR
+// ═══════════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{0}")]
@@ -66,207 +82,207 @@ impl<R: SessionRepository, L: LogManager> SessionService<R, L> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PING TRACKING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+struct PendingPing {
+    timestamp: u64,
+    sent_at: Instant,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SESSION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const MAX_BYTES_PER_SECOND: u64 = 30_000_000;
-const RATE_LIMIT_WINDOW_MS: u128 = 1000;
-
 pub struct SubscriberSession<R: SessionRepository, L: LogManager> {
-    pub may_session: Option<Session>,
-    pub observer_tx: mpsc::Sender<ServerMessage>,
+    session: Session,
+    observer_tx: mpsc::Sender<ServerMessage>,
     server_tx: mpsc::Sender<SubscriberMessage>,
-    pub server_rx: mpsc::Receiver<SubscriberMessage>,
-    pub service: SessionService<R, L>,
-    pub connection: Connection,
-    pub identifier: String,
-    bytes_this_window: u64,
-    window_start: std::time::Instant,
+    server_rx: mpsc::Receiver<SubscriberMessage>,
+    service: SessionService<R, L>,
+    identifier: String,
+    pending_pings: Vec<PendingPing>,
+    missed_pongs: usize,
 }
 
 impl<R: SessionRepository, L: LogManager> SubscriberSession<R, L> {
     pub fn new(
         observer_tx: mpsc::Sender<ServerMessage>,
         service: SessionService<R, L>,
-        conn: Connection,
-        token: String,
+        identifier: String,
+        session: Session,
     ) -> Self {
-        let (server_tx, server_rx): (
-            mpsc::Sender<SubscriberMessage>,
-            mpsc::Receiver<SubscriberMessage>,
-        ) = mpsc::channel(10000);
+        let (server_tx, server_rx) = mpsc::channel(10000);
         Self {
-            may_session: None,
+            session,
             observer_tx,
             server_tx,
             server_rx,
             service,
-            connection: conn,
-            identifier: token,
-            bytes_this_window: 0,
-            window_start: std::time::Instant::now(),
+            identifier,
+            pending_pings: Vec::new(),
+            missed_pongs: 0,
         }
     }
 
-    pub async fn send_error(&mut self, reason: String) {
-        let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
-            payload: ControlPayload::Error { reason },
-        })
-        .expect("serialization");
-        self.connection.send_ordered(bytes.into()).await;
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    pub async fn run(&mut self, socket: WebSocket) {
+        let (mut ws_sender, mut ws_receiver) = socket.split();
+
+        let _ = self
+            .observer_tx
+            .send(ServerMessage::Command(CommandPayload::Connect(
+                self.session.user_id,
+                self.session.session_id,
+                self.server_tx.clone(),
+                self.identifier.clone(),
+                self.session.session_token.clone(),
+            )))
+            .await;
+
+        let mut ping_interval = interval(Duration::from_millis(PING_INTERVAL_MS));
+        let mut pong_check_interval = interval(Duration::from_secs(1));
+
+        loop {
+            tokio::select! {
+                Some(msg) = self.server_rx.recv() => {
+                    if self.handle_server_message(msg, &mut ws_sender).await.is_err() {
+                        break;
+                    }
+                }
+                may_msg = ws_receiver.next() => {
+                    match may_msg {
+                        Some(Ok(Message::Binary(data))) => {
+                            if self.handle_message(&data, &mut ws_sender).await.is_err() {
+                                break;
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) => break,
+                        Some(Err(_)) => break,
+                        None => break,
+                        _ => {}
+                    }
+                }
+                _ = ping_interval.tick() => {
+                    if self.send_ping(&mut ws_sender).await.is_err() {
+                        break;
+                    }
+                }
+                _ = pong_check_interval.tick() => {
+                    if self.check_pong_timeouts() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        let _ = self
+            .service
+            .logger
+            .log_entry(
+                format!("User {} disconnected", self.session.user_id),
+                "websocket".to_string(),
+            )
+            .await;
+        let _ = self
+            .observer_tx
+            .send(ServerMessage::Command(CommandPayload::Timeout(
+                self.session.user_id,
+                self.identifier.clone(),
+            )))
+            .await;
     }
 
-    pub async fn handle_server_message(
+    async fn handle_message(
+        &mut self,
+        data: &[u8],
+        ws_sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    ) -> Result<(), SessionError> {
+        let message: ConnectionMessage = rmp_serde::from_slice(data)
+            .map_err(|_| SessionError("Invalid message format".to_string()))?;
+
+        match message {
+            ConnectionMessage::Ping { timestamp } => {
+                self.send(ws_sender, ConnectionMessage::Pong { timestamp })
+                    .await?;
+            }
+            ConnectionMessage::Pong { timestamp } => {
+                self.pending_pings.retain(|p| p.timestamp != timestamp);
+                self.missed_pongs = 0;
+            }
+            ConnectionMessage::Event { .. } => {}
+        }
+        Ok(())
+    }
+
+    async fn handle_server_message(
         &mut self,
         msg: SubscriberMessage,
+        ws_sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     ) -> Result<(), SessionError> {
         match msg {
             SubscriberMessage::Event(payload) => {
-                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Event { payload })
-                    .expect("serialization");
-                self.connection.send_ordered(bytes.into()).await;
-            }
-            SubscriberMessage::Voip(payload) => {
-                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Voip { payload })
-                    .expect("serialization");
-                self.connection.send_unordered(bytes.into()).await;
+                self.send(ws_sender, ConnectionMessage::Event { payload })
+                    .await?;
             }
             SubscriberMessage::Error(reason) => {
                 return Err(SessionError(reason));
             }
             SubscriberMessage::Close => {
-                let bytes = rmp_serde::to_vec_named(&ConnectionMessage::Control {
-                    payload: ControlPayload::Close,
-                })
-                .expect("serialization");
-                self.connection.send_ordered(bytes.into()).await;
+                let close_frame = CloseFrame {
+                    code: CLOSE_CODE_DISCONNECTED,
+                    reason: "Disconnected".into(),
+                };
+                let _ = ws_sender.send(Message::Close(Some(close_frame))).await;
                 return Err(SessionError("Close".to_string()));
             }
         }
         Ok(())
     }
 
-    pub async fn handle_connection_message(&mut self, msg: Message) -> Result<(), SessionError> {
-        match msg {
-            Message::Unordered(bytes) => {
-                if let Ok(voip_msg) = rmp_serde::from_slice::<VoipPayload>(&bytes) {
-                    return self.handle_voip_message(voip_msg).await;
-                }
-                Err(SessionError("Invalid VoIP message format".to_string()))
-            }
-            Message::Ordered(bytes) => {
-                if let Ok(ctr_msg) = rmp_serde::from_slice::<ControlPayload>(&bytes) {
-                    return self.handle_control_message(ctr_msg).await;
-                }
-                Err(SessionError("Invalid control message format".to_string()))
-            }
-        }
-    }
-
-    async fn handle_voip_message(&mut self, payload: VoipPayload) -> Result<(), SessionError> {
-        let user_session = self
-            .may_session
-            .clone()
-            .ok_or_else(|| SessionError("No user authenticated".to_string()))?;
-
-        let payload_user_id = match &payload {
-            VoipPayload::Speech { user_id, .. } => *user_id,
-            VoipPayload::Media { user_id, .. } => *user_id,
-        };
-        if payload_user_id != user_session.user_id as u64 {
-            return Err(SessionError("User ID mismatch".to_string()));
-        }
-
-        let now = std::time::Instant::now();
-        if now.duration_since(self.window_start).as_millis() > RATE_LIMIT_WINDOW_MS {
-            self.bytes_this_window = 0;
-            self.window_start = now;
-        }
-
-        let payload_size = match &payload {
-            VoipPayload::Speech { .. } => 32,
-            VoipPayload::Media { data, .. } => data.len() as u64,
-        };
-
-        self.bytes_this_window += payload_size;
-        if self.bytes_this_window > MAX_BYTES_PER_SECOND {
-            return Err(SessionError("VoIP abuse detected".to_string()));
-        }
-
-        self.send_to_server(ServerMessage::Voip(payload, self.identifier.clone()))
-            .await;
-
-        Ok(())
-    }
-
-    async fn handle_control_message(
-        &mut self,
-        payload: ControlPayload,
+    async fn send(
+        &self,
+        ws_sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+        message: ConnectionMessage,
     ) -> Result<(), SessionError> {
-        match payload {
-            ControlPayload::Connect { token } => {
-                match self.service.authenticate_session(&token).await? {
-                    Some(ref session) => {
-                        self.may_session = Some(session.clone());
-                        self.send_to_server(ServerMessage::Command(CommandPayload::Connect(
-                            session.user_id,
-                            session.session_id,
-                            self.server_tx.clone(),
-                            self.identifier.clone(),
-                            session.session_token.clone(),
-                        )))
-                        .await;
-                        self.send_to_connection(
-                            ConnectionMessage::Control {
-                                payload: ControlPayload::Answer {
-                                    answer: AnswerPayload::Accept,
-                                },
-                            },
-                            true,
-                        )
-                        .await;
-                        Ok(())
-                    }
-                    None => {
-                        self.send_to_connection(
-                            ConnectionMessage::Control {
-                                payload: ControlPayload::Answer {
-                                    answer: AnswerPayload::Decline {
-                                        reason: "Bad Credentials".to_string(),
-                                    },
-                                },
-                            },
-                            true,
-                        )
-                        .await;
-                        Ok(())
-                    }
-                }
-            }
-            ControlPayload::Answer { .. } => {
-                Err(SessionError("Unexpected answer payload".to_string()))
-            }
-            ControlPayload::Close => Err(SessionError("Session End".to_string())),
-            ControlPayload::Error { .. } => {
-                Err(SessionError("Received error from client".to_string()))
-            }
-        }
+        let bytes = rmp_serde::to_vec_named(&message).expect("serialization");
+        ws_sender
+            .send(Message::Binary(bytes.into()))
+            .await
+            .map_err(|_| SessionError("Send failed".to_string()))
     }
 
-    async fn send_to_connection<T>(&mut self, payload: T, ordered: bool)
-    where
-        T: serde::Serialize,
-    {
-        let bytes = rmp_serde::to_vec_named(&payload).expect("serialization");
-        if ordered {
-            self.connection.send_ordered(bytes.into()).await;
-        } else {
-            self.connection.send_unordered(bytes.into()).await;
-        }
+    async fn send_ping(
+        &mut self,
+        ws_sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    ) -> Result<(), SessionError> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        self.pending_pings.push(PendingPing {
+            timestamp,
+            sent_at: Instant::now(),
+        });
+
+        self.send(ws_sender, ConnectionMessage::Ping { timestamp })
+            .await
     }
 
-    async fn send_to_server(&mut self, payload: ServerMessage) {
-        let _ = self.observer_tx.send(payload).await;
+    fn check_pong_timeouts(&mut self) -> bool {
+        let now = Instant::now();
+        let timeout = Duration::from_millis(PONG_TIMEOUT_MS);
+
+        let timed_out = self
+            .pending_pings
+            .iter()
+            .filter(|p| now.duration_since(p.sent_at) > timeout)
+            .count();
+
+        self.pending_pings
+            .retain(|p| now.duration_since(p.sent_at) <= timeout);
+        self.missed_pongs += timed_out;
+
+        self.missed_pongs >= MAX_MISSED_PONGS
     }
 }

@@ -1,6 +1,6 @@
 import { createSignal, createEffect, splitProps, Show, type Component, type JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { getServerUrlOrDefault } from '../lib/ServerConfig';
+import { getHttpUrl } from '../lib/ServerConfig';
 import { getSessionToken, cn } from '../utils';
 
 const cache = new Map<string, string>();
@@ -32,7 +32,7 @@ const Image: Component<ImageProps> = (props) => {
     if (!token) return;
 
     try {
-      const res = await fetch(`${getServerUrlOrDefault()}${path}`, {
+      const res = await fetch(`${getHttpUrl()}${path}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!res.ok) return;

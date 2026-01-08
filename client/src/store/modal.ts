@@ -1,5 +1,8 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
+import type { MediaType } from "../model";
+
+export type CallType = "private" | "channel";
 
 export type ModalType =
   | { type: "createGroup" }
@@ -11,6 +14,8 @@ export type ModalType =
   | { type: "roleSettings"; roleId: number }
   | { type: "createRole" }
   | { type: "serverSettings" }
+  | { type: "voipUserSettings"; publisherId: number; callType: CallType }
+  | { type: "focusedStream"; publisherId: number; mediaType: MediaType; callType: CallType }
   | null;
 
 interface ModalState {

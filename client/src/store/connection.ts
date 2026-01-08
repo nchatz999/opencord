@@ -1,5 +1,7 @@
 import { createRoot } from "solid-js";
 import { decode, encode } from "@msgpack/msgpack";
+import type { Result } from "opencord-utils";
+import { ok, err } from "opencord-utils";
 import type {
   Channel,
   Group,
@@ -7,58 +9,19 @@ import type {
   User,
   VoipParticipant,
   GroupRoleRights,
-  Subscription,
   File,
   ServerConfig,
   Reaction,
 } from "../model";
-import { err, ok, type Result } from "opencord-utils";
-import { MediaTransport } from "opencord-transport";
+import { getWsUrl } from "../lib/ServerConfig";
 
-function hexToUint8Array(hexString: string): Uint8Array {
-  const cleanHex = hexString.replace(/[^0-9A-Fa-f]/g, '');
-  const matches = cleanHex.match(/.{1,2}/g);
-  if (!matches) return new Uint8Array();
-  return new Uint8Array(
-    matches.map((byte) => parseInt(byte, 16))
-  );
-}
 
-function getCertificateHash(): WebTransportHash | undefined {
-  const certHash = import.meta.env.VITE_CERT_HASH;
-  if (!certHash) return undefined;
-  return {
-    algorithm: 'sha-256',
-    value: hexToUint8Array(certHash)
-  };
-}
+const PING_INTERVAL_MS = 1000;
+const PONG_TIMEOUT_MS = 2000;
+const MAX_MISSED_PONGS = 1;
+const CLOSE_CODE_AUTH_FAILED = 4001;
+const CLOSE_CODE_DISCONNECTED = 4002;
 
-export type AnswerPayload =
-  | { type: "accept" }
-  | { type: "decline"; reason: string };
-
-export type ControlPayload =
-  | { type: "connect"; token: string }
-  | { type: "answer"; answer: AnswerPayload }
-  | { type: "close"; reason?: string }
-  | { type: "error"; reason: string };
-
-export type VoipPayload =
-  | {
-    type: "speech";
-    userId: number;
-    isSpeaking: boolean;
-  }
-  | {
-    type: "media";
-    userId: number;
-    mediaType: "voice" | "camera" | "screen" | "screenSound";
-    data: Uint8Array;
-    timestamp: number;
-    realTimestamp: number;
-    key: "key" | "delta";
-    sequence: number;
-  };
 
 export type EventPayload =
   | { type: "channelCreated"; channel: Channel }
@@ -102,101 +65,136 @@ export type EventPayload =
     emoji: string;
     messageType: { type: "Channel"; channelId: number } | { type: "Direct"; recipientId: number };
   }
-  | { type: "mediaSubscription"; subscription: Subscription }
-  | { type: "mediaUnsubscription"; subscription: Subscription }
   | { type: "readStatusUpdated"; channelId: number | null; recipientId: number | null; hasNewMessage: boolean };
 
 type ConnectionMessage =
-  | { type: "voip"; payload: VoipPayload }
-  | { type: "event"; payload: EventPayload }
-  | { type: "control"; payload: ControlPayload };
+  | { type: "ping"; timestamp: number }
+  | { type: "pong"; timestamp: number }
+  | { type: "event"; payload: EventPayload };
+
+export type ConnectionError =
+  | { type: "networkError" }
+  | { type: "authFailed" };
 
 export interface ConnectionActions {
-  connect: (url: string, token: string) => Promise<Result<void, string>>;
-  disconnect: () => Promise<void>;
-  sendVoip: (payload: VoipPayload) => Promise<void>;
-  sendControl: (payload: ControlPayload) => void;
-
-  onVoipData: (callback: (data: VoipPayload) => void) => () => void;
+  connect: (token: string) => Promise<Result<void, ConnectionError>>;
+  disconnect: () => void;
   onServerEvent: (callback: (event: EventPayload) => void) => () => void;
   onConnectionClosed: (callback: () => void) => () => void;
-  onServerError: (callback: (reason: string) => void) => () => void;
   onConnectionLost: (callback: () => void) => () => void;
 }
 
-interface TransportConfig {
-  certificateHash?: WebTransportHash;
+
+interface PendingPing {
+  timestamp: number;
+  sentAt: number;
+  timeoutId: number;
 }
 
-function createConnectionStore(config?: TransportConfig): ConnectionActions {
-  const voipDataCallbacks = new Set<(data: VoipPayload) => void>();
+
+function createConnectionStore(): ConnectionActions {
   const serverEventCallbacks = new Set<(event: EventPayload) => void>();
   const closedCallbacks = new Set<() => void>();
-  const serverErrorCallbacks = new Set<(reason: string) => void>();
   const connectionLostCallbacks = new Set<() => void>();
 
-  let pendingConnection: {
-    resolve: (success: boolean) => void;
-    reject: (error: Error) => void;
-  } | null = null;
+  let socket: WebSocket | null = null;
+  let pingIntervalId: number | null = null;
+  let pendingPings: PendingPing[] = [];
+  let missedPongs = 0;
+  let connectResolve: ((result: Result<void, ConnectionError>) => void) | null = null;
 
-  const protocol = new MediaTransport(
-    (data: ArrayBuffer) => {
-      const message = decode(data) as ConnectionMessage;
-      handleConnectionMessage(message);
-    },
-    (data: ArrayBuffer) => {
-      const message = decode(data) as ConnectionMessage;
-      handleConnectionMessage(message);
-    },
-    async () => {
-      await actions.disconnect();
-      notifyConnectionLost();
+  function disconnect() {
+    if (pingIntervalId !== null) {
+      clearInterval(pingIntervalId);
+      pingIntervalId = null;
     }
-  );
+    pendingPings.forEach(p => clearTimeout(p.timeoutId));
+    pendingPings = [];
+    missedPongs = 0;
+    if (socket) {
+      socket.close(1000, "Client disconnect");
+      socket = null;
+    }
+  }
 
-  function handleConnectionMessage(message: ConnectionMessage): void {
+  function startPingPong() {
+    pingIntervalId = window.setInterval(() => {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+      const timestamp = Date.now();
+      socket.send(encode({ type: "ping", timestamp }));
+
+      const timeoutId = window.setTimeout(() => {
+        pendingPings = pendingPings.filter(p => p.timestamp !== timestamp);
+        missedPongs++;
+
+        if (missedPongs >= MAX_MISSED_PONGS) {
+          disconnect();
+          notifyConnectionLost();
+        }
+      }, PONG_TIMEOUT_MS);
+
+      pendingPings.push({ timestamp, sentAt: Date.now(), timeoutId });
+    }, PING_INTERVAL_MS);
+  }
+
+  function handleMessage(data: ArrayBuffer) {
+    const message = decode(data) as ConnectionMessage;
+
     switch (message.type) {
-      case "voip":
-        notifyVoipData(message.payload);
+      case "ping":
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(encode({ type: "pong", timestamp: message.timestamp }));
+        }
         break;
-      case "control":
-        handleControlPayload(message.payload);
+
+      case "pong": {
+        const ping = pendingPings.find(p => p.timestamp === message.timestamp);
+        if (ping) {
+          clearTimeout(ping.timeoutId);
+          pendingPings = pendingPings.filter(p => p.timestamp !== message.timestamp);
+          missedPongs = 0;
+        }
         break;
+      }
+
       case "event":
         notifyServerEvent(message.payload);
         break;
     }
   }
 
-  async function handleControlPayload(payload: ControlPayload) {
-    switch (payload.type) {
-      case "answer":
-        if (pendingConnection) {
-          const success = payload.answer.type === "accept";
-          pendingConnection.resolve(success);
-          pendingConnection = null;
-        }
-        break;
-
-      case "close":
-        await actions.disconnect()
-        notifyClosed();
-        break;
-
-      case "error":
-        await actions.disconnect();
-        notifyServerError(payload.reason);
-        break;
-
-      case "connect":
-        console.warn("Received unexpected connect message from server");
-        break;
+  function handleOpen() {
+    startPingPong();
+    if (connectResolve) {
+      connectResolve(ok(undefined));
+      connectResolve = null;
     }
   }
 
-  function notifyVoipData(data: VoipPayload): void {
-    voipDataCallbacks.forEach((cb) => cb(data));
+  function handleError() {
+    disconnect();
+    if (connectResolve) {
+      connectResolve(err({ type: "networkError" }));
+      connectResolve = null;
+    }
+  }
+
+  function handleClose(event: CloseEvent) {
+    disconnect();
+    if (connectResolve) {
+      if (event.code === CLOSE_CODE_AUTH_FAILED) {
+        connectResolve(err({ type: "authFailed" }));
+      } else if (event.code === CLOSE_CODE_DISCONNECTED) {
+        connectResolve(err({ type: "networkError" }));
+      }
+      connectResolve = null;
+      return;
+    } else {
+      if (event.code === CLOSE_CODE_DISCONNECTED) {
+        notifyClosed();
+      }
+    }
   }
 
   function notifyServerEvent(event: EventPayload): void {
@@ -207,81 +205,28 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     closedCallbacks.forEach((cb) => cb());
   }
 
-  function notifyServerError(reason: string): void {
-    serverErrorCallbacks.forEach((cb) => cb(reason));
-  }
-
   function notifyConnectionLost(): void {
     connectionLostCallbacks.forEach((cb) => cb());
   }
 
   const actions: ConnectionActions = {
-    async connect(url: string, token: string): Promise<Result<void, string>> {
-      await actions.disconnect();
+    connect(token: string): Promise<Result<void, ConnectionError>> {
+      disconnect();
 
-      try {
-        if (config?.certificateHash) {
-          await protocol.connect(url, config.certificateHash);
-        } else {
-          await protocol.connect(url);
-        }
-      } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Connection failed";
-        return err(errorMsg);
-      }
+      const wsUrl = `${getWsUrl()}/ws?token=${encodeURIComponent(token)}`;
+      socket = new WebSocket(wsUrl);
+      socket.binaryType = "arraybuffer";
+      socket.onopen = handleOpen;
+      socket.onmessage = (event) => handleMessage(event.data);
+      socket.onerror = handleError;
+      socket.onclose = handleClose;
 
       return new Promise((resolve) => {
-        if (pendingConnection) {
-          resolve(err("Connection already in progress"));
-          return;
-        }
-
-        pendingConnection = {
-          resolve: (success: boolean) => {
-            if (success) {
-              resolve(ok(undefined));
-            } else {
-              resolve(err("Connection rejected by server"));
-            }
-          },
-          reject: (error: Error) => {
-            resolve(err(error.message));
-          },
-        };
-
-        const connectMessage: ControlPayload = {
-          type: "connect",
-          token,
-        };
-
-        protocol.sendOrdered(encode(connectMessage));
-
-        setTimeout(() => {
-          if (pendingConnection) {
-            pendingConnection.reject(new Error("Connection timeout"));
-            pendingConnection = null;
-          }
-        }, 10000);
+        connectResolve = resolve;
       });
     },
 
-    async disconnect(): Promise<void> {
-      pendingConnection = null;
-      await protocol.disconnect()
-    },
-
-    async sendVoip(payload: VoipPayload): Promise<void> {
-      await protocol.send(encode(payload));
-    },
-
-    sendControl(payload: ControlPayload): void {
-      protocol.sendOrdered(encode(payload));
-    },
-
-    onVoipData(callback: (data: VoipPayload) => void): () => void {
-      voipDataCallbacks.add(callback);
-      return () => voipDataCallbacks.delete(callback);
-    },
+    disconnect,
 
     onServerEvent(callback: (event: EventPayload) => void): () => void {
       serverEventCallbacks.add(callback);
@@ -291,11 +236,6 @@ function createConnectionStore(config?: TransportConfig): ConnectionActions {
     onConnectionClosed(callback: () => void): () => void {
       closedCallbacks.add(callback);
       return () => closedCallbacks.delete(callback);
-    },
-
-    onServerError(callback: (reason: string) => void): () => void {
-      serverErrorCallbacks.add(callback);
-      return () => serverErrorCallbacks.delete(callback);
     },
 
     onConnectionLost(callback: () => void): () => void {
@@ -312,9 +252,7 @@ let instance: ConnectionActions | null = null;
 export function useConnection(): ConnectionActions {
   if (!instance) {
     createRoot(() => {
-      instance = createConnectionStore({
-        certificateHash: getCertificateHash()
-      });
+      instance = createConnectionStore();
     });
   }
   return instance!;

@@ -4,7 +4,7 @@ import { Hash, Volume2, Lock } from "lucide-solid";
 
 import { VoipChannelMember } from "../voip/VoipChannelMember";
 import { ChannelType, type Channel } from "../../model";
-import { useContext, useModal, useVoip, usePlayback, useMicrophone, useScreenShare, useCamera, useOutput, useAcl, useAuth, useNotification } from "../../store/index";
+import { useContext, useModal, useVoip, useOutput, useAcl, useAuth, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 
 export const ChannelEntry: Component<{
@@ -15,11 +15,7 @@ export const ChannelEntry: Component<{
   const hasUnread = () => props.channel.channelType === ChannelType.Text && notification.hasChannel(props.channel.channelId);
   const [, modalActions] = useModal();
   const [, voipActions] = useVoip();
-  const [, playbackActions] = usePlayback();
-  const [microphoneState, microphoneActions] = useMicrophone();
   const [, outputActions] = useOutput()
-  const [screenShareState, screenShareActions] = useScreenShare();
-  const [cameraState, cameraActions] = useCamera();
   const [, aclActions] = useAcl();
   const [, authActions] = useAuth();
 
@@ -34,25 +30,14 @@ export const ChannelEntry: Component<{
     }
 
     if (channel.channelType === ChannelType.VoIP) {
-
-      if (screenShareState.isRecording) {
-        screenShareActions.stop();
-      }
-      if (cameraState.isRecording) {
-        cameraActions.stop();
-      }
-
       const result = await voipActions.joinChannel(
         channel.channelId,
-        microphoneState.muted,
+        false,
         outputActions.getDeafened()
       );
       if (result.isErr()) {
         addToast(`Failed to join channel: ${result.error}`, "error");
-        return;
       }
-      await microphoneActions.start();
-      await playbackActions.resume();
     }
   };
 

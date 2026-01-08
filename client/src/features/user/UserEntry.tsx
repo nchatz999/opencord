@@ -2,7 +2,7 @@ import { type Component, Show } from "solid-js";
 import { MessageCircle, Phone } from "lucide-solid";
 import Avatar from "../../components/Avatar";
 import { UserStatusType, type User } from "../../model";
-import { useVoip, usePlayback, useContext, useMicrophone, useScreenShare, useCamera, useOutput, useNotification } from "../../store/index";
+import { useVoip, useContext, useOutput, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
 
 const UnreadBadge = () => (
@@ -14,14 +14,10 @@ export const UserEntry: Component<{ user: User; }> = (
 ) => {
   const { addToast } = useToaster();
   const [, voipActions] = useVoip();
-  const [, playbackActions] = usePlayback();
   const [, contextActions] = useContext();
   const notification = useNotification();
   const hasUnread = () => notification.hasDM(props.user.userId);
-  const [microphoneState, microphoneActions] = useMicrophone();
   const [, outputActions] = useOutput()
-  const [screenShareState, screenShareActions] = useScreenShare();
-  const [cameraState, cameraActions] = useCamera();
 
   const statusColors: Record<UserStatusType | number, string> = {
     [UserStatusType.Online]: "bg-status-online",
@@ -54,26 +50,15 @@ export const UserEntry: Component<{ user: User; }> = (
   const handleVoiceCall = async (e: MouseEvent) => {
     e.stopPropagation();
 
-    if (screenShareState.isRecording) {
-      screenShareActions.stop();
-    }
-    if (cameraState.isRecording) {
-      cameraActions.stop();
-    }
-
     const result = await voipActions.joinPrivate(
       props.user.userId,
-      microphoneState.muted,
+      false,
       outputActions.getDeafened()
     );
 
     if (result.isErr()) {
       addToast(`Failed to join private call: ${result.error}`, 'error');
-      return;
     }
-
-    await microphoneActions.start();
-    await playbackActions.resume();
   };
 
   return (

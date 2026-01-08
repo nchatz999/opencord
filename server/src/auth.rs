@@ -623,6 +623,8 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
             ))
             .await;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateUsers).await;
+
         let _ = self
             .logger
             .log_entry(

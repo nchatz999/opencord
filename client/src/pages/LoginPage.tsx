@@ -4,7 +4,7 @@ import { useToaster } from "../components/Toaster";
 import { Input } from "../components/Input";
 import Checkbox from "../components/CheckBox";
 import Button from "../components/Button";
-import { getServerUrlOrDefault } from "../lib/ServerConfig";
+import { getDomain } from "../lib/ServerConfig";
 import { useAuth } from "../store/auth";
 import { useApp } from "../store/app";
 
@@ -21,16 +21,16 @@ const LoginPage: Component = () => {
   const [inviteCode, setInviteCode] = createSignal("");
   const [rememberMe, setRememberMe] = createSignal(false);
   const [activeForm, setActiveForm] = createSignal<FormType>("login");
-  const [serverUrl, setServerUrl] = createSignal(getServerUrlOrDefault());
+  const [serverDomain, setServerDomain] = createSignal(getDomain());
 
   const handleLogin = async (e: Event) => {
     e.preventDefault();
-    if (!username() || !password() || !serverUrl()) {
+    if (!username() || !password() || !serverDomain()) {
       addToast("Please fill in all fields", "error");
       return;
     }
 
-    const result = await authActions.login(username(), password(), serverUrl());
+    const result = await authActions.login(username(), password(), serverDomain());
 
     if (result.isErr()) {
       addToast(result.error, "error");
@@ -42,7 +42,7 @@ const LoginPage: Component = () => {
 
   const handleRegister = async (e: Event) => {
     e.preventDefault();
-    if (!password() || !username() || !repeatPassword() || !inviteCode() || !serverUrl()) {
+    if (!password() || !username() || !repeatPassword() || !inviteCode() || !serverDomain()) {
       addToast("Please fill in all fields", "error");
       return;
     }
@@ -52,7 +52,7 @@ const LoginPage: Component = () => {
       return;
     }
 
-    const result = await authActions.register(username(), password(), inviteCode(), serverUrl());
+    const result = await authActions.register(username(), password(), inviteCode(), serverDomain());
 
     if (result.isErr()) {
       addToast(result.error, "error");
@@ -67,9 +67,9 @@ const LoginPage: Component = () => {
     <>
       <form onSubmit={handleLogin} class="space-y-4">
         <Input
-          value={serverUrl()}
-          onChange={setServerUrl}
-          placeholder="Server URL"
+          value={serverDomain()}
+          onChange={setServerDomain}
+          placeholder="Server Domain"
           icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
@@ -110,9 +110,9 @@ const LoginPage: Component = () => {
     <>
       <form onSubmit={handleRegister} class="space-y-4">
         <Input
-          value={serverUrl()}
-          onChange={setServerUrl}
-          placeholder="Server URL"
+          value={serverDomain()}
+          onChange={setServerDomain}
+          placeholder="Server Domain"
           icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input

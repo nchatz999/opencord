@@ -1,184 +1,115 @@
 import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
-import { AudioPlayback, createSharedAudioContext } from "../lib/AudioPlayback";
-import { VideoPlayback } from "../lib/VideoPlayback";
 import { usePreference } from "./preference";
+import { Track, type RemoteTrack, type RemoteAudioTrack } from "livekit-client";
 
-export type MediaTypeKey = "voice" | "camera" | "screen" | "screenSound";
-export type CallType = "private" | "channel";
-type PlaybackKey = `${number}-${MediaTypeKey}`;
+type Key = `${number}:${Track.Source}`;
+type AudioSource = Track.Source.Microphone | Track.Source.ScreenShareAudio;
 
-interface PlaybackStoreState {
-  audio: AudioContext;
-  playbacks: Map<PlaybackKey, AudioPlayback | VideoPlayback>;
-  speakingStates: Record<number, boolean>;
+interface AudioEntry {
+  track: RemoteAudioTrack;
+  volume: number;
+}
+
+interface PlaybackState {
+  tracks: Record<Key, RemoteTrack>;
+  audio: Record<Key, AudioEntry>;
+  speaking: Record<number, boolean>;
 }
 
 interface PlaybackActions {
-  getAudioContext: () => AudioContext;
-  resume: () => Promise<void>;
-  getPlayback: (userId: number, mediaType: MediaTypeKey) => AudioPlayback | VideoPlayback | undefined;
-  createPlayback: (userId: number, mediaType: MediaTypeKey, callType: CallType) => AudioPlayback | VideoPlayback;
-  destroyPlayback: (userId: number, mediaType: MediaTypeKey) => void;
+  attachTrack: (userId: number, source: Track.Source, track: RemoteTrack) => void;
+  detachTrack: (userId: number, source: Track.Source) => void;
+  getTrack: (userId: number, source: Track.Source) => RemoteTrack | undefined;
+  isSubscribedToVideo: (userId: number, source: Track.Source.Camera | Track.Source.ScreenShare) => boolean;
   cleanupForUser: (userId: number) => void;
-  streamMedia: (
-    userId: number,
-    mediaType: MediaTypeKey,
-    packet: EncodedAudioChunk | EncodedVideoChunk,
-    timestamp: number,
-    sequence: number,
-    callType: CallType
-  ) => void;
   updateSpeakingState: (userId: number, isSpeaking: boolean) => void;
   getSpeakingState: (userId: number) => boolean;
-  clearSpeakingState: (userId: number) => void;
-  adjustVolume: (userId: number, volume: number, callType: CallType) => void;
-  getVolume: (userId: number, callType: CallType) => number;
-  adjustScreenAudio: (userId: number, volume: number, callType: CallType) => void;
-  getScreenAudioVolume: (userId: number, callType: CallType) => number;
+  setVolume: (userId: number, volume: number) => void;
+  getVolume: (userId: number) => number;
+  setScreenVolume: (userId: number, volume: number) => void;
+  getScreenVolume: (userId: number) => number;
 }
 
-export type PlaybackStore = [PlaybackStoreState, PlaybackActions];
+export type PlaybackStore = [PlaybackState, PlaybackActions];
+
+const SOURCES = [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare, Track.Source.ScreenShareAudio];
+const DEFAULT_VOLUME: Record<AudioSource, number> = {
+  [Track.Source.Microphone]: 100,
+  [Track.Source.ScreenShareAudio]: 100,
+};
 
 function createPlaybackStore(): PlaybackStore {
-  const [state, setState] = createStore<PlaybackStoreState>({
-    audio: createSharedAudioContext(),
-    playbacks: new Map(),
-    speakingStates: {},
+  const [state, setState] = createStore<PlaybackState>({
+    tracks: {},
+    audio: {},
+    speaking: {},
   });
 
-  const [, prefActions] = usePreference();
+  const [, pref] = usePreference();
 
-  const getVolumeKey = (userId: number, mediaType: "voice" | "screenSound", callType: CallType = "channel") =>
-    `volume:${userId}:${callType}:${mediaType}`;
+  const toKey = (userId: number, source: Track.Source): Key => `${userId}:${source}`;
+  const prefKey = (userId: number, source: AudioSource) => `vol:${userId}:${source}`;
+
+  const loadVolume = (userId: number, source: AudioSource): number => {
+    return pref.get<number>(prefKey(userId, source)) ?? DEFAULT_VOLUME[source];
+  };
+
+  const updateVolume = (userId: number, source: AudioSource, volume: number) => {
+    const k = toKey(userId, source);
+    const entry = state.audio[k];
+    if (entry) {
+      pref.set(prefKey(userId, source), volume);
+      entry.track.setVolume(volume / 100);
+      setState("audio", k, { ...entry, volume });
+    }
+  };
+
+  const readVolume = (userId: number, source: AudioSource): number => {
+    return state.audio[toKey(userId, source)]?.volume ?? DEFAULT_VOLUME[source];
+  };
 
   const actions: PlaybackActions = {
-    getAudioContext() {
-      return state.audio;
-    },
+    attachTrack(userId, source, track) {
+      const k = toKey(userId, source);
+      actions.detachTrack(userId, source);
+      setState("tracks", k, track);
 
-    async resume() {
-      await state.audio.resume();
-    },
-
-    getPlayback(userId, mediaType) {
-      const key: PlaybackKey = `${userId}-${mediaType}`;
-      return state.playbacks.get(key);
-    },
-
-    createPlayback(userId, mediaType, callType) {
-      const key: PlaybackKey = `${userId}-${mediaType}`;
-      const ctx = state.audio;
-
-      let playback: AudioPlayback | VideoPlayback;
-
-      switch (mediaType) {
-        case "voice": {
-          const pb = new AudioPlayback(ctx, 200);
-          const vol = prefActions.get<number>(getVolumeKey(userId, "voice", callType)) ?? 100;
-          pb.setVolume(vol);
-          playback = pb;
-          break;
-        }
-        case "screenSound": {
-          const pb = new AudioPlayback(ctx, 200);
-          const vol = prefActions.get<number>(getVolumeKey(userId, "screenSound", callType)) ?? 0;
-          pb.setVolume(vol);
-          playback = pb;
-          break;
-        }
-        case "camera":
-        case "screen":
-          playback = new VideoPlayback(200);
-          break;
+      if (source === Track.Source.Microphone || source === Track.Source.ScreenShareAudio) {
+        const audioTrack = track as RemoteAudioTrack;
+        const volume = loadVolume(userId, source);
+        audioTrack.setVolume(volume / 100);
+        audioTrack.attach();
+        setState("audio", k, { track: audioTrack, volume });
       }
-
-      setState("playbacks", (map) => new Map(map).set(key, playback));
-      return playback;
     },
 
-    destroyPlayback(userId, mediaType) {
-      const key: PlaybackKey = `${userId}-${mediaType}`;
-      const playback = state.playbacks.get(key);
-      if (!playback) return;
-
-      playback.cleanup();
-
-      setState("playbacks", (map) => {
-        const newMap = new Map(map);
-        newMap.delete(key);
-        return newMap;
-      });
+    detachTrack(userId, source) {
+      const k = toKey(userId, source);
+      const entry = state.audio[k];
+      if (entry) {
+        entry.track.detach();
+      }
+      state.tracks[k]?.detach();
+      setState("tracks", k, undefined!);
+      setState("audio", k, undefined!);
     },
+
+    getTrack: (userId, source) => state.tracks[toKey(userId, source)],
+    isSubscribedToVideo: (userId, source) => !!state.tracks[toKey(userId, source)],
 
     cleanupForUser(userId) {
-      const mediaTypes: MediaTypeKey[] = ["voice", "camera", "screen", "screenSound"];
-      for (const mediaType of mediaTypes) {
-        actions.destroyPlayback(userId, mediaType);
-      }
-      actions.clearSpeakingState(userId);
+      SOURCES.forEach((s) => actions.detachTrack(userId, s));
+      setState("speaking", userId, undefined!);
     },
 
-    streamMedia(userId, mediaType, packet, timestamp, sequence, callType) {
-      let playback = actions.getPlayback(userId, mediaType);
+    updateSpeakingState: (userId, isSpeaking) => setState("speaking", userId, isSpeaking),
+    getSpeakingState: (userId) => state.speaking[userId] ?? false,
 
-      if (!playback) {
-        playback = actions.createPlayback(userId, mediaType, callType);
-      }
-
-      if (mediaType === "voice" || mediaType === "screenSound") {
-        (playback as AudioPlayback).pushChunk(packet as EncodedAudioChunk, timestamp);
-      } else {
-        (playback as VideoPlayback).pushFrame(packet as EncodedVideoChunk, timestamp, sequence);
-      }
-    },
-
-    updateSpeakingState(userId, isSpeaking) {
-      setState("speakingStates", userId, isSpeaking);
-    },
-
-    getSpeakingState(userId) {
-      return state.speakingStates[userId] || false;
-    },
-
-    clearSpeakingState(userId) {
-      setState("speakingStates", (states) => {
-        const { [userId]: _, ...rest } = states;
-        return rest;
-      });
-    },
-
-    adjustVolume(userId, volume, callType) {
-      prefActions.set(getVolumeKey(userId, "voice", callType), volume);
-      const playback = actions.getPlayback(userId, "voice");
-      if (playback) {
-        (playback as AudioPlayback).setVolume(volume);
-      }
-    },
-
-    getVolume(userId, callType) {
-      const playback = actions.getPlayback(userId, "voice");
-      if (playback) {
-        return (playback as AudioPlayback).volume();
-      }
-      return prefActions.get<number>(getVolumeKey(userId, "voice", callType)) ?? 100;
-    },
-
-    adjustScreenAudio(userId, volume, callType) {
-      prefActions.set(getVolumeKey(userId, "screenSound", callType), volume);
-      const playback = actions.getPlayback(userId, "screenSound");
-      if (playback) {
-        (playback as AudioPlayback).setVolume(volume);
-      }
-    },
-
-    getScreenAudioVolume(userId, callType) {
-      const playback = actions.getPlayback(userId, "screenSound");
-      if (playback) {
-        return (playback as AudioPlayback).volume();
-      }
-      return prefActions.get<number>(getVolumeKey(userId, "screenSound", callType)) ?? 0;
-    },
+    setVolume: (userId, volume) => updateVolume(userId, Track.Source.Microphone, volume),
+    getVolume: (userId) => readVolume(userId, Track.Source.Microphone),
+    setScreenVolume: (userId, volume) => updateVolume(userId, Track.Source.ScreenShareAudio, volume),
+    getScreenVolume: (userId) => readVolume(userId, Track.Source.ScreenShareAudio),
   };
 
   return [state, actions];
@@ -188,9 +119,7 @@ let instance: PlaybackStore | null = null;
 
 export function usePlayback(): PlaybackStore {
   if (!instance) {
-    createRoot(() => {
-      instance = createPlaybackStore();
-    });
+    createRoot(() => { instance = createPlaybackStore(); });
   }
   return instance!;
 }

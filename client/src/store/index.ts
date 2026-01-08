@@ -22,10 +22,7 @@ export type { ContextStore } from "./context";
 export { useAcl } from "./acl";
 export type { AclStore } from "./acl";
 
-export { useSubscription } from "./subscription";
-export type { SubscriptionStore } from "./subscription";
-
-export { usePlayback, type PlaybackState } from "./playback";
+export { usePlayback } from "./playback";
 export type { PlaybackStore } from "./playback";
 
 export { useVoip } from "./voip";
@@ -41,19 +38,9 @@ export { useModal } from "./modal";
 export type { ModalStore } from "./modal";
 
 export { useConnection } from "./connection";
-export type { ConnectionStore } from "./connection";
 
 export { useAuth } from "./auth";
 export type { AuthStore, AuthState, AuthActions } from "./auth";
-
-export { useMicrophone } from "./microphone";
-export type { MicrophoneStore } from "./microphone";
-
-export { useCamera, MAX_VIDEO_BITRATE } from "./camera";
-export type { CameraStore } from "./camera";
-
-export { useScreenShare } from "./screenShare";
-export type { ScreenShareStore } from "./screenShare";
 
 export { useOutput } from "./output";
 export type { OutputStore, AudioOutputDevice } from "./output";
@@ -70,4 +57,4 @@ export type { ThemeStore, Theme } from "./theme";
 export { useNotification } from "./notification";
 export type { NotificationStore } from "./notification";
 
-export { initializeStores, getWebTransportUrl, connection, resetStore } from "./init";
+export { initializeStores, connection, resetStore } from "./init";

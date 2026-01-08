@@ -1,6 +1,3 @@
-import type { AudioPlayback } from "./lib/AudioPlayback";
-import type { VideoPlayback } from "./lib/VideoPlayback";
-
 export const RIGHTS = {
   Ack: 1,
   Read: 2,
@@ -21,9 +18,10 @@ export enum VoipDataType {
 }
 
 export enum MediaType {
-  Screen = "screen",
   Camera = "camera",
-  Audio = "audio",
+  Microphone = "microphone",
+  Screen = "screen_share",
+  ScreenAudio = "screen_share_audio",
 }
 
 
@@ -123,10 +121,6 @@ export interface VoipParticipant {
   publishScreen: boolean;
   publishCamera: boolean;
   createdAt: string;
-  playback?: AudioPlayback
-  cameraPlayback?: VideoPlayback,
-  screenPlayback?: VideoPlayback,
-  screenSoundPlayback?: AudioPlayback
 }
 
 export interface GroupRoleRights {
@@ -134,30 +128,6 @@ export interface GroupRoleRights {
   roleId: number;
   rights: number;
 }
-
-export interface Subscription {
-  userId: number;
-  publisherId: number;
-  mediaType: MediaType;
-  createdAt: string;
-}
-
-export type VoipDataMessage =
-  | {
-    type: "speech"
-    userId: number
-    isSpeaking: boolean
-  }
-  | {
-    type: "mediaData"
-    userId: number
-    mediaType: "voice" | "camera" | "screen" | "screenSound"
-    data: ArrayBuffer
-    timestamp: number
-    realTimestamp: number
-    key: "key" | "delta"
-  }
-
 
 export interface MessageWithFiles {
   message: Message;

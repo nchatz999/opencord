@@ -7,8 +7,7 @@ use crate::{
     message::{File, MessageType, Reaction},
     role::Role,
     user::User,
-    voip::{Subscription, VoipParticipant},
-    transport::VoipDataType,
+    voip::VoipParticipant,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -109,22 +108,11 @@ pub enum EventPayload {
         message_type: MessageType,
     },
 
-    #[serde(rename = "mediaSubscription")]
+    #[serde(rename = "readStatusUpdated")]
     #[serde(rename_all = "camelCase")]
-    MediaSubscription { subscription: Subscription },
-
-    #[serde(rename = "mediaUnsubscription")]
-    #[serde(rename_all = "camelCase")]
-    MediaUnsubscription { subscription: Subscription },
-
-    #[serde(rename = "voipData")]
-    #[serde(rename_all = "camelCase")]
-    VoIPData {
-        channel_id: i64,
-        user_id: i64,
-        data_type: VoipDataType,
-        data: Vec<u8>,
-        timestamp: u64,
-        key: String,
+    ReadStatusUpdated {
+        channel_id: Option<i64>,
+        recipient_id: Option<i64>,
+        has_new_message: bool,
     },
 }

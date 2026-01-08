@@ -1,15 +1,10 @@
 import { type Component, onMount } from "solid-js";
-import { useAuth, useConnection, initializeStores, getWebTransportUrl, useVoip, useMicrophone, useOutput } from "../store/index";
+import { useAuth, useConnection, initializeStores, useVoip, useOutput } from "../store/index";
 import { useApp } from "../store/app";
-import { useToaster } from "../components/Toaster";
 import logo from "../assets/opencord.webp";
 
 const MAX_RETRIES = 5;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const isChromiumBased = (): boolean => {
-  return /Chrome|Chromium/.test(navigator.userAgent);
-};
 
 interface LoadingPageProps {
   channelId?: number;
@@ -19,56 +14,43 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
   const [auth, authActions] = useAuth();
   const [, appActions] = useApp();
   const [, voipActions] = useVoip();
-  const [micState, micActions] = useMicrophone();
   const [, outputActions] = useOutput();
-  const connectionActions = useConnection();
-  const { addToast } = useToaster();
+  const connection = useConnection();
 
   onMount(() => {
     connectWithRetry();
   });
 
   const connectWithRetry = async () => {
-    if (!isChromiumBased()) {
-      appActions.setView({ type: "unsupported" });
-      return;
-    }
-
     if (!auth.session) {
       appActions.setView({ type: "unauthenticated" });
       return;
     }
 
-    const url = getWebTransportUrl();
     let retries = 0;
-
     while (retries < MAX_RETRIES) {
-      const connectResult = await connectionActions.connect(url, auth.session.sessionToken);
+      const result = await connection.connect(auth.session.sessionToken);
 
-      if (connectResult.isErr()) {
-        if (connectResult.error === "Connection rejected by server") {
-          authActions.logout();
+      if (result.isErr()) {
+        if (result.error.type === "authFailed") {
+          await authActions.logout();
           appActions.setView({ type: "unauthenticated" });
           return;
         }
 
-        addToast(connectResult.error, "error");
         retries++;
-
         if (retries < MAX_RETRIES) {
           await sleep(1000 * retries);
           continue;
         }
 
-        appActions.setView({ type: "error", error: "Max retries exceeded" });
+        appActions.setView({ type: "error", error: "Connection failed" });
         return;
       }
 
-      await sleep(100);
       await initializeStores();
       if (props.channelId) {
-        await voipActions.joinChannel(props.channelId, micState.muted, outputActions.getDeafened());
-        await micActions.start()
+        await voipActions.joinChannel(props.channelId, false, outputActions.getDeafened());
       }
       appActions.setView({ type: "app" });
       return;

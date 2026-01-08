@@ -6,14 +6,19 @@ import { ok, err } from "opencord-utils";
 import { request } from "../utils";
 import { useConnection } from "./connection";
 import { usePlayback } from "./playback";
+import type { CallType } from "./modal";
 import { useAuth } from "./auth";
-import { useMicrophone } from "./microphone";
-import { useScreenShare } from "./screenShare";
-import { useCamera } from "./camera";
 import { useSound } from "./sound";
+import { getLiveKitManager, Track } from "../lib/livekit";
+
+interface JoinVoipResponse {
+  token: string;
+  serverUrl: string;
+}
 
 interface VoipState {
   voipState: VoipParticipant[];
+  currentCallType: CallType | null;
 }
 
 interface VoipActions {
@@ -43,15 +48,14 @@ export type VoipStore = [VoipState, VoipActions];
 function createVoipStore(): VoipStore {
   const [state, setState] = createStore<VoipState>({
     voipState: [],
+    currentCallType: null,
   });
 
   const connection = useConnection();
   const [, authActions] = useAuth();
   const [, playbackActions] = usePlayback();
-  const [, microphoneActions] = useMicrophone();
-  const [, screenActions] = useScreenShare();
-  const [, cameraActions] = useCamera();
   const [, soundActions] = useSound();
+  const livekit = getLiveKitManager();
   let cleanupFn: (() => void) | null = null;
 
   const actions: VoipActions = {
@@ -83,9 +87,8 @@ function createVoipStore(): VoipStore {
             soundActions.play("/sounds/leave_call.ogg");
           }
           if (event.userId == authActions.getUser().userId) {
-            await microphoneActions.stop()
-            await screenActions.stop()
-            await cameraActions.stop()
+            await livekit.disconnect();
+            setState("currentCallType", null);
           }
           actions.remove(event.userId as number);
         }
@@ -100,6 +103,7 @@ function createVoipStore(): VoipStore {
         cleanupFn = null;
       }
       setState("voipState", []);
+      setState("currentCallType", null);
     },
 
     list() {
@@ -128,11 +132,11 @@ function createVoipStore(): VoipStore {
       );
 
       if (!participant.publishScreen) {
-        playbackActions.destroyPlayback(participant.userId, "screen");
-        playbackActions.destroyPlayback(participant.userId, "screenSound");
+        playbackActions.detachTrack(participant.userId, Track.Source.ScreenShare);
+        playbackActions.detachTrack(participant.userId, Track.Source.ScreenShareAudio);
       }
       if (!participant.publishCamera) {
-        playbackActions.destroyPlayback(participant.userId, "camera");
+        playbackActions.detachTrack(participant.userId, Track.Source.Camera);
       }
     },
 
@@ -158,14 +162,24 @@ function createVoipStore(): VoipStore {
         playbackActions.cleanupForUser(participant.userId);
       }
 
+      await livekit.disconnect();
       await request("/voip/leave", { method: "POST" });
 
-      const result = await request(`/voip/channel/${channelId}/join/${muted}/${deafened}`, {
+      const result = await request<JoinVoipResponse>(`/voip/channel/${channelId}/join/${muted}/${deafened}`, {
         method: "POST",
       });
       if (result.isErr()) {
         return err(result.error.reason);
       }
+
+      const { token, serverUrl } = result.value;
+      setState("currentCallType", "channel");
+
+      await livekit.connect(serverUrl, token);
+
+      livekit.setMuted(muted);
+      await livekit.setMicEnabled(true);
+
       soundActions.play("/sounds/enter_call_me.ogg");
       return ok(undefined);
     },
@@ -175,19 +189,32 @@ function createVoipStore(): VoipStore {
         playbackActions.cleanupForUser(participant.userId);
       }
 
+      await livekit.disconnect();
       await request("/voip/leave", { method: "POST" });
 
-      const result = await request(`/voip/private/${userId}/join/${muted}/${deafened}`, {
+      const result = await request<JoinVoipResponse>(`/voip/private/${userId}/join/${muted}/${deafened}`, {
         method: "POST",
       });
       if (result.isErr()) {
         return err(result.error.reason);
       }
+
+      const { token, serverUrl } = result.value;
+      setState("currentCallType", "private");
+
+      await livekit.connect(serverUrl, token);
+
+      livekit.setMuted(muted);
+      await livekit.setMicEnabled(true);
+
       soundActions.play("/sounds/enter_call_me.ogg");
       return ok(undefined);
     },
 
     async leave() {
+      await livekit.disconnect();
+      setState("currentCallType", null);
+
       const result = await request("/voip/leave", { method: "POST" });
       if (result.isErr()) {
         return err(result.error.reason);
@@ -203,6 +230,8 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+
+      await livekit.setMicMuted(muted);
       return ok(undefined);
     },
 
@@ -218,6 +247,7 @@ function createVoipStore(): VoipStore {
     },
 
     async publishScreen(publish) {
+      await livekit.setScreenShareEnabled(publish);
       const result = await request("/voip/screen/publish", {
         method: "PUT",
         body: { publish },
@@ -225,10 +255,12 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+
       return ok(undefined);
     },
 
     async publishCamera(publish) {
+      await livekit.setCameraEnabled(publish);
       const result = await request("/voip/camera/publish", {
         method: "PUT",
         body: { publish },
@@ -236,6 +268,7 @@ function createVoipStore(): VoipStore {
       if (result.isErr()) {
         return err(result.error.reason);
       }
+
       return ok(undefined);
     },
 

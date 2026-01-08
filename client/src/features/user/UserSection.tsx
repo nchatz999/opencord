@@ -3,21 +3,22 @@ import { Show } from 'solid-js'
 import { Mic, MicOff, Headphones, HeadphoneOff, Settings, Circle } from 'lucide-solid'
 import Avatar from '../../components/Avatar'
 import Button from '../../components/Button'
-import { useAuth, useVoip, useModal, useMicrophone, useOutput, useSound } from '../../store/index'
+import { useAuth, useVoip, useModal, useOutput, useSound } from '../../store/index'
 import { getStatusColor } from '../../utils'
 
 const UserSection: Component = () => {
   const [, authActions] = useAuth()
   const [, voipActions] = useVoip()
   const [, modalActions] = useModal()
-  const [microphoneState, microphoneActions] = useMicrophone()
   const [, outputActions] = useOutput()
   const [, soundActions] = useSound();
   const currentUser = () => authActions.getUser()
 
+  const currentVoip = () => voipActions.findById(currentUser().userId)
+  const isMuted = () => currentVoip()?.localMute ?? false
+
   const handleMuteToggle = async () => {
-    const newMuted = !microphoneState.muted
-    microphoneActions.setMuted(newMuted)
+    const newMuted = !isMuted()
     await voipActions.setMuted(newMuted)
     soundActions.play(newMuted ? "/sounds/mute.ogg" : "/sounds/unmute.ogg");
   }
@@ -59,12 +60,12 @@ const UserSection: Component = () => {
       <div class="flex items-center gap-1">
         <Button
           onClick={handleMuteToggle}
-          variant={microphoneState.muted ? "destructive" : "secondary"}
+          variant={isMuted() ? "destructive" : "secondary"}
           size="sm"
           class="p-2"
-          title={microphoneState.muted ? 'Unmute' : 'Mute'}
+          title={isMuted() ? 'Unmute' : 'Mute'}
         >
-          <Show when={microphoneState.muted} fallback={<Mic size={16} />}>
+          <Show when={isMuted()} fallback={<Mic size={16} />}>
             <MicOff size={16} />
           </Show>
         </Button>

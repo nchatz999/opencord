@@ -13,23 +13,23 @@ import {
   Lock,
   Upload,
   User as UserIcon,
-  Mic,
   Headphones,
   Circle,
   Monitor,
   Trash2,
   Calendar,
-  Settings,
   Palette,
+  Settings,
 } from "lucide-solid";
-import { connection, useAuth, useModal, usePlayback, useMicrophone, useCamera, useScreenShare, useOutput, useUser, useSound, useTheme, type AudioOutputDevice, MAX_VIDEO_BITRATE } from "../../store/index";
-import { getPresetOptions, type QualityPreset } from "../../model";
+import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
 import { useApp } from "../../store/app";
+import { getLiveKitManager, type VideoQuality } from "../../lib/livekit";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
 import Slider from "../../components/Slider";
 import Avatar from "../../components/Avatar";
+import Checkbox from "../../components/CheckBox";
 import { Tabs } from "../../components/Tabs";
 import Card from "../../components/Card";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../components/Table";
@@ -37,18 +37,15 @@ import { UserStatusType, type Session } from "../../model";
 import { useToaster } from "../../components/Toaster";
 import { getStatusColor } from "../../utils";
 
+
 const UserSettingsModal: Component = () => {
   const [, authActions] = useAuth();
   const [, appActions] = useApp();
   const [, modalActions] = useModal();
-  const [, playbackActions] = usePlayback();
   const [, userActions] = useUser();
-  const [microphoneState, microphoneActions] = useMicrophone();
-  const [cameraState, cameraActions] = useCamera();
-  const [screenShareState, screenShareActions] = useScreenShare();
-  const [, outputActions] = useOutput();
   const [, soundActions] = useSound();
   const [themeState, themeActions] = useTheme();
+  const livekit = getLiveKitManager();
   const user = () => authActions.getUser();
 
 
@@ -80,8 +77,7 @@ const UserSettingsModal: Component = () => {
     }
   };
 
-  onMount(async () => {
-    await playbackActions.resume()
+  onMount(() => {
     loadSessions();
   });
 
@@ -263,46 +259,28 @@ const UserSettingsModal: Component = () => {
       icon: <Volume2 class="w-4 h-4" />,
       content: (
         <div class="space-y-4 mt-6">
-          <Card title="Microphone" icon={<Mic class="w-4 h-4" />}>
-            <div class="space-y-4">
-              <Select
-                label="Input Device"
-                options={microphoneState.availableInputs.map((device: MediaDeviceInfo) => ({
-                  value: device.deviceId,
-                  label: device.label,
-                }))}
-                value={microphoneState.deviceId}
-                onChange={(device) => {
-                  microphoneActions.setDevice(device as string)
-                }}
-                class="w-full"
-              />
-              <Slider
-                title="Microphone Volume"
-                min={0}
-                max={200}
-                value={microphoneState.volume}
-                onChange={(e) => microphoneActions.setVolume(e)}
-              />
-            </div>
+          <Card title="Input" icon={<Volume2 class="w-4 h-4" />}>
+            <Select
+              label="Microphone"
+              options={livekit.getAudioInputDevices().map((d) => ({ value: d.deviceId, label: d.label }))}
+              value={livekit.getActiveAudioInput()}
+              onChange={async (id) => await livekit.setAudioInputDevice(id as string)}
+              class="w-full"
+            />
+            <Checkbox
+              label="Noise Cancellation"
+              checked={livekit.getNoiseCancellation()}
+              onChange={(checked) => livekit.setNoiseCancellation(checked)}
+              class="mt-3"
+            />
           </Card>
 
           <Card title="Output" icon={<Headphones class="w-4 h-4" />}>
             <Select
-              label="Output Device"
-              options={outputActions.getAvailableOutputs().map(
-                (device: AudioOutputDevice) => ({
-                  value: device.deviceId,
-                  label: device.label,
-                })
-              )}
-              value={outputActions.getSelectedOutput()?.deviceId || ""}
-              onChange={(deviceId) => {
-                const device = outputActions.getAvailableOutputs().find(d => d.deviceId === deviceId);
-                if (device) {
-                  outputActions.setOutput(device);
-                }
-              }}
+              label="Speaker"
+              options={livekit.getAudioOutputDevices().map((d) => ({ value: d.deviceId, label: d.label }))}
+              value={livekit.getActiveAudioOutput()}
+              onChange={async (id) => await livekit.setAudioOutputDevice(id as string)}
               class="w-full"
             />
           </Card>
@@ -357,69 +335,6 @@ const UserSettingsModal: Component = () => {
       ),
     },
     {
-      id: "quality",
-      label: "Quality",
-      icon: <Settings class="w-4 h-4" />,
-      content: (
-        <div class="space-y-4 mt-6">
-          <Card title="Video Settings" icon={<Settings class="w-4 h-4" />}>
-            <div class="space-y-6">
-              <Select
-                label="Camera Resolution"
-                options={getPresetOptions()}
-                value={cameraState.preset}
-                onChange={(value) => cameraActions.setPreset(value as QualityPreset)}
-                class="w-full"
-              />
-
-              <Select
-                label="Screen Share Resolution"
-                options={getPresetOptions()}
-                value={screenShareState.preset}
-                onChange={(value) => screenShareActions.setPreset(value as QualityPreset)}
-                class="w-full"
-              />
-
-              <Select
-                label="Screen Share Frame Rate"
-                options={[
-                  { value: 30, label: "30 FPS" },
-                  { value: 60, label: "60 FPS" },
-                ]}
-                value={screenShareState.frameRate}
-                onChange={(value) => screenShareActions.setFrameRate(value as number)}
-                class="w-full"
-              />
-
-              <Slider
-                title={`Camera Bitrate: ${(cameraState.quality / 1_000_000).toFixed(1)} Mbps`}
-                value={cameraState.quality}
-                min={500000}
-                max={MAX_VIDEO_BITRATE}
-                onChange={(value) => cameraActions.setQuality(value)}
-              />
-
-              <Slider
-                title={`Screen Share Bitrate: ${(screenShareState.quality / 1_000_000).toFixed(1)} Mbps`}
-                value={screenShareState.quality}
-                min={500000}
-                max={MAX_VIDEO_BITRATE}
-                onChange={(value) => screenShareActions.setQuality(value)}
-              />
-
-              <Slider
-                title={`Audio Bitrate: ${(microphoneState.quality / 1000).toFixed(0)} kbps`}
-                value={microphoneState.quality}
-                min={64000}
-                max={320000}
-                onChange={(value) => microphoneActions.setQuality(value)}
-              />
-            </div>
-          </Card>
-        </div>
-      ),
-    },
-    {
       id: "appearance",
       label: "Appearance",
       icon: <Palette class="w-4 h-4" />,
@@ -434,6 +349,24 @@ const UserSettingsModal: Component = () => {
               }))}
               value={themeState.current}
               onChange={(value) => themeActions.setTheme(value as string)}
+              class="w-full"
+            />
+          </Card>
+        </div>
+      ),
+    },
+    {
+      id: "quality",
+      label: "Quality",
+      icon: <Settings class="w-4 h-4" />,
+      content: (
+        <div class="space-y-4 mt-6">
+          <Card title="Video Quality" icon={<Settings class="w-4 h-4" />}>
+            <Select
+              label="Quality"
+              options={livekit.getVideoQualityOptions()}
+              value={livekit.getVideoQuality()}
+              onChange={(value) => livekit.setVideoQuality(value as VideoQuality)}
               class="w-full"
             />
           </Card>
@@ -549,9 +482,6 @@ const UserSettingsModal: Component = () => {
         <Tabs items={tabItems()} />
         <div class="mt-6 flex justify-end gap-2">
           <Button onClick={async () => {
-            await microphoneActions.stop();
-            await cameraActions.stop();
-            await screenShareActions.stop();
             await authActions.logout();
             await connection.disconnect();
             modalActions.close();

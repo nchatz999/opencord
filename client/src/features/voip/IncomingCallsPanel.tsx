@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js'
 import { Show, For } from 'solid-js'
 import { ChevronDown, ChevronRight, Phone } from 'lucide-solid'
-import { useAuth, useUser, useVoip, usePreference, usePlayback, useMicrophone, useScreenShare, useCamera } from '../../store/index'
+import { useAuth, useUser, useVoip, usePreference } from '../../store/index'
 import Avatar from '../../components/Avatar'
 import { useToaster } from '../../components/Toaster'
 
@@ -12,10 +12,6 @@ const IncomingCallsPanel: Component = () => {
   const [, authActions] = useAuth()
   const [, userActions] = useUser()
   const [voipState, voipActions] = useVoip()
-  const [, playbackActions] = usePlayback()
-  const [microphoneState, microphoneActions] = useMicrophone()
-  const [screenShareState, screenShareActions] = useScreenShare()
-  const [cameraState, cameraActions] = useCamera()
   const { addToast } = useToaster()
 
   const isCollapsed = () => prefActions.get<boolean>(COLLAPSED_KEY) ?? false
@@ -28,9 +24,8 @@ const IncomingCallsPanel: Component = () => {
 
   const incomingCallers = () => {
     const userId = currentUserId()
-    const isInCall = voipState.voipState.some(p => p.userId === userId)
     return voipState.voipState
-      .filter(p => p.recipientId === userId && !isInCall)
+      .filter(p => p.recipientId === userId)
       .map(p => ({
         participant: p,
         user: userActions.findById(p.userId)
@@ -39,26 +34,11 @@ const IncomingCallsPanel: Component = () => {
   }
 
   const handleCallback = async (callerId: number) => {
-    if (screenShareState.isRecording) {
-      screenShareActions.stop()
-    }
-    if (cameraState.isRecording) {
-      cameraActions.stop()
-    }
-
-    const result = await voipActions.joinPrivate(
-      callerId,
-      microphoneState.muted,
-      false
-    )
+    const result = await voipActions.joinPrivate(callerId, false, false)
 
     if (result.isErr()) {
       addToast(`Failed to join call: ${result.error}`, 'error')
-      return
     }
-
-    await microphoneActions.start()
-    await playbackActions.resume()
   }
 
   return (

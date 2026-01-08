@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { request } from "../utils";
-import { setServerUrl } from "../lib/ServerConfig";
+import { setDomain } from "../lib/ServerConfig";
 import type { User, Session } from "../model";
 import { useUser } from "./user";
 import { useConnection } from "./connection";
@@ -45,8 +45,8 @@ export interface AuthState {
 export interface AuthActions {
   getUser: () => User;
   getSession: () => AuthSession;
-  login: (username: string, password: string, serverUrl?: string) => Promise<Result<void, string>>;
-  register: (username: string, password: string, inviteCode: string, serverUrl?: string) => Promise<Result<void, string>>;
+  login: (username: string, password: string, domain?: string) => Promise<Result<void, string>>;
+  register: (username: string, password: string, inviteCode: string, domain?: string) => Promise<Result<void, string>>;
   logout: () => Promise<Result<void, string>>;
   getSessions: () => Promise<Result<Session[], string>>;
   terminateSession: (sessionToken: string) => Promise<Result<void, string>>;
@@ -77,11 +77,11 @@ function createAuthStore(): AuthStore {
       return state.session;
     },
 
-    async login(username, password, serverUrl) {
+    async login(username, password, domain) {
       setState("isLoading", true);
 
-      if (serverUrl) {
-        setServerUrl(serverUrl);
+      if (domain) {
+        setDomain(domain);
       }
 
       const result = await request<{
@@ -110,11 +110,11 @@ function createAuthStore(): AuthStore {
       return ok(undefined);
     },
 
-    async register(username, password, inviteCode, serverUrl) {
+    async register(username, password, inviteCode, domain) {
       setState("isLoading", true);
 
-      if (serverUrl) {
-        setServerUrl(serverUrl);
+      if (domain) {
+        setDomain(domain);
       }
 
       const result = await request<{ user_id: number }>("/auth/register", {

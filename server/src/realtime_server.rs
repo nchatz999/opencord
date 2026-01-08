@@ -5,20 +5,23 @@ use crate::error::DatabaseError;
 use crate::group::GroupRoleRights;
 use crate::managers::LogManager;
 use crate::model::EventPayload;
-use crate::subscriber_session::{SessionService, SubscriberSession};
+use crate::subscriber_session::SessionService;
 use crate::transport::{
     CommandPayload, ControlRoutingPolicy, DomainError, ServerMessage, SubscriberHandler,
-    SubscriberMessage, VoipDataType, VoipPayload,
+    SubscriberMessage,
 };
 use crate::user::{User, UserStatusType};
-use crate::voip::{MediaType, Subscription, VoipParticipant};
-use opencord_transport_server::Server;
-use std::path::PathBuf;
+use crate::voip::VoipParticipant;
+use axum::extract::ws::{CloseFrame, WebSocket, WebSocketUpgrade};
+use axum::extract::{Query, State};
+use axum::response::IntoResponse;
+use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use uuid::Uuid;
 
-const MAX_INVALID_VOIP_PACKETS: u32 = 1000;
+const CLOSE_CODE_AUTH_FAILED: u16 = 4001;
+const CLOSE_CODE_DISCONNECTED: u16 = 4002;
 
 pub struct ServerError;
 
@@ -49,15 +52,10 @@ pub trait ServerRepository: Send + Sync + Clone {
         &mut self,
         user_id: i64,
     ) -> Result<Option<VoipParticipant>, DatabaseError>;
-    async fn remove_subscriptions(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError>;
     async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError>;
     async fn find_all_group_role_rights(&self) -> Result<Vec<GroupRoleRights>, DatabaseError>;
     async fn find_all_users(&self) -> Result<Vec<User>, DatabaseError>;
     async fn find_all_channels(&self) -> Result<Vec<Channel>, DatabaseError>;
-    async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError>;
 }
 
 impl ServerRepository for Postgre {
@@ -127,22 +125,6 @@ impl ServerRepository for Postgre {
         Ok(result)
     }
 
-    async fn remove_subscriptions(
-        &mut self,
-        user_id: i64,
-    ) -> Result<Vec<Subscription>, DatabaseError> {
-        let subscriptions = sqlx::query_as!(
-            Subscription,
-            r#"DELETE FROM subscriptions
-               WHERE user_id = $1 OR publisher_id = $1
-               RETURNING user_id, publisher_id, media_type as "media_type: MediaType", created_at"#,
-            user_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(subscriptions)
-    }
-
     async fn find_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DatabaseError> {
         let result = sqlx::query_as!(
             VoipParticipant,
@@ -188,17 +170,6 @@ impl ServerRepository for Postgre {
         .await?;
         Ok(result)
     }
-
-    async fn find_all_subscriptions(&self) -> Result<Vec<Subscription>, DatabaseError> {
-        let result = sqlx::query_as!(
-            Subscription,
-            r#"SELECT user_id, publisher_id, media_type as "media_type: MediaType", created_at
-               FROM subscriptions"#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(result)
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -239,10 +210,10 @@ impl<R: ServerRepository, L: LogManager> ServerService<R, L> {
                 .logger
                 .log_entry(
                     format!(
-                        "User {} status changed to {:?} via WebTransport",
+                        "User {} status changed to {:?} via WebSocket",
                         user_id, status
                     ),
-                    "webtransport".to_string(),
+                    "websocket".to_string(),
                 )
                 .await;
         }
@@ -264,25 +235,13 @@ impl<R: ServerRepository, L: LogManager> ServerService<R, L> {
             let _ = self
                 .logger
                 .log_entry(
-                    format!("VoIP participant {} removed via WebTransport", user_id),
-                    "webtransport".to_string(),
+                    format!("VoIP participant {} removed via WebSocket", user_id),
+                    "websocket".to_string(),
                 )
                 .await;
         }
 
         Ok(result)
-    }
-
-    pub async fn remove_all_subscriptions(
-        &self,
-        user_id: i64,
-    ) -> Result<Vec<Subscription>, DomainError> {
-        let mut repo = self.repository.clone();
-        let subscriptions = repo
-            .remove_subscriptions(user_id)
-            .await
-            .map_err(DomainError::from)?;
-        Ok(subscriptions)
     }
 
     pub async fn get_all_voip_participants(&self) -> Result<Vec<VoipParticipant>, DomainError> {
@@ -312,13 +271,55 @@ impl<R: ServerRepository, L: LogManager> ServerService<R, L> {
             .await
             .map_err(DomainError::from)
     }
+}
 
-    pub async fn get_all_subscriptions(&self) -> Result<Vec<Subscription>, DomainError> {
-        self.repository
-            .find_all_subscriptions()
-            .await
-            .map_err(DomainError::from)
-    }
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEBSOCKET HANDLER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Clone)]
+pub struct WebSocketState<L: LogManager> {
+    pub session_service: SessionService<Postgre, L>,
+    pub observer_tx: mpsc::Sender<ServerMessage>,
+}
+
+#[derive(Deserialize)]
+pub struct WebSocketParams {
+    token: String,
+}
+
+pub async fn websocket_handler<L: LogManager + 'static>(
+    ws: WebSocketUpgrade,
+    State(state): State<WebSocketState<L>>,
+    Query(params): Query<WebSocketParams>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state, params.token))
+}
+
+async fn handle_socket<L: LogManager>(mut socket: WebSocket, state: WebSocketState<L>, token: String) {
+    use crate::subscriber_session::SubscriberSession;
+    use axum::extract::ws::Message;
+
+    let session = match state.session_service.authenticate_session(&token).await {
+        Ok(Some(session)) => session,
+        _ => {
+            let close_frame = CloseFrame {
+                code: CLOSE_CODE_AUTH_FAILED,
+                reason: "Authentication failed".into(),
+            };
+            let _ = socket.send(Message::Close(Some(close_frame))).await;
+            return;
+        }
+    };
+
+    let identifier = Uuid::new_v4().to_string();
+    let mut subscriber_session = SubscriberSession::new(
+        state.observer_tx,
+        state.session_service,
+        identifier,
+        session,
+    );
+    subscriber_session.run(socket).await;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -328,37 +329,35 @@ impl<R: ServerRepository, L: LogManager> ServerService<R, L> {
 pub struct RealtimeServer<L: LogManager> {
     observers: Vec<SubscriberHandler>,
     service: ServerService<Postgre, L>,
-    session_service: SessionService<Postgre, L>,
     receiver: mpsc::Receiver<ServerMessage>,
     sender: mpsc::Sender<ServerMessage>,
-    cert_path: PathBuf,
-    key_path: PathBuf,
     voip_cache: Vec<VoipParticipant>,
     acl_cache: Vec<GroupRoleRights>,
     user_cache: Vec<User>,
     channel_cache: Vec<Channel>,
-    subscription_cache: Vec<Subscription>,
 }
 
 impl<L: LogManager + 'static> RealtimeServer<L> {
-    pub fn new(repository: Postgre, logger: L, cert_path: PathBuf, key_path: PathBuf) -> Self {
-        let (server_tx, server_rx): (mpsc::Sender<ServerMessage>, mpsc::Receiver<ServerMessage>) =
-            mpsc::channel(1000);
-
+    pub fn new(
+        repository: Postgre,
+        logger: L,
+        receiver: mpsc::Receiver<ServerMessage>,
+        sender: mpsc::Sender<ServerMessage>,
+    ) -> Self {
         Self {
             observers: vec![],
-            service: ServerService::new(repository.clone(), logger.clone()),
-            session_service: SessionService::new(repository, logger),
-            receiver: server_rx,
-            sender: server_tx,
-            cert_path,
-            key_path,
+            service: ServerService::new(repository, logger),
+            receiver,
+            sender,
             voip_cache: vec![],
             acl_cache: vec![],
             user_cache: vec![],
             channel_cache: vec![],
-            subscription_cache: vec![],
         }
+    }
+
+    pub fn sender(&self) -> mpsc::Sender<ServerMessage> {
+        self.sender.clone()
     }
 
     fn count_user_sessions(&self, user_id: i64) -> i64 {
@@ -386,25 +385,10 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         }
     }
 
-    async fn reload_subscription_cache(&mut self) {
-        if let Ok(subscriptions) = self.service.get_all_subscriptions().await {
-            self.subscription_cache = subscriptions;
+    async fn reload_user_cache(&mut self) {
+        if let Ok(users) = self.service.get_all_users().await {
+            self.user_cache = users;
         }
-    }
-
-    fn get_cached_voip(&self, user_id: i64) -> Option<&VoipParticipant> {
-        self.voip_cache.iter().find(|p| p.user_id == user_id)
-    }
-
-    fn is_cached_subscribed(
-        &self,
-        user_id: i64,
-        publisher_id: i64,
-        media_type: &MediaType,
-    ) -> bool {
-        self.subscription_cache.iter().any(|s| {
-            s.user_id == user_id && s.publisher_id == publisher_id && s.media_type == *media_type
-        })
     }
 
     fn get_cached_channel_rights(&self, channel_id: i64, user_id: i64) -> i64 {
@@ -488,7 +472,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
             sender,
             identifier,
             session_token,
-            invalid_voip_count: 0,
         };
         self.observers.push(subscriber);
         let _ = self
@@ -526,246 +509,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         }
         self.observers
             .retain(|subscriber| subscriber.user_id() != user_id);
-        Ok(())
-    }
-
-    async fn send_error_to_session(&self, identifier: &str, reason: String) {
-        if let Some(subscriber) = self.observers.iter().find(|o| o.identifier == identifier) {
-            subscriber.send_error(reason).await;
-        }
-    }
-
-    fn increment_invalid_voip(&mut self, user_id: i64) -> bool {
-        if let Some(subscriber) = self.observers.iter_mut().find(|o| o.user_id() == user_id) {
-            subscriber.invalid_voip_count += 1;
-            return subscriber.invalid_voip_count > MAX_INVALID_VOIP_PACKETS;
-        }
-        false
-    }
-
-    fn reset_invalid_voip(&mut self, user_id: i64) {
-        if let Some(subscriber) = self.observers.iter_mut().find(|o| o.user_id() == user_id) {
-            subscriber.invalid_voip_count = 0;
-        }
-    }
-
-    async fn handle_voip(
-        &mut self,
-        payload: VoipPayload,
-        identifier: String,
-    ) -> Result<(), ServerError> {
-        match payload {
-            VoipPayload::Speech {
-                user_id,
-                is_speaking,
-            } => {
-                self.handle_speech(user_id as i64, is_speaking, &identifier)
-                    .await
-            }
-            VoipPayload::Media {
-                user_id,
-                media_type: VoipDataType::Voice,
-                data,
-                timestamp,
-                real_timestamp,
-                key,
-                sequence,
-            } => {
-                self.handle_voice(
-                    user_id as i64,
-                    data,
-                    timestamp,
-                    real_timestamp,
-                    key,
-                    sequence,
-                    &identifier,
-                )
-                .await
-            }
-            VoipPayload::Media {
-                user_id,
-                media_type,
-                data,
-                timestamp,
-                real_timestamp,
-                key,
-                sequence,
-            } => {
-                self.handle_media(
-                    user_id as i64,
-                    media_type,
-                    data,
-                    timestamp,
-                    real_timestamp,
-                    key,
-                    sequence,
-                    &identifier,
-                )
-                .await
-            }
-        }
-    }
-
-    async fn handle_speech(
-        &mut self,
-        sender_id: i64,
-        is_speaking: bool,
-        identifier: &str,
-    ) -> Result<(), ServerError> {
-        let Some(sender_participant) = self.get_cached_voip(sender_id) else {
-            if self.increment_invalid_voip(sender_id) {
-                self.send_error_to_session(identifier, "VoIP abuse detected".into())
-                    .await;
-            }
-            return Ok(());
-        };
-
-        let payload = VoipPayload::Speech {
-            user_id: sender_id as u64,
-            is_speaking,
-        };
-
-        if let Some(channel_id) = sender_participant.channel_id {
-            if self.get_cached_channel_rights(channel_id, sender_id) <= 2 {
-                if self.increment_invalid_voip(sender_id) {
-                    self.send_error_to_session(identifier, "VoIP abuse detected".into())
-                        .await;
-                }
-                return Ok(());
-            }
-            self.reset_invalid_voip(sender_id);
-            for subscriber in &self.observers {
-                if self.get_cached_channel_rights(channel_id, subscriber.user_id()) >= 1 {
-                    subscriber
-                        .send(SubscriberMessage::Voip(payload.clone()))
-                        .await;
-                }
-            }
-        } else if let Some(recipient_id) = sender_participant.recipient_id {
-            self.reset_invalid_voip(sender_id);
-            for subscriber in &self.observers {
-                if subscriber.user_id() == recipient_id || subscriber.user_id() == sender_id {
-                    subscriber
-                        .send(SubscriberMessage::Voip(payload.clone()))
-                        .await;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_voice(
-        &mut self,
-        sender_id: i64,
-        data: Vec<u8>,
-        timestamp: u64,
-        real_timestamp: u64,
-        key: crate::transport::KeyType,
-        sequence: u64,
-        identifier: &str,
-    ) -> Result<(), ServerError> {
-        let Some(sender_participant) = self.get_cached_voip(sender_id) else {
-            if self.increment_invalid_voip(sender_id) {
-                self.send_error_to_session(identifier, "VoIP abuse detected".into())
-                    .await;
-            }
-            return Ok(());
-        };
-
-        let payload = VoipPayload::Media {
-            user_id: sender_id as u64,
-            media_type: VoipDataType::Voice,
-            data,
-            timestamp,
-            real_timestamp,
-            key,
-            sequence,
-        };
-
-        if let Some(channel_id) = sender_participant.channel_id {
-            if self.get_cached_channel_rights(channel_id, sender_id) <= 2 {
-                if self.increment_invalid_voip(sender_id) {
-                    self.send_error_to_session(identifier, "VoIP abuse detected".into())
-                        .await;
-                }
-                return Ok(());
-            }
-            self.reset_invalid_voip(sender_id);
-            for subscriber in &self.observers {
-                if let Some(participant) = self.get_cached_voip(subscriber.user_id()) {
-                    if participant.channel_id == Some(channel_id)
-                        && !participant.local_deafen
-                        && subscriber.user_id() != sender_id
-                    {
-                        subscriber
-                            .send(SubscriberMessage::Voip(payload.clone()))
-                            .await;
-                    }
-                }
-            }
-        } else if let Some(recipient_id) = sender_participant.recipient_id {
-            self.reset_invalid_voip(sender_id);
-            for subscriber in &self.observers {
-                if let Some(participant) = self.get_cached_voip(subscriber.user_id()) {
-                    if participant.recipient_id.is_some()
-                        && !participant.local_deafen
-                        && subscriber.user_id() == recipient_id
-                    {
-                        subscriber
-                            .send(SubscriberMessage::Voip(payload.clone()))
-                            .await;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_media(
-        &mut self,
-        sender_id: i64,
-        media_type: VoipDataType,
-        data: Vec<u8>,
-        timestamp: u64,
-        real_timestamp: u64,
-        key: crate::transport::KeyType,
-        sequence: u64,
-        identifier: &str,
-    ) -> Result<(), ServerError> {
-        if self.get_cached_voip(sender_id).is_none() {
-            if self.increment_invalid_voip(sender_id) {
-                self.send_error_to_session(identifier, "VoIP abuse detected".into())
-                    .await;
-            }
-            return Ok(());
-        }
-        self.reset_invalid_voip(sender_id);
-
-        let db_media_type = if matches!(media_type, VoipDataType::Camera) {
-            MediaType::Camera
-        } else {
-            MediaType::Screen
-        };
-
-        let payload = VoipPayload::Media {
-            user_id: sender_id as u64,
-            media_type,
-            data,
-            timestamp,
-            real_timestamp,
-            key,
-            sequence,
-        };
-
-        for subscriber in &self.observers {
-            if self.is_cached_subscribed(subscriber.user_id(), sender_id, &db_media_type) {
-                subscriber
-                    .send(SubscriberMessage::Voip(payload.clone()))
-                    .await;
-            }
-        }
         Ok(())
     }
 
@@ -832,40 +575,22 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
     }
 
     pub async fn run(mut self) -> Result<(), ServerError> {
-        let mut server = Server::bind(
-            "[::]:4443",
-            self.cert_path.to_str().expect("Invalid cert path"),
-            self.key_path.to_str().expect("Invalid key path"),
-        )
-        .await
-        .expect("Failed to start server");
-
         self.reload_voip_cache().await;
         self.reload_acl_cache().await;
-        self.reload_subscription_cache().await;
 
-        let sender = self.subscribe_channel().await;
         let mut session_check_interval = interval(Duration::from_secs(5));
 
         loop {
             tokio::select! {
-                Some(msg)= self.receiver.recv() => {
-                    match msg{
+                Some(msg) = self.receiver.recv() => {
+                    match msg {
                         ServerMessage::Command(payload) => self.handle_command(payload).await?,
-                        ServerMessage::Control(control_payload, control_routing_policy) => self.handle_control(control_payload,control_routing_policy).await?,
-                        ServerMessage::Voip(voip_payload, identifier) => self.handle_voip(voip_payload, identifier).await?,
+                        ServerMessage::Control(control_payload, control_routing_policy) => {
+                            self.handle_control(control_payload, control_routing_policy).await?
+                        }
                         ServerMessage::InvalidateVoip => self.reload_voip_cache().await,
                         ServerMessage::InvalidateAcl => self.reload_acl_cache().await,
-                        ServerMessage::InvalidateSubscriptions => self.reload_subscription_cache().await,
-                    }
-                }
-                Some(req)= server.get_request() => {
-                    if let Some(conn) = server.accept_request(req).await{
-                        let service = self.session_service.clone();
-                        let tx = sender.clone();
-                        tokio::spawn(async move {
-                            Self::handle_subscriber_session(conn, service, tx).await;
-                        });
+                        ServerMessage::InvalidateUsers => self.reload_user_cache().await,
                     }
                 }
                 _ = session_check_interval.tick() => {
@@ -873,10 +598,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 }
             }
         }
-    }
-
-    pub async fn subscribe_channel(&mut self) -> mpsc::Sender<ServerMessage> {
-        self.sender.clone()
     }
 
     pub async fn handle_user_status_update(
@@ -898,30 +619,6 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         &mut self,
         user_id: i64,
     ) -> Result<(), ServerError> {
-        let subscriptions = self.service.remove_all_subscriptions(user_id).await?;
-
-        for subscription in subscriptions {
-            let event = EventPayload::MediaUnsubscription {
-                subscription: subscription.clone(),
-            };
-            let _ = self
-                .route_control(
-                    event.clone(),
-                    ControlRoutingPolicy::User {
-                        user_id: subscription.user_id,
-                    },
-                )
-                .await;
-            let _ = self
-                .route_control(
-                    event,
-                    ControlRoutingPolicy::User {
-                        user_id: subscription.publisher_id,
-                    },
-                )
-                .await;
-        }
-
         if let Some(ref participant) = self.service.remove_voip_participant(user_id).await? {
             let policy = if let Some(channel_id) = participant.channel_id {
                 ControlRoutingPolicy::ChannelRights {
@@ -964,62 +661,12 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                 .logger
                 .log_entry(
                     format!("Session expired for user {}", user_id),
-                    "webtransport".to_string(),
+                    "websocket".to_string(),
                 )
                 .await;
             self.handle_disconnect(user_id, session_token).await?;
         }
 
         Ok(())
-    }
-
-    async fn handle_subscriber_session(
-        connection: opencord_transport_server::Connection,
-        service: SessionService<Postgre, L>,
-        observer_tx: mpsc::Sender<ServerMessage>,
-    ) {
-        let session_token = Uuid::new_v4().to_string();
-        let mut session = SubscriberSession::new(observer_tx, service, connection, session_token);
-        loop {
-            tokio::select! {
-                Some(msg) = session.server_rx.recv() => {
-                    if let Err(e) = session.handle_server_message(msg).await{
-                        let error_msg = format!("{:?}", e);
-                        session.send_error(error_msg).await;
-                        break;
-                    }
-                }
-                may_msg = session.connection.read_message() => {
-                    match may_msg {
-                        Some(msg) => {
-                            if let Err(e) = session.handle_connection_message(msg).await {
-                                let error_msg = format!("{:?}", e);
-                                session.send_error(error_msg).await;
-                                break;
-                            }
-                        }
-                        None => break,
-                    }
-                }
-            }
-        }
-
-        if let Some(ref user_session) = session.may_session {
-            let _ = session
-                .service
-                .logger
-                .log_entry(
-                    format!("User {} disconnected (timeout)", user_session.user_id),
-                    "webtransport".to_string(),
-                )
-                .await;
-            let _ = session
-                .observer_tx
-                .send(ServerMessage::Command(CommandPayload::Timeout(
-                    user_session.user_id,
-                    session.identifier.clone(),
-                )))
-                .await;
-        }
     }
 }
