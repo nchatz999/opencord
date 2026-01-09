@@ -5,7 +5,6 @@ import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
 import { request } from "../utils";
 import { useConnection } from "./connection";
-import { usePlayback } from "./playback";
 import type { CallType } from "./modal";
 import { useAuth } from "./auth";
 import { useSound } from "./sound";
@@ -53,7 +52,6 @@ function createVoipStore(): VoipStore {
 
   const connection = useConnection();
   const [, authActions] = useAuth();
-  const [, playbackActions] = usePlayback();
   const [, soundActions] = useSound();
   const livekit = getLiveKitManager();
   let cleanupFn: (() => void) | null = null;
@@ -132,17 +130,17 @@ function createVoipStore(): VoipStore {
       );
 
       if (!participant.publishScreen) {
-        playbackActions.detachTrack(participant.userId, Track.Source.ScreenShare);
-        playbackActions.detachTrack(participant.userId, Track.Source.ScreenShareAudio);
+        livekit.detachTrack(participant.userId, Track.Source.ScreenShare);
+        livekit.detachTrack(participant.userId, Track.Source.ScreenShareAudio);
       }
       if (!participant.publishCamera) {
-        playbackActions.detachTrack(participant.userId, Track.Source.Camera);
+        livekit.detachTrack(participant.userId, Track.Source.Camera);
       }
     },
 
     remove(userId) {
       setState("voipState", (voipState) => voipState.filter((p) => p.userId !== userId));
-      playbackActions.cleanupForUser(userId);
+      livekit.cleanupForUser(userId);
     },
 
     removeByChannel(channelId) {
@@ -154,12 +152,12 @@ function createVoipStore(): VoipStore {
 
     unpublishAll(userId) {
       setState("voipState", (voipState) => voipState.filter((p) => p.userId !== userId));
-      playbackActions.cleanupForUser(userId);
+      livekit.cleanupForUser(userId);
     },
 
     async joinChannel(channelId, muted, deafened) {
       for (const participant of state.voipState) {
-        playbackActions.cleanupForUser(participant.userId);
+        livekit.cleanupForUser(participant.userId);
       }
 
       await livekit.disconnect();
@@ -186,7 +184,7 @@ function createVoipStore(): VoipStore {
 
     async joinPrivate(userId, muted, deafened) {
       for (const participant of state.voipState) {
-        playbackActions.cleanupForUser(participant.userId);
+        livekit.cleanupForUser(participant.userId);
       }
 
       await livekit.disconnect();

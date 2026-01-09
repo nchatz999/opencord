@@ -1,7 +1,8 @@
 import type { Component } from "solid-js";
 import { Show, createSignal } from "solid-js";
 import { X, Maximize2, Minimize2, Volume2, VolumeX, Camera, Monitor } from "lucide-solid";
-import { useModal, usePlayback } from "../../store/index";
+import { useModal } from "../../store/index";
+import { getLiveKitManager } from "../../lib/livekit";
 import type { CallType } from "../../store/modal";
 import { MediaType } from "../../model";
 import Button from "../../components/Button";
@@ -16,10 +17,10 @@ interface FocusedStreamModalProps {
 
 const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
   const [, modalActions] = useModal();
-  const [, playbackActions] = usePlayback();
+  const livekit = getLiveKitManager();
   const [isFullscreen, setIsFullscreen] = createSignal(false);
 
-  const screenVolume = () => playbackActions.getScreenVolume(props.publisherId);
+  const screenVolume = () => livekit.getScreenVolume(props.publisherId);
   const isCamera = () => props.mediaType === MediaType.Camera;
 
   return (
@@ -66,7 +67,7 @@ const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
                 min={0}
                 max={200}
                 value={screenVolume()!}
-                onChange={(v) => playbackActions.setScreenVolume(props.publisherId, v)}
+                onChange={(v) => livekit.setScreenVolume(props.publisherId, v)}
                 class="w-64"
               />
               <span class="text-sm text-muted-foreground w-12">

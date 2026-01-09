@@ -23,7 +23,7 @@ import {
 } from "lucide-solid";
 import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
 import { useApp } from "../../store/app";
-import { getLiveKitManager, type VideoQuality } from "../../lib/livekit";
+import { getLiveKitManager, type CameraQuality } from "../../lib/livekit";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
@@ -364,9 +364,9 @@ const UserSettingsModal: Component = () => {
           <Card title="Video Quality" icon={<Settings class="w-4 h-4" />}>
             <Select
               label="Quality"
-              options={livekit.getVideoQualityOptions()}
-              value={livekit.getVideoQuality()}
-              onChange={(value) => livekit.setVideoQuality(value as VideoQuality)}
+              options={livekit.getCameraQualityOptions()}
+              value={livekit.getCameraQuality()}
+              onChange={(value) => livekit.setCameraQuality(value as CameraQuality)}
               class="w-full"
             />
           </Card>

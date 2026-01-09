@@ -1,7 +1,8 @@
 import type { Component } from "solid-js";
 import { Show, createMemo } from "solid-js";
 import { X, Volume2, VolumeX, UserX } from "lucide-solid";
-import { useModal, useUser, usePlayback, useVoip, useAcl, useAuth } from "../../store/index";
+import { useModal, useUser, useVoip, useAcl, useAuth } from "../../store/index";
+import { getLiveKitManager } from "../../lib/livekit";
 import type { CallType } from "../../store/modal";
 import Avatar from "../../components/Avatar";
 import Button from "../../components/Button";
@@ -17,15 +18,15 @@ interface VoipUserSettingsModalProps {
 const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => {
   const [, modalActions] = useModal();
   const [, userActions] = useUser();
-  const [, playbackActions] = usePlayback();
   const [, voipActions] = useVoip();
   const [, aclActions] = useAcl();
   const [, authActions] = useAuth();
+  const livekit = getLiveKitManager();
   const { addToast } = useToaster();
 
   const user = createMemo(() => userActions.findById(props.publisherId));
   const currentUser = () => authActions.getUser();
-  const volume = () => Math.round(playbackActions.getVolume(props.publisherId));
+  const volume = () => Math.round(livekit.getVolume(props.publisherId));
 
   const voipSession = () => voipActions.findById(props.publisherId);
   const channelId = () => voipSession()?.channelId;
@@ -56,7 +57,7 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
   };
 
   const toggleMute = () => {
-    playbackActions.setVolume(props.publisherId, volume() === 0 ? 100 : 0);
+    livekit.setVolume(props.publisherId, volume() === 0 ? 100 : 0);
   };
 
   return (
@@ -94,10 +95,11 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
               <Card>
                 <Slider
                   title={`Volume: ${volume()}%`}
+                  disabled={currentUser().userId == user()?.userId}
                   min={0}
                   max={200}
                   value={volume()}
-                  onChange={(value) => playbackActions.setVolume(props.publisherId, value)}
+                  onChange={(value) => livekit.setVolume(props.publisherId, value)}
                 />
               </Card>
 

@@ -2,7 +2,7 @@ import type { Component } from "solid-js";
 import { Show, Switch, Match, createEffect, onCleanup } from "solid-js";
 
 import { Camera, Monitor, Eye, EyeOff } from "lucide-solid";
-import { usePlayback, useUser } from "../../store/index";
+import { useUser } from "../../store/index";
 import type { CallType } from "../../store/modal";
 import Button from "../../components/Button";
 import { getLiveKitManager, Track } from "../../lib/livekit";
@@ -14,15 +14,14 @@ interface VideoStreamProps {
 }
 
 const VideoStream: Component<VideoStreamProps> = (props) => {
-  const [, playbackActions] = usePlayback();
   const [, userActions] = useUser();
   const livekit = getLiveKitManager();
 
   let videoRef: HTMLVideoElement | undefined;
 
   const publisher = () => userActions.findById(props.publisherId);
-  const isSubscribed = () => playbackActions.isSubscribedToVideo(props.publisherId, props.mediaType);
-  const track = () => playbackActions.getTrack(props.publisherId, props.mediaType);
+  const isSubscribed = () => livekit.isSubscribedToVideo(props.publisherId, props.mediaType);
+  const track = () => livekit.getTrack(props.publisherId, props.mediaType);
 
   createEffect(() => {
     const remoteTrack = track();

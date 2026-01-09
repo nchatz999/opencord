@@ -1,7 +1,8 @@
 import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import { MicOff, Headphones, Video, Monitor } from 'lucide-solid'
-import { useAuth, useUser, useVoip, usePlayback } from '../../store/index'
+import { useAuth, useUser, useVoip } from '../../store/index'
+import { getLiveKitManager } from '../../lib/livekit'
 import Avatar from '../../components/Avatar'
 import Slider from '../../components/Slider'
 
@@ -9,7 +10,7 @@ const PrivateCallStatusPanel: Component = () => {
   const [, authActions] = useAuth()
   const [, userActions] = useUser()
   const [, voipActions] = useVoip()
-  const [, playbackActions] = usePlayback()
+  const livekit = getLiveKitManager()
   const currentUser = () => authActions.getUser()
 
   const privateCallInfo = () => {
@@ -38,7 +39,7 @@ const PrivateCallStatusPanel: Component = () => {
   const volume = () => {
     const info = privateCallInfo()
     if (!info) return 100
-    return Math.round(playbackActions.getVolume(info.otherUser.userId))
+    return Math.round(livekit.getVolume(info.otherUser.userId))
   }
 
   return (
@@ -103,7 +104,7 @@ const PrivateCallStatusPanel: Component = () => {
               min={0}
               max={200}
               onChange={(value) => {
-                playbackActions.setVolume(info().otherUser.userId, value)
+                livekit.setVolume(info().otherUser.userId, value)
               }}
             />
           </div>

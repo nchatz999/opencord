@@ -17,6 +17,7 @@ const UserInfoModal: Component<UserInfoModalProps> = (props) => {
   const [, contextActions] = useContext();
   const [, userActions] = useUser();
 
+
   const user = createMemo(() => userActions.findById(props.userId));
   const role = createMemo(() => user() && roleActions.findById(user()?.roleId ?? -1));
 

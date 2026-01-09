@@ -22,9 +22,6 @@ export type { ContextStore } from "./context";
 export { useAcl } from "./acl";
 export type { AclStore } from "./acl";
 
-export { usePlayback } from "./playback";
-export type { PlaybackStore } from "./playback";
-
 export { useVoip } from "./voip";
 export type { VoipStore } from "./voip";
 
