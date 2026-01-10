@@ -1,5 +1,5 @@
 const SERVER_DOMAIN_KEY = 'server_domain';
-const DEFAULT_DOMAIN = 'localhost';
+const DEFAULT_DOMAIN = 'localhost:3000';
 
 const getDomain = (): string => {
   return localStorage.getItem(SERVER_DOMAIN_KEY) || DEFAULT_DOMAIN;
@@ -14,15 +14,11 @@ const clearDomain = (): void => {
 };
 
 const getHttpUrl = (): string => {
-  return `https://${getDomain()}:3000`;
+  return `https://${getDomain()}`;
 };
 
 const getWsUrl = (): string => {
-  return `wss://${getDomain()}:3000`;
-};
-
-const getLiveKitUrl = (): string => {
-  return `wss://${getDomain()}:7880`;
+  return `wss://${getDomain()}`;
 };
 
 export {
@@ -31,6 +27,5 @@ export {
   clearDomain,
   getHttpUrl,
   getWsUrl,
-  getLiveKitUrl,
   DEFAULT_DOMAIN,
 };

@@ -69,7 +69,7 @@ const LoginPage: Component = () => {
         <Input
           value={serverDomain()}
           onChange={setServerDomain}
-          placeholder="Server Domain"
+          placeholder="Server Address"
           icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
@@ -112,7 +112,7 @@ const LoginPage: Component = () => {
         <Input
           value={serverDomain()}
           onChange={setServerDomain}
-          placeholder="Server Domain"
+          placeholder="Server Address"
           icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
         />
         <Input
