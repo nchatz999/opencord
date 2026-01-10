@@ -131,7 +131,7 @@ export class LiveKitManager {
     [this.activeOutput, this.setActiveOutput] = createSignal("");
     [this.cameraQuality, this.setCameraQualitySignal] = createSignal<CameraQuality>("1080p30");
     [this.screenQuality, this.setScreenQualitySignal] = createSignal<ScreenQuality>("1080p30");
-    [this.muted, this.setMutedSignal] = createSignal(true);
+    [this.muted, this.setMutedSignal] = createSignal(false);
     [this.deafened, this.setDeafenedSignal] = createSignal(false);
     [this.noiseCancellation, this.setNoiseCancellationSignal] = createSignal(true);
 

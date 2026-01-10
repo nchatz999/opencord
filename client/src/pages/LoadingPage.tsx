@@ -5,6 +5,7 @@ import { getLiveKitManager } from "../lib/livekit";
 import logo from "../assets/opencord.webp";
 
 const MAX_RETRIES = 5;
+const RETRY_DELAY = 500;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface LoadingPageProps {
@@ -41,7 +42,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
 
         retries++;
         if (retries < MAX_RETRIES) {
-          await sleep(1000 * retries);
+          await sleep(RETRY_DELAY);
           continue;
         }
 
