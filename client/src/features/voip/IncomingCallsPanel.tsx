@@ -2,6 +2,7 @@ import type { Component } from 'solid-js'
 import { Show, For } from 'solid-js'
 import { ChevronDown, ChevronRight, Phone } from 'lucide-solid'
 import { useAuth, useUser, useVoip, usePreference } from '../../store/index'
+import { useLiveKit } from '../../lib/livekit'
 import Avatar from '../../components/Avatar'
 import { useToaster } from '../../components/Toaster'
 
@@ -12,6 +13,7 @@ const IncomingCallsPanel: Component = () => {
     const [, authActions] = useAuth()
     const [, userActions] = useUser()
     const [voipState, voipActions] = useVoip()
+    const [, livekitActions] = useLiveKit()
     const { addToast } = useToaster()
 
     const isCollapsed = () => prefActions.get<boolean>(COLLAPSED_KEY) ?? false
@@ -34,7 +36,7 @@ const IncomingCallsPanel: Component = () => {
     }
 
     const handleCallback = async (callerId: number) => {
-        const result = await voipActions.joinPrivate(callerId, false, false)
+        const result = await voipActions.joinPrivate(callerId, livekitActions.getMuted(), livekitActions.getDeafened())
 
         if (result.isErr()) {
             addToast(`Failed to join call: ${result.error}`, 'error')

@@ -129,7 +129,7 @@ interface LiveKitState {
 
 interface LiveKitActions {
     prepareConnection: (serverUrl: string, token: string) => Promise<void>;
-    connect: (serverUrl: string, token: string, muted: boolean) => Promise<void>;
+    connect: (serverUrl: string, token: string) => Promise<void>;
     disconnect: () => Promise<void>;
     getConnectionState: () => ConnectionState | null;
     isConnected: () => boolean;
@@ -400,13 +400,12 @@ function createLiveKitStore(): LiveKitStore {
             await room.prepareConnection(serverUrl, token);
         },
 
-        async connect(serverUrl, token, muted) {
+        async connect(serverUrl, token) {
             await actions.disconnect();
             setState("connectionState", "connecting");
             await room.connect(serverUrl, token, { autoSubscribe: false });
             syncRemotePublications();
             await restoreDevicePreferences();
-            actions.setMuted(muted);
             await actions.setMicEnabled(true);
             setState("connectionState", "connected");
         },

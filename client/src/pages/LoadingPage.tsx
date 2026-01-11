@@ -52,7 +52,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
 
             await initializeStores();
             if (props.channelId) {
-                await voipActions.joinChannel(props.channelId, false, livekitActions.getDeafened());
+                await voipActions.joinChannel(props.channelId, livekitActions.getMuted(), livekitActions.getDeafened());
             }
             appActions.setView({ type: "app" });
             return;
