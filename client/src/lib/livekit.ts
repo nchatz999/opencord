@@ -180,16 +180,18 @@ interface LiveKitActions {
 export type LiveKitStore = [LiveKitState, LiveKitActions];
 
 function createLiveKitStore(): LiveKitStore {
+    const [, prefActions] = usePreference();
+
     const [state, setState] = createStore<LiveKitState>({
         connectionState: undefined,
         inputDevices: [],
         outputDevices: [],
         activeInput: "",
         activeOutput: "",
-        cameraQuality: "1080p30",
-        screenQuality: "1080p30",
-        screenCodec: "vp9",
-        screenContentHint: "motion",
+        cameraQuality: prefActions.get<CameraQuality>("cameraQuality") ?? "1080p30",
+        screenQuality: prefActions.get<ScreenQuality>("screenQuality") ?? "1080p30",
+        screenCodec: prefActions.get<ScreenCodec>("screenCodec") ?? "vp9",
+        screenContentHint: prefActions.get<ScreenContentHint>("screenContentHint") ?? "motion",
         muted: false,
         deafened: false,
         noiseCancellation: true,
@@ -201,7 +203,6 @@ function createLiveKitStore(): LiveKitStore {
         speaking: {},
     });
 
-    const pref = usePreference()[1];
     const publications = new Map<PublicationKey, RemoteTrackPublication>();
     const noiseProcessor = new NoiseSuppressorProcessor(workletUrl);
 
@@ -231,7 +232,7 @@ function createLiveKitStore(): LiveKitStore {
     const prefKey = (userId: number, source: AudioSource): string => `vol:${userId}:${source}`;
 
     const loadVolume = (userId: number, source: AudioSource): number =>
-        pref.get<number>(prefKey(userId, source)) ?? DEFAULT_VOLUME;
+        prefActions.get<number>(prefKey(userId, source)) ?? DEFAULT_VOLUME;
 
     const applyTrackVolume = (entry: AudioEntry): void => {
         entry.track.setVolume(state.deafened ? 0 : entry.volume / 100);
@@ -322,7 +323,7 @@ function createLiveKitStore(): LiveKitStore {
         const key = toTrackKey(userId, source);
         const entry = playback.audio[key];
         if (entry) {
-            pref.set(prefKey(userId, source), volume);
+            prefActions.set(prefKey(userId, source), volume);
             setPlayback("audio", key, { ...entry, volume });
             applyTrackVolume({ ...entry, volume });
         }
@@ -536,19 +537,19 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         getCameraQuality: () => state.cameraQuality,
-        setCameraQuality: (quality) => setState("cameraQuality", quality),
+        setCameraQuality: (quality) => { setState("cameraQuality", quality); prefActions.set("cameraQuality", quality); },
         getCameraQualityOptions: () => CAMERA_QUALITY_OPTIONS,
 
         getScreenQuality: () => state.screenQuality,
-        setScreenQuality: (quality) => setState("screenQuality", quality),
+        setScreenQuality: (quality) => { setState("screenQuality", quality); prefActions.set("screenQuality", quality); },
         getScreenQualityOptions: () => SCREEN_QUALITY_OPTIONS,
 
         getScreenCodec: () => state.screenCodec,
-        setScreenCodec: (codec) => setState("screenCodec", codec),
+        setScreenCodec: (codec) => { setState("screenCodec", codec); prefActions.set("screenCodec", codec); },
         getScreenCodecOptions: () => SCREEN_CODEC_OPTIONS,
 
         getScreenContentHint: () => state.screenContentHint,
-        setScreenContentHint: (hint) => setState("screenContentHint", hint),
+        setScreenContentHint: (hint) => { setState("screenContentHint", hint); prefActions.set("screenContentHint", hint); },
         getScreenContentHintOptions: () => SCREEN_CONTENT_HINT_OPTIONS,
 
         getMuted: () => state.muted,
