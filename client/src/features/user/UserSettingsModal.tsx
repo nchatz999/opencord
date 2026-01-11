@@ -297,7 +297,6 @@ const UserSettingsModal: Component = () => {
                 </div>
             ),
         },
-
         {
             id: "security",
             label: "Security",

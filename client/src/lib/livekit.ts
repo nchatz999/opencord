@@ -480,7 +480,12 @@ function createLiveKitStore(): LiveKitStore {
             if (enabled) {
                 const preset = SCREEN_PRESETS[state.screenQuality];
                 await room.localParticipant.setScreenShareEnabled(true, {
-                    audio: true,
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        channelCount: 2,
+                    },
                     resolution: { width: preset.width, height: preset.height, frameRate: preset.encoding.maxFramerate },
                     contentHint: state.screenContentHint,
                 }, {
