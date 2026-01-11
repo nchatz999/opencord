@@ -1,33 +1,26 @@
 import type { Component } from 'solid-js'
-import { createMemo, Show } from 'solid-js'
-import { Wifi } from 'lucide-solid'
+import { Show, Switch, Match } from 'solid-js'
+import { Wifi, Loader } from 'lucide-solid'
+import { useLiveKit } from '../../lib/livekit'
 
 const ConnectionIndicator: Component = () => {
-    const statusConfig = createMemo(() => {
-        return {
-            color: 'text-status-online',
-            icon: Wifi,
-            label: 'Connected',
-            pulseColor: 'bg-status-online',
-            showPulse: false,
-        }
-    })
+    const [livekitState] = useLiveKit()
 
     return (
-        <div class="flex items-center gap-2 text-sm">
-            <div class="relative">
-                {(() => {
-                    const Icon = statusConfig().icon
-                    return <Icon size={16} class={statusConfig().color} />
-                })()}
-                <Show when={statusConfig().showPulse}>
-                    <div
-                        class={`absolute -inset-1 rounded-full ${statusConfig().pulseColor} opacity-25 animate-ping`}
-                    />
-                </Show>
+        <Show when={livekitState.connectionState}>
+            <div class="flex items-center gap-2 text-sm">
+                <Switch>
+                    <Match when={livekitState.connectionState === 'connecting'}>
+                        <Loader size={16} class="text-status-away animate-spin" />
+                        <span class="text-status-away">Connecting</span>
+                    </Match>
+                    <Match when={livekitState.connectionState === 'connected'}>
+                        <Wifi size={16} class="text-status-online" />
+                        <span class="text-status-online">Connected</span>
+                    </Match>
+                </Switch>
             </div>
-            <span class={statusConfig().color}>{statusConfig().label}</span>
-        </div>
+        </Show>
     )
 }
 

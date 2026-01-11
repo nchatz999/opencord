@@ -11,13 +11,13 @@ import { useMessage } from "./message";
 import { useFile } from "./file";
 import { useReaction } from "./reaction";
 import { useAcl } from "./acl";
-import { getLiveKitManager } from "../lib/livekit";
+import { useLiveKit } from "../lib/livekit";
 
 const connection = useConnection();
 const [, appActions] = useApp();
 const [, authActions] = useAuth();
 const [, voipActions] = useVoip();
-const livekit = getLiveKitManager();
+const [, livekitActions] = useLiveKit();
 
 connection.onConnectionLost(() => {
     const voipSession = voipActions.findById(authActions.getUser().userId);
@@ -32,7 +32,7 @@ connection.onConnectionClosed(async () => {
 export { connection };
 
 export async function resetStore() {
-    await livekit.disconnect();
+    await livekitActions.disconnect();
 }
 
 export async function initializeStores() {

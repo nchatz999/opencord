@@ -10,14 +10,16 @@ import {
     type RemoteAudioTrack,
     type Participant,
     type LocalTrack,
+    type LocalTrackPublication,
 } from "livekit-client";
-import { createSignal, createRoot, batch } from "solid-js";
+import { createRoot, batch } from "solid-js";
 import { createStore } from "solid-js/store";
 import { usePreference } from "../store/preference";
 import { NoiseSuppressorProcessor } from "rnnoise-wasm";
 import workletUrl from "rnnoise-wasm/worklet-bundle?url";
+import { useVoip } from "../store";
 
-export { Track } from "livekit-client";
+export { Track, VideoQuality } from "livekit-client";
 
 export interface MediaDevice {
     deviceId: string;
@@ -40,16 +42,16 @@ const CAMERA_PRESETS: Record<CameraQuality, VideoPreset> = {
 };
 
 const SCREEN_PRESETS: Record<ScreenQuality, VideoPreset> = {
-    "480p30": new VideoPreset(854, 480, 1_000_000, 30),
-    "480p60": new VideoPreset(854, 480, 1_500_000, 60),
-    "720p30": new VideoPreset(1280, 720, 1_500_000, 30),
-    "720p60": new VideoPreset(1280, 720, 2_500_000, 60),
-    "1080p30": new VideoPreset(1920, 1080, 3_000_000, 30),
-    "1080p60": new VideoPreset(1920, 1080, 5_000_000, 60),
-    "1440p30": new VideoPreset(2560, 1440, 5_000_000, 30),
-    "1440p60": new VideoPreset(2560, 1440, 8_000_000, 60),
-    "4k30": new VideoPreset(3840, 2160, 8_000_000, 30),
-    "4k60": new VideoPreset(3840, 2160, 12_000_000, 60),
+    "480p30": new VideoPreset(854, 480, 2_000_000, 30),
+    "480p60": new VideoPreset(854, 480, 3_000_000, 60),
+    "720p30": new VideoPreset(1280, 720, 4_000_000, 30),
+    "720p60": new VideoPreset(1280, 720, 6_000_000, 60),
+    "1080p30": new VideoPreset(1920, 1080, 8_000_000, 30),
+    "1080p60": new VideoPreset(1920, 1080, 12_000_000, 60),
+    "1440p30": new VideoPreset(2560, 1440, 12_000_000, 30),
+    "1440p60": new VideoPreset(2560, 1440, 18_000_000, 60),
+    "4k30": new VideoPreset(3840, 2160, 20_000_000, 30),
+    "4k60": new VideoPreset(3840, 2160, 30_000_000, 60),
 };
 
 const CAMERA_QUALITY_OPTIONS: QualityOption<CameraQuality>[] = [
@@ -70,6 +72,16 @@ const SCREEN_QUALITY_OPTIONS: QualityOption<ScreenQuality>[] = [
     { value: "1440p60", label: "1440p 60fps" },
     { value: "4k30", label: "4K 30fps" },
     { value: "4k60", label: "4K 60fps" },
+];
+
+const SCREEN_CODEC_OPTIONS: QualityOption<ScreenCodec>[] = [
+    { value: "h264", label: "H.264" },
+    { value: "vp9", label: "VP9" },
+];
+
+const SCREEN_CONTENT_HINT_OPTIONS: QualityOption<ScreenContentHint>[] = [
+    { value: "motion", label: "Motion (Gaming)" },
+    { value: "detail", label: "Detail (Text)" },
 ];
 
 const ALL_SOURCES = [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare, Track.Source.ScreenShareAudio];
@@ -96,60 +108,104 @@ interface PlaybackState {
 
 type PublicationKey = `${number}-${Track.Source}`;
 
-export class LiveKitManager {
-    private room: Room;
-    private publications = new Map<PublicationKey, RemoteTrackPublication>();
-    private noiseProcessor: NoiseSuppressorProcessor;
+export type LiveKitConnectionState = "connecting" | "connected" | undefined;
+export type ScreenCodec = "h264" | "vp9";
+export type ScreenContentHint = "motion" | "detail";
 
-    private playback: PlaybackState;
-    private setPlayback: ReturnType<typeof createStore<PlaybackState>>[1];
-    private pref: ReturnType<typeof usePreference>[1];
+interface LiveKitState {
+    connectionState: LiveKitConnectionState;
+    inputDevices: MediaDevice[];
+    outputDevices: MediaDevice[];
+    activeInput: string;
+    activeOutput: string;
+    cameraQuality: CameraQuality;
+    screenQuality: ScreenQuality;
+    screenCodec: ScreenCodec;
+    screenContentHint: ScreenContentHint;
+    muted: boolean;
+    deafened: boolean;
+    noiseCancellation: boolean;
+}
 
-    private inputDevices: () => MediaDevice[];
-    private setInputDevices: (d: MediaDevice[]) => void;
-    private outputDevices: () => MediaDevice[];
-    private setOutputDevices: (d: MediaDevice[]) => void;
-    private activeInput: () => string;
-    private setActiveInput: (id: string) => void;
-    private activeOutput: () => string;
-    private setActiveOutput: (id: string) => void;
-    private cameraQuality: () => CameraQuality;
-    private setCameraQualitySignal: (q: CameraQuality) => void;
-    private screenQuality: () => ScreenQuality;
-    private setScreenQualitySignal: (q: ScreenQuality) => void;
-    private muted: () => boolean;
-    private setMutedSignal: (m: boolean) => void;
-    private deafened: () => boolean;
-    private setDeafenedSignal: (d: boolean) => void;
-    private noiseCancellation: () => boolean;
-    private setNoiseCancellationSignal: (n: boolean) => void;
+interface LiveKitActions {
+    prepareConnection: (serverUrl: string, token: string) => Promise<void>;
+    connect: (serverUrl: string, token: string, muted: boolean) => Promise<void>;
+    disconnect: () => Promise<void>;
+    getConnectionState: () => ConnectionState | null;
+    isConnected: () => boolean;
+    subscribeToCameraStream: (userId: number) => void;
+    unsubscribeFromCameraStream: (userId: number) => void;
+    subscribeToScreenStream: (userId: number) => void;
+    unsubscribeFromScreenStream: (userId: number) => void;
+    setMicEnabled: (enabled: boolean) => Promise<void>;
+    setMicMuted: (muted: boolean) => Promise<void>;
+    setCameraEnabled: (enabled: boolean) => Promise<void>;
+    setScreenShareEnabled: (enabled: boolean) => Promise<void>;
+    detachTrack: (userId: number, source: Track.Source) => void;
+    getTrack: (userId: number, source: Track.Source) => RemoteTrack | undefined;
+    isSubscribedToVideo: (userId: number, source: Track.Source.Camera | Track.Source.ScreenShare) => boolean;
+    cleanupForUser: (userId: number) => void;
+    getSpeakingState: (userId: number) => boolean;
+    setVolume: (userId: number, volume: number) => void;
+    getVolume: (userId: number) => number;
+    setScreenVolume: (userId: number, volume: number) => void;
+    getScreenVolume: (userId: number) => number | undefined;
+    getCameraQuality: () => CameraQuality;
+    setCameraQuality: (quality: CameraQuality) => void;
+    getCameraQualityOptions: () => QualityOption<CameraQuality>[];
+    getScreenQuality: () => ScreenQuality;
+    setScreenQuality: (quality: ScreenQuality) => void;
+    getScreenQualityOptions: () => QualityOption<ScreenQuality>[];
+    getScreenCodec: () => ScreenCodec;
+    setScreenCodec: (codec: ScreenCodec) => void;
+    getScreenCodecOptions: () => QualityOption<ScreenCodec>[];
+    getScreenContentHint: () => ScreenContentHint;
+    setScreenContentHint: (hint: ScreenContentHint) => void;
+    getScreenContentHintOptions: () => QualityOption<ScreenContentHint>[];
+    getMuted: () => boolean;
+    setMuted: (muted: boolean) => void;
+    getDeafened: () => boolean;
+    setDeafened: (deafened: boolean) => void;
+    getNoiseCancellation: () => boolean;
+    setNoiseCancellation: (enabled: boolean) => void;
+    refreshDevices: () => Promise<void>;
+    getAudioInputDevices: () => MediaDevice[];
+    getAudioOutputDevices: () => MediaDevice[];
+    getActiveAudioInput: () => string;
+    getActiveAudioOutput: () => string;
+    setAudioInputDevice: (deviceId: string) => Promise<void>;
+    setAudioOutputDevice: (deviceId: string) => Promise<void>;
+}
 
-    constructor() {
-        [this.inputDevices, this.setInputDevices] = createSignal<MediaDevice[]>([]);
-        [this.outputDevices, this.setOutputDevices] = createSignal<MediaDevice[]>([]);
-        [this.activeInput, this.setActiveInput] = createSignal("");
-        [this.activeOutput, this.setActiveOutput] = createSignal("");
-        [this.cameraQuality, this.setCameraQualitySignal] = createSignal<CameraQuality>("1080p30");
-        [this.screenQuality, this.setScreenQualitySignal] = createSignal<ScreenQuality>("1080p30");
-        [this.muted, this.setMutedSignal] = createSignal(false);
-        [this.deafened, this.setDeafenedSignal] = createSignal(false);
-        [this.noiseCancellation, this.setNoiseCancellationSignal] = createSignal(true);
+export type LiveKitStore = [LiveKitState, LiveKitActions];
 
-        [this.playback, this.setPlayback] = createStore<PlaybackState>({
-            tracks: {},
-            audio: {},
-            speaking: {},
-        });
-        this.pref = usePreference()[1];
+function createLiveKitStore(): LiveKitStore {
+    const [state, setState] = createStore<LiveKitState>({
+        connectionState: undefined,
+        inputDevices: [],
+        outputDevices: [],
+        activeInput: "",
+        activeOutput: "",
+        cameraQuality: "1080p30",
+        screenQuality: "1080p30",
+        screenCodec: "vp9",
+        screenContentHint: "motion",
+        muted: false,
+        deafened: false,
+        noiseCancellation: true,
+    });
 
-        this.noiseProcessor = new NoiseSuppressorProcessor(workletUrl);
-        this.room = this.createRoom();
-        this.setupEventListeners();
-    }
+    const [playback, setPlayback] = createStore<PlaybackState>({
+        tracks: {},
+        audio: {},
+        speaking: {},
+    });
 
-    private createRoom(): Room {
-        const preset = CAMERA_PRESETS[this.cameraQuality()];
+    const pref = usePreference()[1];
+    const publications = new Map<PublicationKey, RemoteTrackPublication>();
+    const noiseProcessor = new NoiseSuppressorProcessor(workletUrl);
 
+    const createRoom = (): Room => {
         return new Room({
             adaptiveStream: true,
             dynacast: true,
@@ -159,393 +215,417 @@ export class LiveKitManager {
                 echoCancellation: true,
                 autoGainControl: true,
             },
-            videoCaptureDefaults: {
-                resolution: {
-                    width: preset.width,
-                    height: preset.height,
-                    frameRate: preset.encoding.maxFramerate,
-                },
-            },
             publishDefaults: {
-                videoEncoding: preset.encoding,
-                videoSimulcastLayers: getSimulcastLayers(preset),
+                videoCodec: "h264",
                 red: false,
             },
         });
-    }
-
-    async prepareConnection(serverUrl: string, token: string): Promise<void> {
-        await this.room.prepareConnection(serverUrl, token);
-    }
-
-    async connect(serverUrl: string, token: string): Promise<void> {
-        await this.disconnect();
-        await this.room.connect(serverUrl, token, { autoSubscribe: false });
-        this.syncRemotePublications();
-        await this.restoreDevicePreferences();
-    }
-
-    async disconnect(): Promise<void> {
-        await this.room.disconnect();
-        this.publications.clear();
-    }
-
-    getConnectionState(): ConnectionState | null {
-        return this.room?.state ?? null;
-    }
-
-    isConnected(): boolean {
-        return this.room?.state === ConnectionState.Connected;
-    }
-
-    private setupEventListeners(): void {
-        this.room
-            .on(RoomEvent.TrackSubscribed, this.handleTrackSubscribed)
-            .on(RoomEvent.TrackUnsubscribed, this.handleTrackUnsubscribed)
-            .on(RoomEvent.TrackPublished, this.handleTrackPublished)
-            .on(RoomEvent.TrackUnpublished, this.handleTrackUnpublished)
-            .on(RoomEvent.ActiveSpeakersChanged, this.handleActiveSpeakersChanged)
-            .on(RoomEvent.ParticipantPermissionsChanged, this.handlePermissionsChanged);
-    }
-
-    private handleTrackSubscribed = (
-        track: RemoteTrack,
-        _pub: RemoteTrackPublication,
-        participant: RemoteParticipant
-    ): void => {
-        const userId = this.parseUserId(participant.identity);
-        this.attachTrack(userId, track.source, track);
     };
 
-    private handleTrackUnsubscribed = (
-        track: RemoteTrack,
-        _pub: RemoteTrackPublication,
-        participant: RemoteParticipant
-    ): void => {
-        const userId = this.parseUserId(participant.identity);
-        this.detachTrack(userId, track.source);
+    let room = createRoom();
+
+    const parseUserId = (identity: string): number => parseInt(identity, 10);
+
+    const toTrackKey = (userId: number, source: Track.Source): TrackKey => `${userId}:${source}`;
+
+    const prefKey = (userId: number, source: AudioSource): string => `vol:${userId}:${source}`;
+
+    const loadVolume = (userId: number, source: AudioSource): number =>
+        pref.get<number>(prefKey(userId, source)) ?? DEFAULT_VOLUME;
+
+    const applyTrackVolume = (entry: AudioEntry): void => {
+        entry.track.setVolume(state.deafened ? 0 : entry.volume / 100);
     };
 
-    private handleTrackPublished = (
-        publication: RemoteTrackPublication,
-        participant: RemoteParticipant
-    ): void => {
-        this.storePublication(participant, publication);
-    };
+    const attachTrack = (userId: number, source: Track.Source, track: RemoteTrack): void => {
+        const key = toTrackKey(userId, source);
+        actions.detachTrack(userId, source);
+        setPlayback("tracks", key, track);
 
-    private handleTrackUnpublished = (
-        publication: RemoteTrackPublication,
-        participant: RemoteParticipant
-    ): void => {
-        this.removePublication(participant, publication);
-    };
-
-    private handleActiveSpeakersChanged = (speakers: Participant[]): void => {
-        const speakingIds = new Set(speakers.map((s) => this.parseUserId(s.identity)));
-        for (const participant of this.room.remoteParticipants.values()) {
-            const userId = this.parseUserId(participant.identity);
-            this.setPlayback("speaking", userId, speakingIds.has(userId));
+        if (source === Track.Source.Microphone || source === Track.Source.ScreenShareAudio) {
+            const audioTrack = track as RemoteAudioTrack;
+            const volume = loadVolume(userId, source);
+            const entry = { track: audioTrack, volume };
+            audioTrack.attach();
+            applyTrackVolume(entry);
+            setPlayback("audio", key, entry);
         }
     };
 
-    private handlePermissionsChanged = async (_: unknown, participant: Participant): Promise<void> => {
-        if (participant === this.room.localParticipant && participant.permissions?.canPublish) {
-            await this.enableMicrophone();
-        }
-    };
+    const makePublicationKey = (participant: RemoteParticipant, source: Track.Source): PublicationKey =>
+        `${parseUserId(participant.identity)}-${source}`;
 
-    private syncRemotePublications(): void {
-        for (const participant of this.room.remoteParticipants.values()) {
-            for (const publication of participant.trackPublications.values()) {
-                this.storePublication(participant, publication);
-            }
-        }
-    }
-
-    private storePublication(participant: RemoteParticipant, publication: RemoteTrackPublication): void {
-        const key = this.makePublicationKey(participant, publication.source);
-        this.publications.set(key, publication);
+    const storePublication = (participant: RemoteParticipant, publication: RemoteTrackPublication): void => {
+        const key = makePublicationKey(participant, publication.source);
+        publications.set(key, publication);
 
         if (publication.source === Track.Source.Microphone) {
             publication.setSubscribed(true);
         }
-    }
+    };
 
-    private removePublication(participant: RemoteParticipant, publication: RemoteTrackPublication): void {
-        const key = this.makePublicationKey(participant, publication.source);
-        this.publications.delete(key);
-    }
+    const removePublication = (participant: RemoteParticipant, publication: RemoteTrackPublication): void => {
+        const key = makePublicationKey(participant, publication.source);
+        publications.delete(key);
+    };
 
-    private makePublicationKey(participant: RemoteParticipant, source: Track.Source): PublicationKey {
-        return `${this.parseUserId(participant.identity)}-${source}`;
-    }
-
-    private parseUserId(identity: string): number {
-        return parseInt(identity, 10);
-    }
-
-    subscribeToCameraStream(userId: number): void {
-        this.setSubscription(userId, Track.Source.Camera, true);
-    }
-
-    unsubscribeFromCameraStream(userId: number): void {
-        this.setSubscription(userId, Track.Source.Camera, false);
-    }
-
-    subscribeToScreenStream(userId: number): void {
-        this.setSubscription(userId, Track.Source.ScreenShare, true);
-        this.setSubscription(userId, Track.Source.ScreenShareAudio, true);
-    }
-
-    unsubscribeFromScreenStream(userId: number): void {
-        this.setSubscription(userId, Track.Source.ScreenShare, false);
-        this.setSubscription(userId, Track.Source.ScreenShareAudio, false);
-    }
-
-    private setSubscription(userId: number, source: Track.Source, subscribed: boolean): void {
-        const key: PublicationKey = `${userId}-${source}`;
-        this.publications.get(key)?.setSubscribed(subscribed);
-    }
-
-    private async enableMicrophone(): Promise<void> {
-        const localParticipant = this.room?.localParticipant;
-        if (!localParticipant) return;
-
-        await localParticipant.setMicrophoneEnabled(true);
-        await this.syncMicrophoneState();
-    }
-
-    async setMicEnabled(enabled: boolean): Promise<void> {
-        const localParticipant = this.room?.localParticipant;
-        if (!localParticipant) return;
-
-        if (enabled) {
-            await this.enableMicrophone();
-        } else {
-            await localParticipant.setMicrophoneEnabled(false);
+    const syncRemotePublications = (): void => {
+        for (const participant of room.remoteParticipants.values()) {
+            for (const publication of participant.trackPublications.values()) {
+                storePublication(participant, publication);
+            }
         }
-    }
+    };
 
-    async setMicMuted(muted: boolean): Promise<void> {
-        this.setMutedSignal(muted);
-        await this.syncMicrophoneState();
-    }
+    const setSubscription = (userId: number, source: Track.Source, subscribed: boolean): void => {
+        const key: PublicationKey = `${userId}-${source}`;
+        publications.get(key)?.setSubscribed(subscribed);
+    };
 
-    private async syncMicrophoneState(): Promise<void> {
-        const track = this.getMicrophoneTrack();
+    const getMicrophoneTrack = (): LocalTrack | undefined =>
+        room?.localParticipant?.getTrackPublication(Track.Source.Microphone)?.track as LocalTrack | undefined;
+
+    const applyNoiseProcessor = async (track: LocalTrack): Promise<void> => {
+        await track.setProcessor(noiseProcessor);
+        noiseProcessor.enabled = state.noiseCancellation;
+    };
+
+    const syncMicrophoneState = async (): Promise<void> => {
+        const track = getMicrophoneTrack();
         if (!track) return;
 
-        if (this.muted()) {
+        if (state.muted) {
             await track.stopProcessor();
             await track.mute();
         } else {
             await track.unmute();
-            await this.applyNoiseProcessor(track);
+            await applyNoiseProcessor(track);
         }
-    }
+    };
 
-    private async applyNoiseProcessor(track: LocalTrack): Promise<void> {
-        await track.setProcessor(this.noiseProcessor);
-        this.noiseProcessor.enabled = this.noiseCancellation();
-    }
+    const enableMicrophone = async (): Promise<void> => {
+        const localParticipant = room?.localParticipant;
+        if (!localParticipant) return;
 
-    private getMicrophoneTrack(): LocalTrack | undefined {
-        return this.room?.localParticipant
-            ?.getTrackPublication(Track.Source.Microphone)
-            ?.track as LocalTrack | undefined;
-    }
+        await localParticipant.setMicrophoneEnabled(true);
+        await syncMicrophoneState();
+    };
 
-    async setCameraEnabled(enabled: boolean): Promise<void> {
-        await this.room?.localParticipant?.setCameraEnabled(enabled);
-    }
+    const restoreDevicePreferences = async (): Promise<void> => {
+        const input = state.activeInput;
+        const output = state.activeOutput;
+        if (input) await room.switchActiveDevice("audioinput", input).catch(() => { });
+        if (output) await room.switchActiveDevice("audiooutput", output).catch(() => { });
+    };
 
-    async setScreenShareEnabled(enabled: boolean): Promise<void> {
-        if (!this.room?.localParticipant) return;
-
-        if (enabled) {
-            const preset = SCREEN_PRESETS[this.screenQuality()];
-            await this.room.localParticipant.setScreenShareEnabled(true, {
-                audio: true,
-                resolution: { width: preset.width, height: preset.height, frameRate: preset.encoding.maxFramerate },
-            });
-        } else {
-            await this.room.localParticipant.setScreenShareEnabled(false);
-        }
-    }
-
-    private toTrackKey(userId: number, source: Track.Source): TrackKey {
-        return `${userId}:${source}`;
-    }
-
-    private prefKey(userId: number, source: AudioSource): string {
-        return `vol:${userId}:${source}`;
-    }
-
-    private loadVolume(userId: number, source: AudioSource): number {
-        return this.pref.get<number>(this.prefKey(userId, source)) ?? DEFAULT_VOLUME;
-    }
-
-    private applyTrackVolume(entry: AudioEntry): void {
-        entry.track.setVolume(this.deafened() ? 0 : entry.volume / 100);
-    }
-
-    private attachTrack(userId: number, source: Track.Source, track: RemoteTrack): void {
-        const key = this.toTrackKey(userId, source);
-        this.detachTrack(userId, source);
-        this.setPlayback("tracks", key, track);
-
-        if (source === Track.Source.Microphone || source === Track.Source.ScreenShareAudio) {
-            const audioTrack = track as RemoteAudioTrack;
-            const volume = this.loadVolume(userId, source);
-            const entry = { track: audioTrack, volume };
-            this.applyTrackVolume(entry);
-            audioTrack.attach();
-            this.setPlayback("audio", key, entry);
-        }
-    }
-
-    detachTrack(userId: number, source: Track.Source): void {
-        const key = this.toTrackKey(userId, source);
-        this.playback.audio[key]?.track.detach();
-        this.playback.tracks[key]?.detach();
-        this.setPlayback("tracks", key, undefined!);
-        this.setPlayback("audio", key, undefined!);
-    }
-
-    getTrack(userId: number, source: Track.Source): RemoteTrack | undefined {
-        return this.playback.tracks[this.toTrackKey(userId, source)];
-    }
-
-    isSubscribedToVideo(userId: number, source: Track.Source.Camera | Track.Source.ScreenShare): boolean {
-        return !!this.playback.tracks[this.toTrackKey(userId, source)];
-    }
-
-    cleanupForUser(userId: number): void {
-        ALL_SOURCES.forEach((s) => this.detachTrack(userId, s));
-        this.setPlayback("speaking", userId, undefined!);
-    }
-
-    getSpeakingState(userId: number): boolean {
-        return this.playback.speaking[userId] ?? false;
-    }
-
-    setVolume(userId: number, volume: number): void {
-        this.updateVolume(userId, Track.Source.Microphone, volume);
-    }
-
-    getVolume(userId: number): number {
-        return this.playback.audio[this.toTrackKey(userId, Track.Source.Microphone)]?.volume ?? DEFAULT_VOLUME;
-    }
-
-    setScreenVolume(userId: number, volume: number): void {
-        this.updateVolume(userId, Track.Source.ScreenShareAudio, volume);
-    }
-
-    getScreenVolume(userId: number): number | undefined {
-        return this.playback.audio[this.toTrackKey(userId, Track.Source.ScreenShareAudio)]?.volume;
-    }
-
-    private updateVolume(userId: number, source: AudioSource, volume: number): void {
-        const key = this.toTrackKey(userId, source);
-        const entry = this.playback.audio[key];
+    const updateVolume = (userId: number, source: AudioSource, volume: number): void => {
+        const key = toTrackKey(userId, source);
+        const entry = playback.audio[key];
         if (entry) {
-            this.pref.set(this.prefKey(userId, source), volume);
-            this.setPlayback("audio", key, { ...entry, volume });
-            this.applyTrackVolume({ ...entry, volume });
-        }
-    }
-
-    getCameraQuality = () => this.cameraQuality();
-    setCameraQuality = (quality: CameraQuality) => this.setCameraQualitySignal(quality);
-    getCameraQualityOptions = () => CAMERA_QUALITY_OPTIONS;
-
-    getScreenQuality = () => this.screenQuality();
-    setScreenQuality = (quality: ScreenQuality) => this.setScreenQualitySignal(quality);
-    getScreenQualityOptions = () => SCREEN_QUALITY_OPTIONS;
-
-    getMuted = () => this.muted();
-    setMuted = (muted: boolean) => this.setMicMuted(muted);
-
-    getDeafened = () => this.deafened();
-    setDeafened = (deafened: boolean): void => {
-        this.setDeafenedSignal(deafened);
-        for (const entry of Object.values(this.playback.audio)) {
-            if (entry) this.applyTrackVolume(entry);
+            pref.set(prefKey(userId, source), volume);
+            setPlayback("audio", key, { ...entry, volume });
+            applyTrackVolume({ ...entry, volume });
         }
     };
 
-    getNoiseCancellation = () => this.noiseCancellation();
-    setNoiseCancellation = (enabled: boolean): void => {
-        this.setNoiseCancellationSignal(enabled);
-        this.noiseProcessor.enabled = enabled;
+    const handleTrackSubscribed = (
+        track: RemoteTrack,
+        _pub: RemoteTrackPublication,
+        participant: RemoteParticipant
+    ): void => {
+        const userId = parseUserId(participant.identity);
+        attachTrack(userId, track.source, track);
     };
 
-    async refreshDevices(): Promise<void> {
-        const [inputs, outputs] = await Promise.all([
-            Room.getLocalDevices("audioinput"),
-            Room.getLocalDevices("audiooutput"),
-        ]);
+    const handleTrackUnsubscribed = (
+        track: RemoteTrack,
+        _pub: RemoteTrackPublication,
+        participant: RemoteParticipant
+    ): void => {
+        const userId = parseUserId(participant.identity);
+        actions.detachTrack(userId, track.source);
+    };
 
-        batch(() => {
-            this.setInputDevices(
-                inputs.map((d) => ({
+    const handleTrackPublished = (
+        publication: RemoteTrackPublication,
+        participant: RemoteParticipant
+    ): void => {
+        storePublication(participant, publication);
+    };
+
+    const handleTrackUnpublished = (
+        publication: RemoteTrackPublication,
+        participant: RemoteParticipant
+    ): void => {
+        removePublication(participant, publication);
+    };
+
+    const handleActiveSpeakersChanged = (speakers: Participant[]): void => {
+        const speakingIds = new Set(speakers.map((s) => parseUserId(s.identity)));
+        for (const participant of room.remoteParticipants.values()) {
+            const userId = parseUserId(participant.identity);
+            setPlayback("speaking", userId, speakingIds.has(userId));
+        }
+    };
+
+    const handleLocalTrackUnpublished = (publication: LocalTrackPublication): void => {
+        const [, voipActions] = useVoip();
+        if (publication.source === Track.Source.ScreenShare) {
+            voipActions.publishScreen(false);
+        }
+    };
+
+    const handlePermissionsChanged = async (_: unknown, participant: Participant): Promise<void> => {
+        if (participant === room.localParticipant && participant.permissions?.canPublish) {
+            await enableMicrophone();
+        }
+    };
+
+    const setupEventListeners = (): void => {
+        room
+            .on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
+            .on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
+            .on(RoomEvent.TrackPublished, handleTrackPublished)
+            .on(RoomEvent.TrackUnpublished, handleTrackUnpublished)
+            .on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished)
+            .on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged)
+            .on(RoomEvent.ParticipantPermissionsChanged, handlePermissionsChanged);
+    };
+
+    setupEventListeners();
+
+    const actions: LiveKitActions = {
+        async prepareConnection(serverUrl, token) {
+            await room.prepareConnection(serverUrl, token);
+        },
+
+        async connect(serverUrl, token, muted) {
+            await actions.disconnect();
+            setState("connectionState", "connecting");
+            await room.connect(serverUrl, token, { autoSubscribe: false });
+            syncRemotePublications();
+            await restoreDevicePreferences();
+            actions.setMuted(muted);
+            await actions.setMicEnabled(true);
+            setState("connectionState", "connected");
+        },
+
+        async disconnect() {
+            await room.disconnect();
+            publications.clear();
+            setState("connectionState", undefined);
+        },
+
+        getConnectionState() {
+            return room?.state ?? null;
+        },
+
+        isConnected() {
+            return room?.state === ConnectionState.Connected;
+        },
+
+        subscribeToCameraStream(userId) {
+            setSubscription(userId, Track.Source.Camera, true);
+        },
+
+        unsubscribeFromCameraStream(userId) {
+            setSubscription(userId, Track.Source.Camera, false);
+        },
+
+        subscribeToScreenStream(userId) {
+            setSubscription(userId, Track.Source.ScreenShare, true);
+            setSubscription(userId, Track.Source.ScreenShareAudio, true);
+        },
+
+        unsubscribeFromScreenStream(userId) {
+            setSubscription(userId, Track.Source.ScreenShare, false);
+            setSubscription(userId, Track.Source.ScreenShareAudio, false);
+        },
+
+        async setMicEnabled(enabled) {
+            const localParticipant = room?.localParticipant;
+            if (!localParticipant) return;
+
+            if (enabled) {
+                await enableMicrophone();
+            } else {
+                await localParticipant.setMicrophoneEnabled(false);
+            }
+        },
+
+        async setMicMuted(muted) {
+            setState("muted", muted);
+            await syncMicrophoneState();
+        },
+
+        async setCameraEnabled(enabled) {
+            if (!room?.localParticipant) return;
+
+            if (enabled) {
+                const preset = CAMERA_PRESETS[state.cameraQuality];
+                await room.localParticipant.setCameraEnabled(true, {
+                    resolution: { width: preset.width, height: preset.height, frameRate: preset.encoding.maxFramerate },
+                }, {
+                    videoEncoding: preset.encoding,
+                    videoSimulcastLayers: getSimulcastLayers(preset),
+                });
+            } else {
+                await room.localParticipant.setCameraEnabled(false);
+            }
+        },
+
+        async setScreenShareEnabled(enabled) {
+            if (!room?.localParticipant) return;
+
+            if (enabled) {
+                const preset = SCREEN_PRESETS[state.screenQuality];
+                await room.localParticipant.setScreenShareEnabled(true, {
+                    audio: true,
+                    resolution: { width: preset.width, height: preset.height, frameRate: preset.encoding.maxFramerate },
+                    contentHint: state.screenContentHint,
+                }, {
+                    videoCodec: state.screenCodec,
+                    screenShareEncoding: preset.encoding,
+                    screenShareSimulcastLayers: getSimulcastLayers(preset),
+                    degradationPreference: "maintain-framerate",
+                });
+            } else {
+                await room.localParticipant.setScreenShareEnabled(false);
+            }
+        },
+
+        detachTrack(userId, source) {
+            const key = toTrackKey(userId, source);
+            playback.audio[key]?.track.detach();
+            playback.tracks[key]?.detach();
+            setPlayback("tracks", key, undefined!);
+            setPlayback("audio", key, undefined!);
+        },
+
+        getTrack(userId, source) {
+            return playback.tracks[toTrackKey(userId, source)];
+        },
+
+        isSubscribedToVideo(userId, source) {
+            return !!playback.tracks[toTrackKey(userId, source)];
+        },
+
+        cleanupForUser(userId) {
+            ALL_SOURCES.forEach((s) => actions.detachTrack(userId, s));
+            setPlayback("speaking", userId, undefined!);
+        },
+
+        getSpeakingState(userId) {
+            return playback.speaking[userId] ?? false;
+        },
+
+        setVolume(userId, volume) {
+            updateVolume(userId, Track.Source.Microphone, volume);
+        },
+
+        getVolume(userId) {
+            return playback.audio[toTrackKey(userId, Track.Source.Microphone)]?.volume ?? DEFAULT_VOLUME;
+        },
+
+        setScreenVolume(userId, volume) {
+            updateVolume(userId, Track.Source.ScreenShareAudio, volume);
+        },
+
+        getScreenVolume(userId) {
+            return playback.audio[toTrackKey(userId, Track.Source.ScreenShareAudio)]?.volume;
+        },
+
+        getCameraQuality: () => state.cameraQuality,
+        setCameraQuality: (quality) => setState("cameraQuality", quality),
+        getCameraQualityOptions: () => CAMERA_QUALITY_OPTIONS,
+
+        getScreenQuality: () => state.screenQuality,
+        setScreenQuality: (quality) => setState("screenQuality", quality),
+        getScreenQualityOptions: () => SCREEN_QUALITY_OPTIONS,
+
+        getScreenCodec: () => state.screenCodec,
+        setScreenCodec: (codec) => setState("screenCodec", codec),
+        getScreenCodecOptions: () => SCREEN_CODEC_OPTIONS,
+
+        getScreenContentHint: () => state.screenContentHint,
+        setScreenContentHint: (hint) => setState("screenContentHint", hint),
+        getScreenContentHintOptions: () => SCREEN_CONTENT_HINT_OPTIONS,
+
+        getMuted: () => state.muted,
+        setMuted: (muted) => actions.setMicMuted(muted),
+
+        getDeafened: () => state.deafened,
+        setDeafened(deafened) {
+            setState("deafened", deafened);
+            for (const entry of Object.values(playback.audio)) {
+                if (entry) applyTrackVolume(entry);
+            }
+        },
+
+        getNoiseCancellation: () => state.noiseCancellation,
+        setNoiseCancellation(enabled) {
+            setState("noiseCancellation", enabled);
+            noiseProcessor.enabled = enabled;
+        },
+
+        async refreshDevices() {
+            const [inputs, outputs] = await Promise.all([
+                Room.getLocalDevices("audioinput"),
+                Room.getLocalDevices("audiooutput"),
+            ]);
+
+            batch(() => {
+                setState("inputDevices", inputs.map((d) => ({
                     deviceId: d.deviceId,
                     label: d.label || `Microphone ${d.deviceId.slice(0, 8)}`,
-                }))
-            );
-            this.setOutputDevices(
-                outputs.map((d) => ({
+                })));
+                setState("outputDevices", outputs.map((d) => ({
                     deviceId: d.deviceId,
                     label: d.label || `Speaker ${d.deviceId.slice(0, 8)}`,
-                }))
-            );
-            this.setActiveInput(this.room?.getActiveDevice("audioinput") ?? inputs[0]?.deviceId ?? "");
-            this.setActiveOutput(this.room?.getActiveDevice("audiooutput") ?? outputs[0]?.deviceId ?? "");
-        });
-    }
+                })));
+                setState("activeInput", room?.getActiveDevice("audioinput") ?? inputs[0]?.deviceId ?? "");
+                setState("activeOutput", room?.getActiveDevice("audiooutput") ?? outputs[0]?.deviceId ?? "");
+            });
+        },
 
-    private async restoreDevicePreferences(): Promise<void> {
-        const input = this.activeInput();
-        const output = this.activeOutput();
-        if (input) await this.room.switchActiveDevice("audioinput", input);
-        if (output) await this.room.switchActiveDevice("audiooutput", output);
-    }
+        getAudioInputDevices: () => state.inputDevices,
+        getAudioOutputDevices: () => state.outputDevices,
+        getActiveAudioInput: () => state.activeInput,
+        getActiveAudioOutput: () => state.activeOutput,
 
-    getAudioInputDevices = () => this.inputDevices();
-    getAudioOutputDevices = () => this.outputDevices();
-    getActiveAudioInput = () => this.activeInput();
-    getActiveAudioOutput = () => this.activeOutput();
+        async setAudioInputDevice(deviceId) {
+            setState("activeInput", deviceId);
 
-    async setAudioInputDevice(deviceId: string): Promise<void> {
-        this.setActiveInput(deviceId);
+            const track = getMicrophoneTrack();
+            if (track) {
+                await track.stopProcessor();
+            }
 
-        const track = this.getMicrophoneTrack();
-        if (track) {
-            await track.stopProcessor();
-        }
+            await room?.switchActiveDevice("audioinput", deviceId);
 
-        await this.room?.switchActiveDevice("audioinput", deviceId);
+            const newTrack = getMicrophoneTrack();
+            if (newTrack && !state.muted) {
+                await applyNoiseProcessor(newTrack);
+            }
+        },
 
-        const newTrack = this.getMicrophoneTrack();
-        if (newTrack && !this.muted()) {
-            await this.applyNoiseProcessor(newTrack);
-        }
-    }
+        async setAudioOutputDevice(deviceId) {
+            setState("activeOutput", deviceId);
+            await room?.switchActiveDevice("audiooutput", deviceId).catch(() => { });
+        },
+    };
 
-    async setAudioOutputDevice(deviceId: string): Promise<void> {
-        this.setActiveOutput(deviceId);
-        await this.room?.switchActiveDevice("audiooutput", deviceId);
-    }
+    return [state, actions];
 }
 
-let instance: LiveKitManager | null = null;
+let instance: LiveKitStore | null = null;
 
-export function getLiveKitManager(): LiveKitManager {
+export function useLiveKit(): LiveKitStore {
     if (!instance) {
         createRoot(() => {
-            instance = new LiveKitManager();
+            instance = createLiveKitStore();
         });
-        navigator.mediaDevices.addEventListener("devicechange", () => instance?.refreshDevices());
+        navigator.mediaDevices.addEventListener("devicechange", () => instance?.[1].refreshDevices());
     }
     return instance!;
 }

@@ -5,16 +5,16 @@ import Avatar from '../../components/Avatar'
 import Button from '../../components/Button'
 import { useAuth, useVoip, useModal, useSound } from '../../store/index'
 import { getStatusColor } from '../../utils'
-import { getLiveKitManager } from '../../lib/livekit'
+import { useLiveKit } from '../../lib/livekit'
 
 const UserSection: Component = () => {
     const [, authActions] = useAuth()
     const [, voipActions] = useVoip()
     const [, modalActions] = useModal()
     const [, soundActions] = useSound();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
     const currentUser = () => authActions.getUser()
-    const isMuted = () => livekit.getMuted()
+    const isMuted = () => livekitActions.getMuted()
 
     const handleMuteToggle = async () => {
         const newMuted = !isMuted()
@@ -23,8 +23,8 @@ const UserSection: Component = () => {
     }
 
     const handleDeafenToggle = async () => {
-        const newDeafened = !livekit.getDeafened()
-        livekit.setDeafened(newDeafened)
+        const newDeafened = !livekitActions.getDeafened()
+        livekitActions.setDeafened(newDeafened)
         await voipActions.setDeafened(newDeafened)
         soundActions.play(newDeafened ? "/sounds/deafen.ogg" : "/sounds/undeafen.ogg");
     }
@@ -71,12 +71,12 @@ const UserSection: Component = () => {
 
                 <Button
                     onClick={handleDeafenToggle}
-                    variant={livekit.getDeafened() ? "destructive" : "secondary"}
+                    variant={livekitActions.getDeafened() ? "destructive" : "secondary"}
                     size="sm"
                     class="p-2"
-                    title={livekit.getDeafened() ? 'Undeafen' : 'Deafen'}
+                    title={livekitActions.getDeafened() ? 'Undeafen' : 'Deafen'}
                 >
-                    <Show when={livekit.getDeafened()} fallback={<Headphones size={16} />}>
+                    <Show when={livekitActions.getDeafened()} fallback={<Headphones size={16} />}>
                         <HeadphoneOff size={16} />
                     </Show>
                 </Button>

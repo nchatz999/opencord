@@ -5,7 +5,7 @@ import { Camera, Monitor, Eye, EyeOff } from "lucide-solid";
 import { useUser } from "../../store/index";
 import type { CallType } from "../../store/modal";
 import Button from "../../components/Button";
-import { getLiveKitManager, Track } from "../../lib/livekit";
+import { useLiveKit, Track } from "../../lib/livekit";
 
 interface VideoStreamProps {
     publisherId: number;
@@ -15,13 +15,13 @@ interface VideoStreamProps {
 
 const VideoStream: Component<VideoStreamProps> = (props) => {
     const [, userActions] = useUser();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
 
     let videoRef: HTMLVideoElement | undefined;
 
     const publisher = () => userActions.findById(props.publisherId);
-    const isSubscribed = () => livekit.isSubscribedToVideo(props.publisherId, props.mediaType);
-    const track = () => livekit.getTrack(props.publisherId, props.mediaType);
+    const isSubscribed = () => livekitActions.isSubscribedToVideo(props.publisherId, props.mediaType);
+    const track = () => livekitActions.getTrack(props.publisherId, props.mediaType);
 
     createEffect(() => {
         const remoteTrack = track();
@@ -38,10 +38,10 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
         const { publisherId, mediaType } = props;
         switch (mediaType) {
             case Track.Source.Camera:
-                isSubscribed() ? livekit.unsubscribeFromCameraStream(publisherId) : livekit.subscribeToCameraStream(publisherId);
+                isSubscribed() ? livekitActions.unsubscribeFromCameraStream(publisherId) : livekitActions.subscribeToCameraStream(publisherId);
                 break;
             case Track.Source.ScreenShare:
-                isSubscribed() ? livekit.unsubscribeFromScreenStream(publisherId) : livekit.subscribeToScreenStream(publisherId);
+                isSubscribed() ? livekitActions.unsubscribeFromScreenStream(publisherId) : livekitActions.subscribeToScreenStream(publisherId);
                 break;
         }
     };

@@ -8,7 +8,7 @@ import {
 } from "lucide-solid";
 import type { VoipParticipant } from "../../model";
 import { useAcl, useAuth, useModal, useUser } from "../../store/index";
-import { getLiveKitManager } from "../../lib/livekit";
+import { useLiveKit } from "../../lib/livekit";
 import Avatar from "../../components/Avatar";
 
 
@@ -16,11 +16,11 @@ export const VoipChannelMember: Component<{ participant: VoipParticipant; channe
     const [, aclActions] = useAcl();
     const [, modalActions] = useModal();
     const [, userActions] = useUser();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
 
     const user = () => userActions.findById(props.participant.userId);
-    const volume = () => Math.round(livekit.getVolume(props.participant.userId));
-    const isSpeaking = () => livekit.getSpeakingState(props.participant.userId);
+    const volume = () => Math.round(livekitActions.getVolume(props.participant.userId));
+    const isSpeaking = () => livekitActions.getSpeakingState(props.participant.userId);
 
     const openSettings = (e: MouseEvent) => {
         e.preventDefault();

@@ -8,7 +8,7 @@ import { useConnection } from "./connection";
 import type { CallType } from "./modal";
 import { useAuth } from "./auth";
 import { useSound } from "./sound";
-import { getLiveKitManager, Track } from "../lib/livekit";
+import { useLiveKit, Track } from "../lib/livekit";
 
 interface JoinVoipResponse {
     token: string;
@@ -53,7 +53,7 @@ function createVoipStore(): VoipStore {
     const connection = useConnection();
     const [, authActions] = useAuth();
     const [, soundActions] = useSound();
-    const livekit = getLiveKitManager();
+    const [, livekit] = useLiveKit();
     let cleanupFn: (() => void) | null = null;
 
     const actions: VoipActions = {
@@ -173,10 +173,7 @@ function createVoipStore(): VoipStore {
             const { token, serverUrl } = result.value;
             setState("currentCallType", "channel");
 
-            await livekit.connect(serverUrl, token);
-
-            livekit.setMuted(muted);
-            await livekit.setMicEnabled(true);
+            await livekit.connect(serverUrl, token, muted);
 
             soundActions.play("/sounds/enter_call_me.ogg");
             return ok(undefined);
@@ -200,10 +197,7 @@ function createVoipStore(): VoipStore {
             const { token, serverUrl } = result.value;
             setState("currentCallType", "private");
 
-            await livekit.connect(serverUrl, token);
-
-            livekit.setMuted(muted);
-            await livekit.setMicEnabled(true);
+            await livekit.connect(serverUrl, token, muted);
 
             soundActions.play("/sounds/enter_call_me.ogg");
             return ok(undefined);

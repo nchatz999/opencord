@@ -1,7 +1,7 @@
 import { type Component, onMount } from "solid-js";
 import { useAuth, useConnection, initializeStores, useVoip } from "../store/index";
 import { useApp } from "../store/app";
-import { getLiveKitManager } from "../lib/livekit";
+import { useLiveKit } from "../lib/livekit";
 import logo from "../assets/opencord.webp";
 
 const MAX_RETRIES = 5;
@@ -16,7 +16,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
     const [auth, authActions] = useAuth();
     const [, appActions] = useApp();
     const [, voipActions] = useVoip();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
     const connection = useConnection();
 
     onMount(() => {
@@ -52,7 +52,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
 
             await initializeStores();
             if (props.channelId) {
-                await voipActions.joinChannel(props.channelId, false, livekit.getDeafened());
+                await voipActions.joinChannel(props.channelId, false, livekitActions.getDeafened());
             }
             appActions.setView({ type: "app" });
             return;

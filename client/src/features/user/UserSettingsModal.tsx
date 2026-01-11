@@ -23,7 +23,7 @@ import {
 } from "lucide-solid";
 import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
 import { useApp } from "../../store/app";
-import { getLiveKitManager, type CameraQuality } from "../../lib/livekit";
+import { useLiveKit, type CameraQuality, type ScreenQuality, type ScreenCodec, type ScreenContentHint } from "../../lib/livekit";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
@@ -45,7 +45,7 @@ const UserSettingsModal: Component = () => {
     const [, userActions] = useUser();
     const [, soundActions] = useSound();
     const [themeState, themeActions] = useTheme();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
     const user = () => authActions.getUser();
 
 
@@ -78,7 +78,7 @@ const UserSettingsModal: Component = () => {
 
     onMount(() => {
         loadSessions();
-        livekit.refreshDevices();
+        livekitActions.refreshDevices();
     });
 
     const loadSessions = async () => {
@@ -262,15 +262,15 @@ const UserSettingsModal: Component = () => {
                     <Card title="Input" icon={<Volume2 class="w-4 h-4" />}>
                         <Select
                             label="Microphone"
-                            options={livekit.getAudioInputDevices().map((d) => ({ value: d.deviceId, label: d.label }))}
-                            value={livekit.getActiveAudioInput()}
-                            onChange={async (id) => await livekit.setAudioInputDevice(id as string)}
+                            options={livekitActions.getAudioInputDevices().map((d) => ({ value: d.deviceId, label: d.label }))}
+                            value={livekitActions.getActiveAudioInput()}
+                            onChange={async (id) => await livekitActions.setAudioInputDevice(id as string)}
                             class="w-full"
                         />
                         <Checkbox
                             label="Noise Cancellation"
-                            checked={livekit.getNoiseCancellation()}
-                            onChange={(checked) => livekit.setNoiseCancellation(checked)}
+                            checked={livekitActions.getNoiseCancellation()}
+                            onChange={(checked) => livekitActions.setNoiseCancellation(checked)}
                             class="mt-3"
                         />
                     </Card>
@@ -278,9 +278,9 @@ const UserSettingsModal: Component = () => {
                     <Card title="Output" icon={<Headphones class="w-4 h-4" />}>
                         <Select
                             label="Speaker"
-                            options={livekit.getAudioOutputDevices().map((d) => ({ value: d.deviceId, label: d.label }))}
-                            value={livekit.getActiveAudioOutput()}
-                            onChange={async (id) => await livekit.setAudioOutputDevice(id as string)}
+                            options={livekitActions.getAudioOutputDevices().map((d) => ({ value: d.deviceId, label: d.label }))}
+                            value={livekitActions.getActiveAudioOutput()}
+                            onChange={async (id) => await livekitActions.setAudioOutputDevice(id as string)}
                             class="w-full"
                         />
                     </Card>
@@ -361,14 +361,39 @@ const UserSettingsModal: Component = () => {
             icon: <Settings class="w-4 h-4" />,
             content: (
                 <div class="space-y-4 mt-6">
-                    <Card title="Video Quality" icon={<Settings class="w-4 h-4" />}>
+                    <Card title="Camera Quality" icon={<Settings class="w-4 h-4" />}>
                         <Select
                             label="Quality"
-                            options={livekit.getCameraQualityOptions()}
-                            value={livekit.getCameraQuality()}
-                            onChange={(value) => livekit.setCameraQuality(value as CameraQuality)}
+                            options={livekitActions.getCameraQualityOptions()}
+                            value={livekitActions.getCameraQuality()}
+                            onChange={(value) => livekitActions.setCameraQuality(value as CameraQuality)}
                             class="w-full"
                         />
+                    </Card>
+                    <Card title="Screen Share Quality" icon={<Monitor class="w-4 h-4" />}>
+                        <div class="space-y-3">
+                            <Select
+                                label="Quality"
+                                options={livekitActions.getScreenQualityOptions()}
+                                value={livekitActions.getScreenQuality()}
+                                onChange={(value) => livekitActions.setScreenQuality(value as ScreenQuality)}
+                                class="w-full"
+                            />
+                            <Select
+                                label="Codec"
+                                options={livekitActions.getScreenCodecOptions()}
+                                value={livekitActions.getScreenCodec()}
+                                onChange={(value) => livekitActions.setScreenCodec(value as ScreenCodec)}
+                                class="w-full"
+                            />
+                            <Select
+                                label="Content Type"
+                                options={livekitActions.getScreenContentHintOptions()}
+                                value={livekitActions.getScreenContentHint()}
+                                onChange={(value) => livekitActions.setScreenContentHint(value as ScreenContentHint)}
+                                class="w-full"
+                            />
+                        </div>
                     </Card>
                 </div>
             ),

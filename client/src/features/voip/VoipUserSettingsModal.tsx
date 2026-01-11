@@ -2,7 +2,7 @@ import type { Component } from "solid-js";
 import { Show, createMemo } from "solid-js";
 import { X, Volume2, VolumeX, UserX } from "lucide-solid";
 import { useModal, useUser, useVoip, useAcl, useAuth } from "../../store/index";
-import { getLiveKitManager } from "../../lib/livekit";
+import { useLiveKit } from "../../lib/livekit";
 import type { CallType } from "../../store/modal";
 import Avatar from "../../components/Avatar";
 import Button from "../../components/Button";
@@ -21,12 +21,12 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
     const [, voipActions] = useVoip();
     const [, aclActions] = useAcl();
     const [, authActions] = useAuth();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
     const { addToast } = useToaster();
 
     const user = createMemo(() => userActions.findById(props.publisherId));
     const currentUser = () => authActions.getUser();
-    const volume = () => Math.round(livekit.getVolume(props.publisherId));
+    const volume = () => Math.round(livekitActions.getVolume(props.publisherId));
 
     const voipSession = () => voipActions.findById(props.publisherId);
     const channelId = () => voipSession()?.channelId;
@@ -57,7 +57,7 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
     };
 
     const toggleMute = () => {
-        livekit.setVolume(props.publisherId, volume() === 0 ? 100 : 0);
+        livekitActions.setVolume(props.publisherId, volume() === 0 ? 100 : 0);
     };
 
     return (
@@ -99,7 +99,7 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
                                     min={0}
                                     max={200}
                                     value={volume()}
-                                    onChange={(value) => livekit.setVolume(props.publisherId, value)}
+                                    onChange={(value) => livekitActions.setVolume(props.publisherId, value)}
                                 />
                             </Card>
 

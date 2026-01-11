@@ -6,7 +6,7 @@ import { VoipChannelMember } from "../voip/VoipChannelMember";
 import { ChannelType, type Channel } from "../../model";
 import { useContext, useModal, useVoip, useAcl, useAuth, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
-import { getLiveKitManager } from "../../lib/livekit";
+import { useLiveKit } from "../../lib/livekit";
 
 export const ChannelEntry: Component<{
     channel: Channel;
@@ -18,7 +18,7 @@ export const ChannelEntry: Component<{
     const [, voipActions] = useVoip();
     const [, aclActions] = useAcl();
     const [, authActions] = useAuth();
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
 
     const { addToast } = useToaster();
 
@@ -33,8 +33,8 @@ export const ChannelEntry: Component<{
         if (channel.channelType === ChannelType.VoIP) {
             const result = await voipActions.joinChannel(
                 channel.channelId,
-                livekit.getMuted(),
-                livekit.getDeafened()
+                livekitActions.getMuted(),
+                livekitActions.getDeafened()
             );
             if (result.isErr()) {
                 addToast(`Failed to join channel: ${result.error}`, "error");

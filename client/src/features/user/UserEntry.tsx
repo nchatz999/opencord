@@ -4,7 +4,7 @@ import Avatar from "../../components/Avatar";
 import { UserStatusType, type User } from "../../model";
 import { useVoip, useContext, useNotification } from "../../store/index";
 import { useToaster } from "../../components/Toaster";
-import { getLiveKitManager } from "../../lib/livekit";
+import { useLiveKit } from "../../lib/livekit";
 
 const UnreadBadge = () => (
     <span class="w-2 h-2 bg-primary rounded-full shrink-0" />
@@ -18,7 +18,7 @@ export const UserEntry: Component<{ user: User; }> = (
     const [, contextActions] = useContext();
     const notification = useNotification();
     const hasUnread = () => notification.hasDM(props.user.userId);
-    const livekit = getLiveKitManager();
+    const [, livekitActions] = useLiveKit();
 
     const statusColors: Record<UserStatusType | number, string> = {
         [UserStatusType.Online]: "bg-status-online",
@@ -53,8 +53,8 @@ export const UserEntry: Component<{ user: User; }> = (
 
         const result = await voipActions.joinPrivate(
             props.user.userId,
-            livekit.getMuted(),
-            livekit.getDeafened()
+            livekitActions.getMuted(),
+            livekitActions.getDeafened()
         );
 
         if (result.isErr()) {
