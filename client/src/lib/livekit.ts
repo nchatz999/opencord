@@ -169,6 +169,7 @@ export class LiveKitManager {
             publishDefaults: {
                 videoEncoding: preset.encoding,
                 videoSimulcastLayers: getSimulcastLayers(preset),
+                red: false,
             },
         });
     }
