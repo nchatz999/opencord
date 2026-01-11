@@ -9,42 +9,42 @@ import { Tabs } from "../components/Tabs";
 import MessageNotification from "../components/MessageNotification";
 
 const MiddlePanel: Component = () => {
-  const [contextState] = useContext();
+    const [contextState] = useContext();
 
-  const tabItems = createMemo(() => {
-    const items = [
-      {
-        id: "chat",
-        label: "Messages",
-        content: (
-          <div class="flex flex-col h-[calc(100vh-50px)] overflow-hidden">
-            <Show when={contextState.context}>
-              {(ctx) => <ChatHeader context={ctx()} />}
-            </Show>
+    const tabItems = createMemo(() => {
+        const items = [
+            {
+                id: "chat",
+                label: "Messages",
+                content: (
+                    <div class="flex flex-col h-[calc(100vh-50px)] overflow-hidden">
+                        <Show when={contextState.context}>
+                            {(ctx) => <ChatHeader context={ctx()} />}
+                        </Show>
 
-            <ChatContent />
-            <Show when={contextState.context}>
-              {(ctx) => <MessageInput context={ctx()} />}
-            </Show>
-          </div>
-        ),
-      },
-      {
-        id: "streams",
-        label: "Streams",
-        content: <StreamsContent />,
-      },
-    ];
+                        <ChatContent />
+                        <Show when={contextState.context}>
+                            {(ctx) => <MessageInput context={ctx()} />}
+                        </Show>
+                    </div>
+                ),
+            },
+            {
+                id: "streams",
+                label: "Streams",
+                content: <StreamsContent />,
+            },
+        ];
 
-    return items;
-  });
+        return items;
+    });
 
-  return (
-    <div class="flex-1 flex flex-col bg-background h-full overflow-hidden relative">
-      <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
-      <MessageNotification />
-    </div>
-  );
+    return (
+        <div class="flex-1 flex flex-col bg-background h-full overflow-hidden relative">
+            <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
+            <MessageNotification />
+        </div>
+    );
 };
 
 export default MiddlePanel;

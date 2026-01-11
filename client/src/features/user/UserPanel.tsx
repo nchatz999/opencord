@@ -5,14 +5,14 @@ import VoiceVideoControls from '../voip/VoiceVideoControls'
 import UserSection from './UserSection'
 
 const UserPanel: Component = () => {
-  return (
-    <div class="bg-background-dark px-2 py-3 w-full flex flex-col gap-3 border-t border-border">
-      <PrivateCallStatusPanel />
-      <ConnectionIndicator />
-      <VoiceVideoControls />
-      <UserSection />
-    </div>
-  )
+    return (
+        <div class="bg-background-dark px-2 py-3 w-full flex flex-col gap-3 border-t border-border">
+            <PrivateCallStatusPanel />
+            <ConnectionIndicator />
+            <VoiceVideoControls />
+            <UserSection />
+        </div>
+    )
 }
 
 export default UserPanel

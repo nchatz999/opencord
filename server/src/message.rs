@@ -1454,7 +1454,6 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         let mut tx = self.repository.begin().await?;
 
         let files = tx.delete_message_files(message_id).await?;
-        let _reactions = tx.delete_message_reactions(message_id).await?;
 
         let message = tx
             .delete_message(message_id)

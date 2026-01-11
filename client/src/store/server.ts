@@ -7,96 +7,96 @@ import { request } from "../utils";
 import { useConnection } from "./connection";
 
 interface ServerState {
-  config: ServerConfig | null;
+    config: ServerConfig | null;
 }
 
 interface ServerActions {
-  init: () => Promise<Result<void, string>>;
-  cleanup: () => void;
-  get: () => ServerConfig | null;
-  set: (config: ServerConfig) => void;
-  updateName: (name: string) => Promise<Result<void, string>>;
-  updateAvatar: (fileName: string, contentType: string, base64Data: string) => Promise<Result<void, string>>;
+    init: () => Promise<Result<void, string>>;
+    cleanup: () => void;
+    get: () => ServerConfig | null;
+    set: (config: ServerConfig) => void;
+    updateName: (name: string) => Promise<Result<void, string>>;
+    updateAvatar: (fileName: string, contentType: string, base64Data: string) => Promise<Result<void, string>>;
 }
 
 export type ServerStore = [ServerState, ServerActions];
 
 function createServerStore(): ServerStore {
-  const [state, setState] = createStore<ServerState>({
-    config: null,
-  });
+    const [state, setState] = createStore<ServerState>({
+        config: null,
+    });
 
-  const connection = useConnection();
-  let cleanupFn: (() => void) | null = null;
+    const connection = useConnection();
+    let cleanupFn: (() => void) | null = null;
 
-  const actions: ServerActions = {
-    async init() {
-      actions.cleanup();
+    const actions: ServerActions = {
+        async init() {
+            actions.cleanup();
 
-      const result = await request<ServerConfig>("/server/config", { method: "GET" });
-      if (result.isErr()) {
-        return err(result.error.reason);
-      }
-      actions.set(result.value);
+            const result = await request<ServerConfig>("/server/config", { method: "GET" });
+            if (result.isErr()) {
+                return err(result.error.reason);
+            }
+            actions.set(result.value);
 
-      cleanupFn = connection.onServerEvent((event) => {
-        if (event.type === "serverUpdated") {
-          actions.set(event.server as ServerConfig);
-        }
-      });
+            cleanupFn = connection.onServerEvent((event) => {
+                if (event.type === "serverUpdated") {
+                    actions.set(event.server as ServerConfig);
+                }
+            });
 
-      return ok(undefined);
-    },
+            return ok(undefined);
+        },
 
-    cleanup() {
-      if (cleanupFn) {
-        cleanupFn();
-        cleanupFn = null;
-      }
-      setState("config", null);
-    },
+        cleanup() {
+            if (cleanupFn) {
+                cleanupFn();
+                cleanupFn = null;
+            }
+            setState("config", null);
+        },
 
-    get() {
-      return state.config;
-    },
+        get() {
+            return state.config;
+        },
 
-    set(config) {
-      setState("config", config);
-    },
+        set(config) {
+            setState("config", config);
+        },
 
-    async updateName(name) {
-      const result = await request<ServerConfig>("/server/name", {
-        method: "PUT",
-        body: { serverName: name },
-      });
-      if (result.isErr()) {
-        return err(result.error.reason);
-      }
-      return ok(undefined);
-    },
+        async updateName(name) {
+            const result = await request<ServerConfig>("/server/name", {
+                method: "PUT",
+                body: { serverName: name },
+            });
+            if (result.isErr()) {
+                return err(result.error.reason);
+            }
+            return ok(undefined);
+        },
 
-    async updateAvatar(fileName, contentType, base64Data) {
-      const result = await request<ServerConfig>("/server/avatar", {
-        method: "PUT",
-        body: { fileName, contentType, data: base64Data },
-      });
-      if (result.isErr()) {
-        return err(result.error.reason);
-      }
-      return ok(undefined);
-    },
-  };
+        async updateAvatar(fileName, contentType, base64Data) {
+            const result = await request<ServerConfig>("/server/avatar", {
+                method: "PUT",
+                body: { fileName, contentType, data: base64Data },
+            });
+            if (result.isErr()) {
+                return err(result.error.reason);
+            }
+            return ok(undefined);
+        },
+    };
 
-  return [state, actions];
+    return [state, actions];
 }
 
 let instance: ServerStore | null = null;
 
 export function useServer(): ServerStore {
-  if (!instance) {
-    createRoot(() => {
-      instance = createServerStore();
-    });
-  }
-  return instance!;
+    if (!instance) {
+        createRoot(() => {
+            instance = createServerStore();
+        });
+    }
+    return instance!;
 }

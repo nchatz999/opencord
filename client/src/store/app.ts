@@ -2,49 +2,49 @@ import { createStore } from "solid-js/store";
 import { createRoot } from "solid-js";
 
 export type AppView = {
-  type: "loading"
-  channelId?: number,
+    type: "loading"
+    channelId?: number,
 } | {
-  type: "unauthenticated"
+    type: "unauthenticated"
 } | {
-  type: "app"
+    type: "app"
 } | {
-  type: "error",
-  error: string
+    type: "error",
+    error: string
 }
 
 
 export interface AppState {
-  view: AppView;
+    view: AppView;
 }
 
 export interface AppActions {
-  setView: (view: AppView) => void;
+    setView: (view: AppView) => void;
 }
 
 export type AppStore = [AppState, AppActions];
 
 function createAppStore(): AppStore {
-  const [state, setState] = createStore<AppState>({
-    view: { type: "loading" },
-  });
+    const [state, setState] = createStore<AppState>({
+        view: { type: "loading" },
+    });
 
-  const actions: AppActions = {
-    setView(view) {
-      setState({ view });
-    },
-  };
+    const actions: AppActions = {
+        setView(view) {
+            setState({ view });
+        },
+    };
 
-  return [state, actions];
+    return [state, actions];
 }
 
 let instance: AppStore | null = null;
 
 export function useApp(): AppStore {
-  if (!instance) {
-    createRoot(() => {
-      instance = createAppStore();
-    });
-  }
-  return instance!;
+    if (!instance) {
+        createRoot(() => {
+            instance = createAppStore();
+        });
+    }
+    return instance!;
 }

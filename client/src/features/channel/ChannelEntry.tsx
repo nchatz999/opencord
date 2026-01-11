@@ -9,77 +9,77 @@ import { useToaster } from "../../components/Toaster";
 import { getLiveKitManager } from "../../lib/livekit";
 
 export const ChannelEntry: Component<{
-  channel: Channel;
+    channel: Channel;
 }> = (props) => {
-  const [, contextActions] = useContext();
-  const notification = useNotification();
-  const hasUnread = () => props.channel.channelType === ChannelType.Text && notification.hasChannel(props.channel.channelId);
-  const [, modalActions] = useModal();
-  const [, voipActions] = useVoip();
-  const [, aclActions] = useAcl();
-  const [, authActions] = useAuth();
-  const livekit = getLiveKitManager();
+    const [, contextActions] = useContext();
+    const notification = useNotification();
+    const hasUnread = () => props.channel.channelType === ChannelType.Text && notification.hasChannel(props.channel.channelId);
+    const [, modalActions] = useModal();
+    const [, voipActions] = useVoip();
+    const [, aclActions] = useAcl();
+    const [, authActions] = useAuth();
+    const livekit = getLiveKitManager();
 
-  const { addToast } = useToaster();
+    const { addToast } = useToaster();
 
-  const isReadOnly = () => aclActions.getChannelRights(props.channel.channelId, authActions.getUser().roleId) === 1;
+    const isReadOnly = () => aclActions.getChannelRights(props.channel.channelId, authActions.getUser().roleId) === 1;
 
-  const handleChannelClick = async (channel: Channel) => {
-    if (channel.channelType === ChannelType.Text) {
-      contextActions.set({ type: "channel", id: channel.channelId });
-      notification.clearChannel(channel.channelId);
-    }
+    const handleChannelClick = async (channel: Channel) => {
+        if (channel.channelType === ChannelType.Text) {
+            contextActions.set({ type: "channel", id: channel.channelId });
+            notification.clearChannel(channel.channelId);
+        }
 
-    if (channel.channelType === ChannelType.VoIP) {
-      const result = await voipActions.joinChannel(
-        channel.channelId,
-        livekit.getMuted(),
-        livekit.getDeafened()
-      );
-      if (result.isErr()) {
-        addToast(`Failed to join channel: ${result.error}`, "error");
-      }
-    }
-  };
+        if (channel.channelType === ChannelType.VoIP) {
+            const result = await voipActions.joinChannel(
+                channel.channelId,
+                livekit.getMuted(),
+                livekit.getDeafened()
+            );
+            if (result.isErr()) {
+                addToast(`Failed to join channel: ${result.error}`, "error");
+            }
+        }
+    };
 
-  const joinedUsers = () => voipActions.findByChannel(props.channel.channelId);
+    const joinedUsers = () => voipActions.findByChannel(props.channel.channelId);
 
-  const handleContextMenu = (e: MouseEvent) => {
-    e.preventDefault();
-    modalActions.open({ type: "channelSettings", channelId: props.channel.channelId });
-  };
+    const handleContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+        modalActions.open({ type: "channelSettings", channelId: props.channel.channelId });
+    };
 
-  return (
-    <div>
-      <button
-        onClick={async () => await handleChannelClick(props.channel)}
-        onContextMenu={handleContextMenu}
-        class="flex items-center gap-2 w-full px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all group disabled:opacity-50 disabled:pointer-events-none"
-        disabled={isReadOnly()}
-      >
-        <Show
-          when={props.channel.channelType === "VoIP"}
-          fallback={<Hash size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />}
-        >
-          <Volume2 size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />
-        </Show>
-        <span class="text-sm truncate" classList={{ "text-foreground font-medium": hasUnread() }}>
-          {props.channel.channelName}
-        </span>
-        <Show when={isReadOnly()}>
-          <Lock size={12} class="shrink-0 ml-auto" />
-        </Show>
-      </button>
+    return (
+        <div>
+            <button
+                onClick={async () => await handleChannelClick(props.channel)}
+                onContextMenu={handleContextMenu}
+                class="flex items-center gap-2 w-full px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all group disabled:opacity-50 disabled:pointer-events-none"
+                disabled={isReadOnly()}
+            >
+                <Show
+                    when={props.channel.channelType === "VoIP"}
+                    fallback={<Hash size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />}
+                >
+                    <Volume2 size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />
+                </Show>
+                <span class="text-sm truncate" classList={{ "text-foreground font-medium": hasUnread() }}>
+                    {props.channel.channelName}
+                </span>
+                <Show when={isReadOnly()}>
+                    <Lock size={12} class="shrink-0 ml-auto" />
+                </Show>
+            </button>
 
-      <Show
-        when={props.channel.channelType === "VoIP" && joinedUsers().length > 0}
-      >
-        <div class="ml-6 mt-1 space-y-1">
-          <For each={joinedUsers()}>
-            {(user) => <VoipChannelMember participant={user} channelId={props.channel.channelId} />}
-          </For>
+            <Show
+                when={props.channel.channelType === "VoIP" && joinedUsers().length > 0}
+            >
+                <div class="ml-6 mt-1 space-y-1">
+                    <For each={joinedUsers()}>
+                        {(user) => <VoipChannelMember participant={user} channelId={props.channel.channelId} />}
+                    </For>
+                </div>
+            </Show>
         </div>
-      </Show>
-    </div>
-  );
+    );
 };

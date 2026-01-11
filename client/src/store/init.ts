@@ -20,42 +20,42 @@ const [, voipActions] = useVoip();
 const livekit = getLiveKitManager();
 
 connection.onConnectionLost(() => {
-  const voipSession = voipActions.findById(authActions.getUser().userId);
-  appActions.setView({ type: "loading", channelId: voipSession?.channelId });
+    const voipSession = voipActions.findById(authActions.getUser().userId);
+    appActions.setView({ type: "loading", channelId: voipSession?.channelId });
 });
 
 connection.onConnectionClosed(async () => {
-  await authActions.logout();
-  appActions.setView({ type: "unauthenticated" });
+    await authActions.logout();
+    appActions.setView({ type: "unauthenticated" });
 });
 
 export { connection };
 
 export async function resetStore() {
-  await livekit.disconnect();
+    await livekit.disconnect();
 }
 
 export async function initializeStores() {
-  const [, userActions] = useUser();
-  const [, serverActions] = useServer();
-  const [, roleActions] = useRole();
-  const [, groupActions] = useGroup();
-  const [, channelActions] = useChannel();
-  const [, messageActions] = useMessage();
-  const [, fileActions] = useFile();
-  const [, reactionActions] = useReaction();
-  const [, aclActions] = useAcl();
+    const [, userActions] = useUser();
+    const [, serverActions] = useServer();
+    const [, roleActions] = useRole();
+    const [, groupActions] = useGroup();
+    const [, channelActions] = useChannel();
+    const [, messageActions] = useMessage();
+    const [, fileActions] = useFile();
+    const [, reactionActions] = useReaction();
+    const [, aclActions] = useAcl();
 
-  await Promise.all([
-    userActions.init(),
-    serverActions.init(),
-    roleActions.init(),
-    groupActions.init(),
-    channelActions.init(),
-    messageActions.init(),
-    fileActions.init(),
-    reactionActions.init(),
-    aclActions.init(),
-    voipActions.init(),
-  ]);
+    await Promise.all([
+        userActions.init(),
+        serverActions.init(),
+        roleActions.init(),
+        groupActions.init(),
+        channelActions.init(),
+        messageActions.init(),
+        fileActions.init(),
+        reactionActions.init(),
+        aclActions.init(),
+        voipActions.init(),
+    ]);
 }
