@@ -583,8 +583,10 @@ function createLiveKitStore(): LiveKitStore {
                     deviceId: d.deviceId,
                     label: d.label || `Speaker ${d.deviceId.slice(0, 8)}`,
                 })));
-                setState("activeInput", room?.getActiveDevice("audioinput") ?? inputs[0]?.deviceId ?? "");
-                setState("activeOutput", room?.getActiveDevice("audiooutput") ?? outputs[0]?.deviceId ?? "");
+                const inputId = room?.getActiveDevice("audioinput") || inputs[0]?.deviceId;
+                const outputId = room?.getActiveDevice("audiooutput") || outputs[0]?.deviceId;
+                if (inputId && inputId !== "default") setState("activeInput", inputId);
+                if (outputId && outputId !== "default") setState("activeOutput", outputId);
             });
         },
 
