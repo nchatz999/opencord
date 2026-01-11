@@ -226,7 +226,7 @@ function createVoipStore(): VoipStore {
                 }
             }
 
-            await livekit.setMicMuted(muted);
+            await livekit.setMuted(muted);
             return ok(undefined);
         },
 

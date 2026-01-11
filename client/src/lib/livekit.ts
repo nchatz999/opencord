@@ -138,7 +138,6 @@ interface LiveKitActions {
     subscribeToScreenStream: (userId: number) => void;
     unsubscribeFromScreenStream: (userId: number) => void;
     setMicEnabled: (enabled: boolean) => Promise<void>;
-    setMicMuted: (muted: boolean) => Promise<void>;
     setCameraEnabled: (enabled: boolean) => Promise<void>;
     setScreenShareEnabled: (enabled: boolean) => Promise<void>;
     detachTrack: (userId: number, source: Track.Source) => void;
@@ -163,7 +162,7 @@ interface LiveKitActions {
     setScreenContentHint: (hint: ScreenContentHint) => void;
     getScreenContentHintOptions: () => QualityOption<ScreenContentHint>[];
     getMuted: () => boolean;
-    setMuted: (muted: boolean) => void;
+    setMuted: (muted: boolean) => Promise<void>;
     getDeafened: () => boolean;
     setDeafened: (deafened: boolean) => void;
     getNoiseCancellation: () => boolean;
@@ -304,14 +303,6 @@ function createLiveKitStore(): LiveKitStore {
         }
     };
 
-    const enableMicrophone = async (): Promise<void> => {
-        const localParticipant = room?.localParticipant;
-        if (!localParticipant) return;
-
-        await localParticipant.setMicrophoneEnabled(true);
-        await syncMicrophoneState();
-    };
-
     const restoreDevicePreferences = async (): Promise<void> => {
         const input = state.activeInput;
         const output = state.activeOutput;
@@ -378,7 +369,8 @@ function createLiveKitStore(): LiveKitStore {
 
     const handlePermissionsChanged = async (_: unknown, participant: Participant): Promise<void> => {
         if (participant === room.localParticipant && participant.permissions?.canPublish) {
-            await enableMicrophone();
+            await room.localParticipant.setMicrophoneEnabled(true);
+            await syncMicrophoneState();
         }
     };
 
@@ -443,19 +435,9 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         async setMicEnabled(enabled) {
-            const localParticipant = room?.localParticipant;
-            if (!localParticipant) return;
-
-            if (enabled) {
-                await enableMicrophone();
-            } else {
-                await localParticipant.setMicrophoneEnabled(false);
-            }
-        },
-
-        async setMicMuted(muted) {
-            setState("muted", muted);
-            await syncMicrophoneState();
+            if (!room?.localParticipant) return;
+            await room.localParticipant.setMicrophoneEnabled(enabled);
+            if (enabled) await syncMicrophoneState();
         },
 
         async setCameraEnabled(enabled) {
@@ -557,7 +539,7 @@ function createLiveKitStore(): LiveKitStore {
         getScreenContentHintOptions: () => SCREEN_CONTENT_HINT_OPTIONS,
 
         getMuted: () => state.muted,
-        setMuted: (muted) => actions.setMicMuted(muted),
+        async setMuted(muted) { setState("muted", muted); await syncMicrophoneState(); },
 
         getDeafened: () => state.deafened,
         setDeafened(deafened) {
