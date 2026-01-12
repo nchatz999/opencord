@@ -4,8 +4,7 @@ import { Plus } from "lucide-solid";
 import { useModal, useRole, useAuth } from "../store/index";
 import type { Role } from "../model";
 import Button from "../components/Button";
-import RoleSection from "../role/RoleSection";
-
+import RoleSection from "../features/role/RoleSection";
 interface RightPanelProps {
     class: string;
 }
