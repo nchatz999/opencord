@@ -17,7 +17,7 @@ import { createStore } from "solid-js/store";
 import { usePreference } from "../store/preference";
 import { NoiseSuppressorProcessor } from "rnnoise-wasm";
 import workletUrl from "rnnoise-wasm/worklet-bundle?url";
-import { useVoip } from "../store";
+import { useVoip, useAuth, useConnection } from "../store";
 
 export { Track, VideoQuality } from "livekit-client";
 
@@ -145,6 +145,7 @@ interface LiveKitActions {
     isSubscribedToVideo: (userId: number, source: Track.Source.Camera | Track.Source.ScreenShare) => boolean;
     cleanupForUser: (userId: number) => void;
     getSpeakingState: (userId: number) => boolean;
+    setSpeakingState: (userId: number, speaking: boolean) => void;
     setVolume: (userId: number, volume: number) => void;
     getVolume: (userId: number) => number;
     setScreenVolume: (userId: number, volume: number) => void;
@@ -288,6 +289,11 @@ function createLiveKitStore(): LiveKitStore {
     const applyNoiseProcessor = async (track: LocalTrack): Promise<void> => {
         await track.setProcessor(noiseProcessor);
         noiseProcessor.enabled = state.noiseCancellation;
+        noiseProcessor.setVad((speaking) => {
+            const [, authActions] = useAuth();
+            const connection = useConnection();
+            connection.sendSpeakStatus(authActions.getUser().userId, speaking);
+        });
     };
 
     const syncMicrophoneState = async (): Promise<void> => {
@@ -295,6 +301,7 @@ function createLiveKitStore(): LiveKitStore {
         if (!track) return;
 
         if (state.muted) {
+            noiseProcessor.setVad(() => { });
             await track.stopProcessor();
             await track.mute();
         } else {
@@ -352,14 +359,6 @@ function createLiveKitStore(): LiveKitStore {
         removePublication(participant, publication);
     };
 
-    const handleActiveSpeakersChanged = (speakers: Participant[]): void => {
-        const speakingIds = new Set(speakers.map((s) => parseUserId(s.identity)));
-        for (const participant of room.remoteParticipants.values()) {
-            const userId = parseUserId(participant.identity);
-            setPlayback("speaking", userId, speakingIds.has(userId));
-        }
-    };
-
     const handleLocalTrackUnpublished = (publication: LocalTrackPublication): void => {
         const [, voipActions] = useVoip();
         if (publication.source === Track.Source.ScreenShare) {
@@ -381,7 +380,6 @@ function createLiveKitStore(): LiveKitStore {
             .on(RoomEvent.TrackPublished, handleTrackPublished)
             .on(RoomEvent.TrackUnpublished, handleTrackUnpublished)
             .on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished)
-            .on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged)
             .on(RoomEvent.ParticipantPermissionsChanged, handlePermissionsChanged);
     };
 
@@ -397,9 +395,9 @@ function createLiveKitStore(): LiveKitStore {
             setState("connectionState", "connecting");
             await room.connect(serverUrl, token, { autoSubscribe: false });
             syncRemotePublications();
+            setState("connectionState", "connected");
             await restoreDevicePreferences();
             await actions.setMicEnabled(true);
-            setState("connectionState", "connected");
         },
 
         async disconnect() {
@@ -504,6 +502,10 @@ function createLiveKitStore(): LiveKitStore {
 
         getSpeakingState(userId) {
             return playback.speaking[userId] ?? false;
+        },
+
+        setSpeakingState(userId, speaking) {
+            setPlayback("speaking", userId, speaking);
         },
 
         setVolume(userId, volume) {

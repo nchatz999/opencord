@@ -2,8 +2,10 @@ use crate::auth::Session;
 use crate::db::Postgre;
 use crate::error::DatabaseError;
 use crate::managers::LogManager;
+use crate::model::EventPayload;
 use crate::transport::{
-    CommandPayload, ConnectionMessage, DomainError, ServerMessage, SubscriberMessage,
+    CommandPayload, ConnectionMessage, ControlRoutingPolicy, DomainError, ServerMessage,
+    SubscriberMessage,
 };
 use axum::extract::ws::{CloseFrame, Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -209,7 +211,19 @@ impl<R: SessionRepository, L: LogManager> SubscriberSession<R, L> {
                 self.pending_pings.retain(|p| p.timestamp != timestamp);
                 self.missed_pongs = 0;
             }
-            ConnectionMessage::Event { .. } => {}
+            ConnectionMessage::Event { payload } => {
+                if let EventPayload::SpeakStatusUpdated { user_id, speaking } = payload {
+                    if user_id == self.session.user_id {
+                        let _ = self
+                            .observer_tx
+                            .send(ServerMessage::Control(
+                                EventPayload::SpeakStatusUpdated { user_id, speaking },
+                                ControlRoutingPolicy::Broadcast,
+                            ))
+                            .await;
+                    }
+                }
+            }
         }
         Ok(())
     }

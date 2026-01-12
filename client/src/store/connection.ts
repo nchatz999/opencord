@@ -65,7 +65,8 @@ export type EventPayload =
         emoji: string;
         messageType: { type: "Channel"; channelId: number } | { type: "Direct"; recipientId: number };
     }
-    | { type: "readStatusUpdated"; channelId: number | null; recipientId: number | null; hasNewMessage: boolean };
+    | { type: "readStatusUpdated"; channelId: number | null; recipientId: number | null; hasNewMessage: boolean }
+    | { type: "speakStatusUpdated"; userId: number; speaking: boolean };
 
 type ConnectionMessage =
     | { type: "ping"; timestamp: number }
@@ -82,6 +83,7 @@ export interface ConnectionActions {
     onServerEvent: (callback: (event: EventPayload) => void) => () => void;
     onConnectionClosed: (callback: () => void) => () => void;
     onConnectionLost: (callback: () => void) => () => void;
+    sendSpeakStatus: (userId: number, speaking: boolean) => void;
 }
 
 
@@ -241,6 +243,15 @@ function createConnectionStore(): ConnectionActions {
         onConnectionLost(callback: () => void): () => void {
             connectionLostCallbacks.add(callback);
             return () => connectionLostCallbacks.delete(callback);
+        },
+
+        sendSpeakStatus(userId: number, speaking: boolean): void {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(encode({
+                    type: "event",
+                    payload: { type: "speakStatusUpdated", userId, speaking }
+                }));
+            }
         },
     };
 

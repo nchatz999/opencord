@@ -89,6 +89,8 @@ function createVoipStore(): VoipStore {
                         setState("currentCallType", null);
                     }
                     actions.remove(event.userId as number);
+                } else if (event.type === "speakStatusUpdated") {
+                    livekit.setSpeakingState(event.userId, event.speaking);
                 }
             });
 

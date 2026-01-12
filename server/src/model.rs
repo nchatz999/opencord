@@ -115,4 +115,7 @@ pub enum EventPayload {
         recipient_id: Option<i64>,
         has_new_message: bool,
     },
+    #[serde(rename = "speakStatusUpdated")]
+    #[serde(rename_all = "camelCase")]
+    SpeakStatusUpdated { user_id: i64, speaking: bool },
 }
