@@ -559,6 +559,7 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
                         >= *minimun_rights
                 }
                 ControlRoutingPolicy::User { user_id } => subscriber.user_id() == *user_id,
+                ControlRoutingPolicy::Users { user_ids } => user_ids.contains(&subscriber.user_id()),
                 ControlRoutingPolicy::Role { role_id } => {
                     self.get_cached_user_role(subscriber.user_id()) == Some(*role_id)
                 }

@@ -130,7 +130,7 @@ interface MessageContentProps {
 const MessageContent: Component<MessageContentProps> = (props) => (
     <>
         <span class="text-foreground font-normal break-words whitespace-pre-wrap">
-            {formatMessageText(props.text, props.isOwner, props.type)}
+            {formatMessageText(props.text)}
         </span>
         <For each={props.youtubeIds}>{(id) => <YouTubeEmbed id={id} />}</For>
     </>

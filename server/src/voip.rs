@@ -545,17 +545,9 @@ impl<R: VoipRepository, N: NotifierManager, G: LogManager> VoipService<R, N, G> 
         let _ = self
             .notifier
             .notify(ServerMessage::Control(
-                event.clone(),
-                ControlRoutingPolicy::User { user_id },
-            ))
-            .await;
-
-        let _ = self
-            .notifier
-            .notify(ServerMessage::Control(
-                event.clone(),
-                ControlRoutingPolicy::User {
-                    user_id: recipient_user_id,
+                event,
+                ControlRoutingPolicy::Users {
+                    user_ids: vec![user_id, recipient_user_id],
                 },
             ))
             .await;

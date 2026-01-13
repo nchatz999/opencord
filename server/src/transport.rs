@@ -30,6 +30,9 @@ pub enum ControlRoutingPolicy {
     User {
         user_id: i64,
     },
+    Users {
+        user_ids: Vec<i64>,
+    },
     Role {
         role_id: i64,
     },

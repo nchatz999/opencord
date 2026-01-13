@@ -211,6 +211,7 @@ function createLiveKitStore(): LiveKitStore {
             adaptiveStream: true,
             dynacast: true,
             webAudioMix: true,
+            reconnectPolicy: { nextRetryDelayInMs: () => null },
             audioCaptureDefaults: {
                 noiseSuppression: false,
                 echoCancellation: true,

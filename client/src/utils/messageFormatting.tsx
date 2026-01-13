@@ -180,8 +180,6 @@ export const formatLinks = (text: string | null, linkClass: string, preventClick
 
 export const formatMessageText = (
     text: string | null,
-    isOwner: boolean,
-    type: "direct" | "channel"
 ): JSX.Element => {
     if (!text) return <></>;
     const linkClass = "text-link hover:text-foreground-bright hover:underline";
@@ -201,7 +199,7 @@ export const formatMessageText = (
     );
 };
 
-export const extractYoutubeIds = (text: string | null): string[] => {
+export const extractYoutubeIds = (text: string | undefined): string[] => {
     if (!text) return [];
     return Array.from(text.matchAll(YOUTUBE_REGEX), (match) => match[1]);
 };

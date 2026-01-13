@@ -7,6 +7,7 @@ use crate::transport::{
     CommandPayload, ConnectionMessage, ControlRoutingPolicy, DomainError, ServerMessage,
     SubscriberMessage,
 };
+use crate::voip::VoipParticipant;
 use axum::extract::ws::{CloseFrame, Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -43,6 +44,10 @@ impl From<DomainError> for SessionError {
 
 pub trait SessionRepository: Send + Sync + Clone {
     async fn find_session(&self, session_token: &str) -> Result<Option<Session>, DatabaseError>;
+    async fn find_voip_participant(
+        &self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError>;
 }
 
 impl SessionRepository for Postgre {
@@ -53,6 +58,20 @@ impl SessionRepository for Postgre {
                WHERE session_token = $1
                AND (expires_at IS NULL OR expires_at > NOW())"#,
             session_token
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn find_voip_participant(
+        &self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DatabaseError> {
+        let result = sqlx::query_as!(
+            VoipParticipant,
+            r#"SELECT * FROM voip_participants WHERE user_id = $1"#,
+            user_id
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -80,6 +99,13 @@ impl<R: SessionRepository, L: LogManager> SessionService<R, L> {
         session_token: &str,
     ) -> Result<Option<Session>, DomainError> {
         Ok(self.repository.find_session(session_token).await?)
+    }
+
+    pub async fn find_voip_participant(
+        &self,
+        user_id: i64,
+    ) -> Result<Option<VoipParticipant>, DomainError> {
+        Ok(self.repository.find_voip_participant(user_id).await?)
     }
 }
 
@@ -214,13 +240,34 @@ impl<R: SessionRepository, L: LogManager> SubscriberSession<R, L> {
             ConnectionMessage::Event { payload } => {
                 if let EventPayload::SpeakStatusUpdated { user_id, speaking } = payload {
                     if user_id == self.session.user_id {
-                        let _ = self
-                            .observer_tx
-                            .send(ServerMessage::Control(
-                                EventPayload::SpeakStatusUpdated { user_id, speaking },
-                                ControlRoutingPolicy::Broadcast,
-                            ))
-                            .await;
+                        if let Ok(Some(participant)) =
+                            self.service.find_voip_participant(user_id).await
+                            && participant.user_id == self.session.user_id
+                        {
+                            let event = EventPayload::SpeakStatusUpdated { user_id, speaking };
+                            if let Some(channel_id) = participant.channel_id {
+                                let _ = self
+                                    .observer_tx
+                                    .send(ServerMessage::Control(
+                                        event,
+                                        ControlRoutingPolicy::ChannelRights {
+                                            channel_id,
+                                            minimun_rights: 2,
+                                        },
+                                    ))
+                                    .await;
+                            } else if let Some(recipient_id) = participant.recipient_id {
+                                let _ = self
+                                    .observer_tx
+                                    .send(ServerMessage::Control(
+                                        event,
+                                        ControlRoutingPolicy::Users {
+                                            user_ids: vec![user_id, recipient_id],
+                                        },
+                                    ))
+                                    .await;
+                            }
+                        }
                     }
                 }
             }

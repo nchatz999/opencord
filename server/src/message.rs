@@ -1165,24 +1165,18 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
             files: file_attachments.clone(),
         };
 
+        let user_ids = if sender_id != recipient_id {
+            vec![sender_id, recipient_id]
+        } else {
+            vec![sender_id]
+        };
         let _ = self
             .notifier
             .notify(ServerMessage::Control(
-                event.clone(),
-                ControlRoutingPolicy::User { user_id: sender_id },
+                event,
+                ControlRoutingPolicy::Users { user_ids },
             ))
             .await;
-        if sender_id != recipient_id {
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event,
-                    ControlRoutingPolicy::User {
-                        user_id: recipient_id,
-                    },
-                ))
-                .await;
-        }
 
         let _ = self
             .logger
@@ -1413,20 +1407,16 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         }
 
         if let Some(recipient_id) = message.recipient_id {
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event.clone(),
-                    ControlRoutingPolicy::User { user_id },
-                ))
-                .await;
+            let user_ids = if user_id != recipient_id {
+                vec![user_id, recipient_id]
+            } else {
+                vec![user_id]
+            };
             let _ = self
                 .notifier
                 .notify(ServerMessage::Control(
                     event,
-                    ControlRoutingPolicy::User {
-                        user_id: recipient_id,
-                    },
+                    ControlRoutingPolicy::Users { user_ids },
                 ))
                 .await;
         }
@@ -1529,20 +1519,16 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 .await;
         }
         if let Some(recipient_id) = message.recipient_id {
-            let _ = self
-                .notifier
-                .notify(ServerMessage::Control(
-                    event.clone(),
-                    ControlRoutingPolicy::User { user_id },
-                ))
-                .await;
+            let user_ids = if user_id != recipient_id {
+                vec![user_id, recipient_id]
+            } else {
+                vec![user_id]
+            };
             let _ = self
                 .notifier
                 .notify(ServerMessage::Control(
                     event,
-                    ControlRoutingPolicy::User {
-                        user_id: recipient_id,
-                    },
+                    ControlRoutingPolicy::Users { user_ids },
                 ))
                 .await;
         }
@@ -1687,26 +1673,18 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 ))
                 .await;
         } else if let Some(recipient_id) = message.recipient_id {
+            let user_ids = if message.sender_id != recipient_id {
+                vec![message.sender_id, recipient_id]
+            } else {
+                vec![message.sender_id]
+            };
             let _ = self
                 .notifier
                 .notify(ServerMessage::Control(
-                    event.clone(),
-                    ControlRoutingPolicy::User {
-                        user_id: message.sender_id,
-                    },
+                    event,
+                    ControlRoutingPolicy::Users { user_ids },
                 ))
                 .await;
-            if message.sender_id != recipient_id {
-                let _ = self
-                    .notifier
-                    .notify(ServerMessage::Control(
-                        event,
-                        ControlRoutingPolicy::User {
-                            user_id: recipient_id,
-                        },
-                    ))
-                    .await;
-            }
         }
 
         let _ = self
@@ -1776,26 +1754,18 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 ))
                 .await;
         } else if let Some(recipient_id) = message.recipient_id {
+            let user_ids = if message.sender_id != recipient_id {
+                vec![message.sender_id, recipient_id]
+            } else {
+                vec![message.sender_id]
+            };
             let _ = self
                 .notifier
                 .notify(ServerMessage::Control(
-                    event.clone(),
-                    ControlRoutingPolicy::User {
-                        user_id: message.sender_id,
-                    },
+                    event,
+                    ControlRoutingPolicy::Users { user_ids },
                 ))
                 .await;
-            if message.sender_id != recipient_id {
-                let _ = self
-                    .notifier
-                    .notify(ServerMessage::Control(
-                        event,
-                        ControlRoutingPolicy::User {
-                            user_id: recipient_id,
-                        },
-                    ))
-                    .await;
-            }
         }
 
         let _ = self

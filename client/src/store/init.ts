@@ -19,12 +19,14 @@ const [, authActions] = useAuth();
 const [, voipActions] = useVoip();
 const [, livekitActions] = useLiveKit();
 
-connection.onConnectionLost(() => {
+connection.onConnectionLost(async () => {
+    await livekitActions.disconnect();
     const voipSession = voipActions.findById(authActions.getUser().userId);
     appActions.setView({ type: "loading", channelId: voipSession?.channelId });
 });
 
 connection.onConnectionClosed(async () => {
+    await livekitActions.disconnect();
     await authActions.logout();
     appActions.setView({ type: "unauthenticated" });
 });

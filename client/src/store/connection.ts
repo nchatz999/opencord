@@ -19,6 +19,10 @@ import { getWsUrl } from "../lib/ServerConfig";
 const PING_INTERVAL_MS = 1000;
 const PONG_TIMEOUT_MS = 2000;
 const MAX_MISSED_PONGS = 1;
+
+const CLOSE_CODE_NORMAL = 1000;
+const CLOSE_CODE_GOING_AWAY = 1001;
+const CLOSE_CODE_ABNORMAL = 1006;
 const CLOSE_CODE_AUTH_FAILED = 4001;
 const CLOSE_CODE_DISCONNECTED = 4002;
 
@@ -174,28 +178,36 @@ function createConnectionStore(): ConnectionActions {
         }
     }
 
-    function handleError() {
-        disconnect();
-        if (connectResolve) {
-            connectResolve(err({ type: "networkError" }));
-            connectResolve = null;
-        }
-    }
-
     function handleClose(event: CloseEvent) {
         disconnect();
-        if (connectResolve) {
-            if (event.code === CLOSE_CODE_AUTH_FAILED) {
-                connectResolve(err({ type: "authFailed" }));
-            } else if (event.code === CLOSE_CODE_DISCONNECTED) {
-                connectResolve(err({ type: "networkError" }));
-            }
-            connectResolve = null;
-            return;
-        } else {
-            if (event.code === CLOSE_CODE_DISCONNECTED) {
-                notifyClosed();
-            }
+
+        switch (event.code) {
+            case CLOSE_CODE_NORMAL:
+                break;
+            case CLOSE_CODE_AUTH_FAILED:
+                if (connectResolve) {
+                    connectResolve(err({ type: "authFailed" }));
+                    connectResolve = null;
+                }
+                break;
+            case CLOSE_CODE_DISCONNECTED:
+                if (connectResolve) {
+                    connectResolve(err({ type: "networkError" }));
+                    connectResolve = null;
+                } else {
+                    notifyClosed();
+                }
+                break;
+            case CLOSE_CODE_GOING_AWAY:
+            case CLOSE_CODE_ABNORMAL:
+            default:
+                if (connectResolve) {
+                    connectResolve(err({ type: "networkError" }));
+                    connectResolve = null;
+                } else {
+                    notifyConnectionLost();
+                }
+                break;
         }
     }
 
@@ -215,13 +227,17 @@ function createConnectionStore(): ConnectionActions {
         connect(token: string): Promise<Result<void, ConnectionError>> {
             disconnect();
 
-            const wsUrl = `${getWsUrl()}/ws?token=${encodeURIComponent(token)}`;
-            socket = new WebSocket(wsUrl);
-            socket.binaryType = "arraybuffer";
-            socket.onopen = handleOpen;
-            socket.onmessage = (event) => handleMessage(event.data);
-            socket.onerror = handleError;
-            socket.onclose = handleClose;
+            try {
+                const wsUrl = `${getWsUrl()}/ws?token=${encodeURIComponent(token)}`;
+                socket = new WebSocket(wsUrl);
+                socket.binaryType = "arraybuffer";
+                socket.onopen = handleOpen;
+                socket.onmessage = (event) => handleMessage(event.data);
+                socket.onclose = handleClose;
+
+            } catch {
+                return Promise.resolve(err({ type: "networkError" }));
+            }
 
             return new Promise((resolve) => {
                 connectResolve = resolve;
