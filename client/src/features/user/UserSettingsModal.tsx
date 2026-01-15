@@ -63,10 +63,10 @@ const UserSettingsModal: Component = () => {
     const { addToast } = useToaster();
 
     const statusOptions = [
-        { value: UserStatusType.Online, label: 'Online', color: 'text-status-online' },
-        { value: UserStatusType.Away, label: 'Away', color: 'text-status-away' },
-        { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-status-dnd' },
-        { value: UserStatusType.Offline, label: 'Offline', color: 'text-status-offline' },
+        { value: UserStatusType.Online, label: 'Online', color: 'text-presence-online' },
+        { value: UserStatusType.Away, label: 'Away', color: 'text-presence-away' },
+        { value: UserStatusType.DoNotDisturb, label: 'Do Not Disturb', color: 'text-presence-dnd' },
+        { value: UserStatusType.Offline, label: 'Offline', color: 'text-presence-offline' },
     ];
 
     const handleStatusChange = async (newStatus: UserStatusType) => {
@@ -194,7 +194,7 @@ const UserSettingsModal: Component = () => {
                                     size={12}
                                     class={`${getStatusColor(user().status)} fill-current`}
                                 />
-                                <span class="text-secondary-text">
+                                <span class="text-fg-subtle">
                                     Your status is visible to other users
                                 </span>
                             </div>
@@ -245,7 +245,7 @@ const UserSettingsModal: Component = () => {
                                 </div>
                             </Show>
 
-                            <p class="text-xs text-secondary-text">
+                            <p class="text-xs text-fg-subtle">
                                 Recommended: Square image, at least 128x128px
                             </p>
                         </div>
@@ -416,7 +416,7 @@ const UserSettingsModal: Component = () => {
                         <Show
                             when={sessions().length > 0}
                             fallback={
-                                <div class="text-center py-8 text-muted-foreground-dark">
+                                <div class="text-center py-8 text-fg-subtle">
                                     {"No active sessions found."}
                                 </div>
                             }
@@ -433,29 +433,29 @@ const UserSettingsModal: Component = () => {
                                 <TableBody>
                                     <For each={sessions()}>
                                         {(session) => (
-                                            <TableRow class="hover:bg-muted">
+                                            <TableRow class="hover:bg-bg-overlay">
                                                 <TableCell>
                                                     <div class="flex items-center gap-2">
-                                                        <span class="text-foreground font-medium">
+                                                        <span class="text-fg-base font-medium">
                                                             Session #{session.sessionId}
                                                         </span>
                                                         <Show when={isCurrentSession(session.sessionToken)}>
-                                                            <span class="px-2 py-1 rounded text-xs font-medium bg-success/20 text-success">
+                                                            <span class="px-2 py-1 rounded text-xs font-medium bg-status-success/20 text-status-success">
                                                                 Current
                                                             </span>
                                                         </Show>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell class="text-secondary-text text-sm">
+                                                <TableCell class="text-fg-subtle text-sm">
                                                     <div class="flex items-center gap-1">
                                                         <Calendar class="w-4 h-4" />
                                                         {formatDate(session.createdAt)}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell class="text-secondary-text text-sm">
+                                                <TableCell class="text-fg-subtle text-sm">
                                                     <Show
                                                         when={session.expiresAt}
-                                                        fallback={<span class="text-muted-foreground-dark">Never</span>}
+                                                        fallback={<span class="text-fg-subtle">Never</span>}
                                                     >
                                                         {formatDate(session.expiresAt)}
                                                     </Show>
@@ -466,7 +466,7 @@ const UserSettingsModal: Component = () => {
                                                         disabled={isCurrentSession(session.sessionToken)}
                                                         variant="ghost"
                                                         size="sm"
-                                                        class="p-2 hover:bg-destructive/20 text-destructive hover:text-destructive"
+                                                        class="p-2 hover:bg-status-danger/20 text-status-danger hover:text-status-danger"
                                                         title={isCurrentSession(session.sessionToken) ? "Cannot terminate current session" : "Terminate session"}
                                                     >
                                                         <Trash2 class="w-4 h-4" />
@@ -480,8 +480,8 @@ const UserSettingsModal: Component = () => {
                         </Show>
 
                         <Card.Sub class="mt-4">
-                            <h4 class="text-sm font-medium text-foreground mb-2">Session Information</h4>
-                            <ul class="text-xs text-secondary-text space-y-1">
+                            <h4 class="text-sm font-medium text-fg-base mb-2">Session Information</h4>
+                            <ul class="text-xs text-fg-subtle space-y-1">
                                 <li>• Sessions allow you to stay logged in across different devices</li>
                                 <li>• You can terminate sessions from other devices for security</li>
                                 <li>• Your current session cannot be terminated from this interface</li>
@@ -496,7 +496,7 @@ const UserSettingsModal: Component = () => {
 
     return (
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-popover text-foreground rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="bg-bg-overlay text-fg-base rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">User Settings</h2>
                     <Button onClick={() => modalActions.close()} variant="ghost" size="sm">

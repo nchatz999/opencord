@@ -43,10 +43,10 @@ const UserSection: Component = () => {
                 />
 
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm text-foreground font-medium truncate">
+                    <div class="text-sm text-fg-base font-medium truncate">
                         {currentUser().username}
                     </div>
-                    <div class="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                    <div class="flex items-center gap-1 text-xs text-fg-muted truncate">
                         <Circle
                             size={8}
                             class={`${getStatusColor(currentUser().status)} fill-current`}

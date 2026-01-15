@@ -28,7 +28,7 @@ const LeftPanel: Component = () => {
                 <div class="relative">
                     <Hash size={16} />
                     <Show when={notification.hasAnyChannel()}>
-                        <div class="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
+                        <div class="absolute -top-1 -right-1 w-2 h-2 bg-accent-primary rounded-full" />
                     </Show>
                 </div>
             ),
@@ -47,7 +47,7 @@ const LeftPanel: Component = () => {
                 <div class="relative">
                     <UsersIcon size={16} />
                     <Show when={notification.hasAnyDM()}>
-                        <div class="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
+                        <div class="absolute -top-1 -right-1 w-2 h-2 bg-accent-primary rounded-full" />
                     </Show>
                 </div>
             ),
@@ -60,11 +60,11 @@ const LeftPanel: Component = () => {
     ];
 
     return (
-        <div class="w-60 bg-sidebar flex flex-col h-full">
-            <div class="h-12 px-4 flex items-center justify-between border-b border-border shadow-sm">
+        <div class="w-60 bg-bg-elevated flex flex-col h-full">
+            <div class="h-12 px-4 flex items-center justify-between border-b border-border-base shadow-sm">
                 <div class="flex items-center gap-2">
                     <Show when={serverConfig()} fallback={
-                        <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground">
+                        <div class="w-7 h-7 rounded-full bg-accent-primary flex items-center justify-center text-sm font-bold text-accent-primary-fg">
                             S
                         </div>
                     }>
@@ -73,7 +73,7 @@ const LeftPanel: Component = () => {
                                 <Show
                                     when={config().avatarFileId}
                                     fallback={
-                                        <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground">
+                                        <div class="w-7 h-7 rounded-full bg-accent-primary flex items-center justify-center text-sm font-bold text-accent-primary-fg">
                                             {config().serverName.charAt(0)}
                                         </div>
                                     }
@@ -86,20 +86,20 @@ const LeftPanel: Component = () => {
                                         />
                                     )}
                                 </Show>
-                                <h2 class="text-foreground font-semibold truncate">
+                                <h2 class="text-fg-base font-semibold truncate">
                                     {config().serverName}
                                 </h2>
                             </>
                         )}
                     </Show>
                     <Show when={!serverConfig()}>
-                        <h2 class="text-foreground font-semibold">Opencord</h2>
+                        <h2 class="text-fg-base font-semibold">Opencord</h2>
                     </Show>
                 </div>
                 <Show when={user().roleId === 1 || user().roleId === 2}>
                     <button
                         onClick={() => modalActions.open({ type: "serverSettings" })}
-                        class="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-all"
+                        class="p-1.5 hover:bg-bg-overlay text-fg-muted hover:text-fg-base rounded transition-all"
                         title="Server Settings"
                     >
                         <Settings size={18} />

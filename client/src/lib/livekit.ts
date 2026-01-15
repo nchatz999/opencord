@@ -402,8 +402,15 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         async disconnect() {
-            await room.disconnect();
+            for (const key of Object.keys(playback.audio) as TrackKey[]) {
+                playback.audio[key]?.track.detach();
+            }
+            for (const key of Object.keys(playback.tracks) as TrackKey[]) {
+                playback.tracks[key]?.detach();
+            }
+            setPlayback({ tracks: {}, audio: {}, speaking: {} });
             publications.clear();
+            await room.disconnect();
             setState("connectionState", undefined);
         },
 
@@ -514,7 +521,8 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         getVolume(userId) {
-            return playback.audio[toTrackKey(userId, Track.Source.Microphone)]?.volume ?? DEFAULT_VOLUME;
+            return playback.audio[toTrackKey(userId, Track.Source.Microphone)]?.volume
+                ?? loadVolume(userId, Track.Source.Microphone);
         },
 
         setScreenVolume(userId, volume) {

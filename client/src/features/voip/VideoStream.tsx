@@ -49,7 +49,7 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
     return (
         <Show when={publisher()}>
             {(pub) => (
-                <div class="relative bg-sidebar rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
+                <div class="relative bg-bg-subtle rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
                     <video
                         ref={videoRef}
                         autoplay
@@ -62,10 +62,10 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
                         <div class="flex items-center gap-2 bg-black bg-opacity-60 rounded-full px-3 py-1.5">
                             <Switch>
                                 <Match when={props.mediaType === Track.Source.Camera}>
-                                    <Camera size={14} class="text-link" />
+                                    <Camera size={14} class="text-accent-link" />
                                 </Match>
                                 <Match when={props.mediaType === Track.Source.ScreenShare}>
-                                    <Monitor size={14} class="text-link" />
+                                    <Monitor size={14} class="text-accent-link" />
                                 </Match>
                             </Switch>
                             <span class="text-white text-sm font-medium truncate max-w-[120px]">{pub().username}</span>

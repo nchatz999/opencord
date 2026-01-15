@@ -45,18 +45,18 @@ export const ChannelBrowser: Component<{ groups: Group[]; }> = (props) => {
     return (
         <div class="p-2">
             <div class="flex items-center justify-between px-2 mb-4">
-                <h3 class="text-xs font-semibold text-muted-foreground uppercase">Organize</h3>
+                <h3 class="text-xs font-semibold text-fg-muted uppercase">Organize</h3>
                 <div class="flex gap-1">
                     <button
                         onClick={handleCreateChannel}
-                        class="p-1.5 bg-muted hover:bg-accent text-foreground rounded transition-colors"
+                        class="p-1.5 bg-bg-overlay hover:bg-bg-emphasis text-fg-base rounded transition-colors"
                         title="Create a new channel"
                     >
                         <Hash size={16} />
                     </button>
                     <button
                         onClick={handleCreateGroup}
-                        class="p-1.5 bg-muted hover:bg-accent text-foreground rounded transition-colors"
+                        class="p-1.5 bg-bg-overlay hover:bg-bg-emphasis text-fg-base rounded transition-colors"
                         title="Create a new group"
                     >
                         <UsersIcon size={16} />
@@ -78,7 +78,7 @@ export const ChannelBrowser: Component<{ groups: Group[]; }> = (props) => {
                                     e.preventDefault();
                                     modalActions.open({ type: "groupSettings", groupId: group.groupId });
                                 }}
-                                class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                                class="flex items-center gap-1 w-full px-2 py-1 text-xs font-semibold text-fg-muted uppercase hover:text-fg-base transition-colors disabled:opacity-50 disabled:pointer-events-none"
                                 disabled={isReadOnly()}
                             >
                                 <Show

@@ -50,11 +50,11 @@ export const Input: Component<InputProps> = (props) => {
 
   const inputClasses = createMemo(() =>
     cn(
-      "flex-grow w-full px-3 py-2 bg-input text-foreground",
-      "focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
-      "placeholder-foreground",
+      "flex-grow w-full px-3 py-2 bg-input text-fg-base",
+      "focus:outline-none focus:ring-2 focus:ring-focus-ring focus:border-transparent",
+      "placeholder:text-fg-muted",
       merged.icon && "pl-10",
-      merged.error && "border border-destructive",
+      merged.error && "border border-status-danger",
       merged.class
     )
   );
@@ -69,7 +69,7 @@ export const Input: Component<InputProps> = (props) => {
   return (
     <div class="flex flex-col w-full">
       <Show when={merged.label}>
-        <label for={inputId()} class="mb-1 text-sm font-medium text-foreground">
+        <label for={inputId()} class="mb-1 text-sm font-medium text-fg-base">
           {merged.label}
         </label>
       </Show>
@@ -108,7 +108,7 @@ export const Input: Component<InputProps> = (props) => {
       </div>
 
       <Show when={merged.error}>
-        <p class="mt-1 text-sm text-destructive">{merged.error}</p>
+        <p class="mt-1 text-sm text-status-danger">{merged.error}</p>
       </Show>
     </div>
   );

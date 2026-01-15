@@ -31,16 +31,16 @@ const FilePreview: Component<FilePreviewProps> = (props) => {
     };
 
     return (
-        <div class="relative bg-sidebar rounded-lg overflow-hidden group">
+        <div class="relative bg-bg-elevated rounded-lg overflow-hidden group">
             <Button
                 variant="ghost"
                 size="sm"
-                class="absolute top-2 right-2 z-10 p-1.5 bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                class="absolute top-2 right-2 z-10 p-1.5 bg-bg-base opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={props.onRemove}
                 disabled={props.disabled}
                 title="Remove file"
             >
-                <Trash2 class="text-destructive" size={16} />
+                <Trash2 class="text-status-danger" size={16} />
             </Button>
 
             {isImage() && imageUrl() ? (
@@ -57,15 +57,15 @@ const FilePreview: Component<FilePreviewProps> = (props) => {
             ) : (
                 <div class="w-44 h-44 flex flex-col items-center justify-center p-4">
                     {props.file.type.startsWith("video/") ? (
-                        <Video class="text-primary" size={48} />
+                        <Video class="text-accent-primary" size={48} />
                     ) : props.file.type.includes("pdf") ? (
-                        <FileText class="text-destructive" size={48} />
+                        <FileText class="text-status-danger" size={48} />
                     ) : (
-                        <FileText class="text-primary" size={48} />
+                        <FileText class="text-accent-primary" size={48} />
                     )}
                     <div class="mt-3 text-center w-full">
-                        <p class="text-sm text-foreground truncate">{props.file.name}</p>
-                        <p class="text-xs text-muted-foreground mt-1">
+                        <p class="text-sm text-fg-base truncate">{props.file.name}</p>
+                        <p class="text-xs text-fg-muted mt-1">
                             {formatFileSize(props.file.size)}
                         </p>
                     </div>

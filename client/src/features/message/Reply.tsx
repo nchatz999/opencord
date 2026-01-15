@@ -62,8 +62,8 @@ const Reply: Component<ReplyProps> = (props) => {
         <Show
             when={!isDeleted()}
             fallback={
-                <div class="flex items-center gap-2 mb-1 px-2 py-1 bg-muted/50 border-l-2 border-muted-foreground">
-                    <span class="text-xs text-muted-foreground italic">Original message was deleted</span>
+                <div class="flex items-center gap-2 mb-1 px-2 py-1 bg-bg-overlay/50 border-l-2 border-fg-muted">
+                    <span class="text-xs text-fg-muted italic">Original message was deleted</span>
                 </div>
             }
         >
@@ -71,10 +71,10 @@ const Reply: Component<ReplyProps> = (props) => {
                 when={message()}
                 fallback={
                     <div
-                        class="flex items-center gap-2 mb-1 px-2 py-1 bg-muted/50 border-l-2 border-primary cursor-pointer hover:bg-muted/70"
+                        class="flex items-center gap-2 mb-1 px-2 py-1 bg-bg-overlay/50 border-l-2 border-accent-primary cursor-pointer hover:bg-bg-overlay/70"
                         onClick={handleClick}
                     >
-                        <span class="text-xs text-muted-foreground italic">
+                        <span class="text-xs text-fg-muted italic">
                             {isLoading() ? "Loading..." : "Click to load message"}
                         </span>
                     </div>
@@ -82,26 +82,26 @@ const Reply: Component<ReplyProps> = (props) => {
             >
                 {(msg) => (
                     <div
-                        class="flex items-center mb-1 bg-accent p-2 text-sm cursor-pointer hover:bg-accent/80"
+                        class="flex items-center mb-1 bg-bg-emphasis p-2 text-sm cursor-pointer hover:bg-bg-emphasis/80"
                         onClick={handleClick}
                     >
-                        <div class="w-1 h-full bg-primary mr-2 rounded-full"></div>
+                        <div class="w-1 h-full bg-accent-primary mr-2 rounded-full"></div>
                         <div class="flex flex-col flex-grow overflow-hidden">
                             <div class="flex items-center">
-                                <span class="font-medium text-primary mr-2">
+                                <span class="font-medium text-accent-primary mr-2">
                                     {author()?.username ?? "Unknown"}
                                 </span>
                                 <Show when={hasAttachments()}>
-                                    <Paperclip class="w-3 h-3 text-muted-foreground" />
+                                    <Paperclip class="w-3 h-3 text-fg-muted" />
                                 </Show>
                             </div>
                             <Show when={msg().messageText}>
-                                <span class="text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                                <span class="text-fg-muted whitespace-nowrap overflow-hidden text-ellipsis">
                                     {truncateText(msg().messageText || "", 100)}
                                 </span>
                             </Show>
                             <Show when={!msg().messageText && hasAttachments()}>
-                                <span class="text-muted-foreground italic">Attachment</span>
+                                <span class="text-fg-muted italic">Attachment</span>
                             </Show>
                         </div>
                     </div>

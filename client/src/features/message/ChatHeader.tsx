@@ -23,17 +23,17 @@ const ChatHeader: Component<{
             <Show when={props.context.type == "dm"}>
                 <Show when={userActions.findById(props.context.id)}>
                     {(user) => (
-                        <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background shrink-0">
+                        <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border-base bg-bg-base shrink-0">
                             <div class="relative flex items-center">
                                 <div class="relative">
                                     <Avatar
                                         avatarFileId={user().avatarFileId}
                                         alt={user().username}
                                         size="md"
-                                        class="border-2 border-background"
+                                        class="border-2 border-bg-elevated"
                                     />
                                     <div
-                                        class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${getStatusColor(user().status, "bg")}`}
+                                        class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-elevated ${getStatusColor(user().status, "bg")}`}
                                     />
                                 </div>
 
@@ -42,24 +42,24 @@ const ChatHeader: Component<{
                                         avatarFileId={currentUser().avatarFileId}
                                         alt="You"
                                         size="sm"
-                                        class="border-2 border-background"
+                                        class="border-2 border-bg-elevated"
                                     />
                                 </div>
                             </div>
 
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <h2 class="text-foreground font-semibold truncate">
+                                    <h2 class="text-fg-base font-semibold truncate">
                                         {user().username}
                                     </h2>
-                                    <span class="text-xs text-muted-foreground capitalize">
+                                    <span class="text-xs text-fg-muted capitalize">
                                         {user().status}
                                     </span>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
                                 <div
-                                    class="w-2 h-2 bg-link rounded-full"
+                                    class="w-2 h-2 bg-accent-link rounded-full"
                                     title="Direct Message"
                                 />
                             </div>
@@ -71,19 +71,19 @@ const ChatHeader: Component<{
             <Show when={props.context.type == "channel"}>
                 <Show when={channelActions.findById(props.context.id)}>
                     {(channel) => (
-                        <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border bg-background">
+                        <div class="flex h-16 min-h-16 items-center gap-3 px-4 py-3 border-b border-border-base bg-bg-base">
                             {}
-                            <div class="text-muted-foreground">
+                            <div class="text-fg-muted">
                                 <Hash size={20} />
                             </div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <h2 class="text-foreground font-semibold truncate">
+                                    <h2 class="text-fg-base font-semibold truncate">
                                         {channel().channelName}
                                     </h2>
                                     <Show when={groupActions.findById(channel().groupId)}>
                                         {(group) => (
-                                            <span class="text-xs text-muted-foreground bg-sidebar px-2 py-0.5 rounded">
+                                            <span class="text-xs text-fg-muted bg-bg-subtle px-2 py-0.5 rounded">
                                                 {group().groupName}
                                             </span>
                                         )}

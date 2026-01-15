@@ -140,7 +140,7 @@ export default function ContextMenu(props: ContextMenuProps) {
               {(item) => (
                 <Show
                   when={!item.separator}
-                  fallback={<div class="h-px bg-border-subtle my-1 mx-2" />}
+                  fallback={<div class="h-px bg-bg-subtle my-1 mx-2" />}
                 >
                   <Show
                     when={!item.customContent}
@@ -163,10 +163,10 @@ export default function ContextMenu(props: ContextMenuProps) {
                       disabled={item.disabled}
                       class={cn(
                         "w-full px-3 py-2 text-sm text-left flex items-center gap-3 transition-colors",
-                        "hover:bg-muted focus:bg-muted focus:outline-none",
+                        "hover:bg-bg-overlay focus:bg-bg-overlay focus:outline-none",
                         item.danger
-                          ? "text-destructive hover:text-destructive"
-                          : "text-foreground hover:text-foreground-bright",
+                          ? "text-status-danger hover:text-status-danger"
+                          : "text-fg-base hover:text-fg-emphasis",
                         item.disabled &&
                         "opacity-50 cursor-not-allowed hover:bg-transparent"
                       )}

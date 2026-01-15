@@ -23,15 +23,12 @@ const IncomingCallsPanel: Component = () => {
     }
 
     const currentUserId = () => authActions.getUser().userId
+    const myCallRecipient = () => voipActions.findById(currentUserId())?.recipientId
 
     const incomingCallers = () => {
-        const userId = currentUserId()
         return voipState.voipState
-            .filter(p => p.recipientId === userId)
-            .map(p => ({
-                participant: p,
-                user: userActions.findById(p.userId)
-            }))
+            .filter(p => p.recipientId === currentUserId() && p.userId !== myCallRecipient())
+            .map(p => ({ participant: p, user: userActions.findById(p.userId) }))
             .filter(c => c.user !== undefined)
     }
 
@@ -45,15 +42,15 @@ const IncomingCallsPanel: Component = () => {
 
     return (
         <Show when={incomingCallers().length > 0}>
-            <div class="bg-background-dark border-t border-border">
+            <div class="bg-bg-subtle border-t border-border-base">
                 <button
                     onClick={toggleCollapsed}
-                    class="w-full px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
+                    class="w-full px-3 py-2 flex items-center gap-2 hover:bg-bg-overlay transition-colors"
                 >
-                    <Show when={isCollapsed()} fallback={<ChevronDown size={14} class="text-muted-foreground-dark" />}>
-                        <ChevronRight size={14} class="text-muted-foreground-dark" />
+                    <Show when={isCollapsed()} fallback={<ChevronDown size={14} class="text-fg-subtle" />}>
+                        <ChevronRight size={14} class="text-fg-subtle" />
                     </Show>
-                    <span class="text-xs font-medium text-foreground">
+                    <span class="text-xs font-medium text-fg-base">
                         Incoming Calls ({incomingCallers().length})
                     </span>
                 </button>
@@ -62,21 +59,21 @@ const IncomingCallsPanel: Component = () => {
                     <div class="max-h-24 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                         <For each={incomingCallers()}>
                             {(caller) => (
-                                <div class="px-3 py-1.5 flex items-center gap-2 hover:bg-muted transition-colors group">
+                                <div class="px-3 py-1.5 flex items-center gap-2 hover:bg-bg-overlay transition-colors group">
                                     <Avatar
                                         avatarFileId={caller.user!.avatarFileId}
                                         alt={caller.user!.username}
                                         size="xs"
                                     />
-                                    <span class="flex-1 text-sm text-foreground truncate">
+                                    <span class="flex-1 text-sm text-fg-base truncate">
                                         {caller.user!.username}
                                     </span>
                                     <button
                                         onClick={() => handleCallback(caller.user!.userId)}
-                                        class="p-1 rounded hover:bg-action-positive/20 transition-colors"
+                                        class="p-1 rounded hover:bg-status-success/20 transition-colors"
                                         title="Answer Call"
                                     >
-                                        <Phone size={14} class="text-action-positive" />
+                                        <Phone size={14} class="text-status-success" />
                                     </button>
                                 </div>
                             )}

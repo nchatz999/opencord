@@ -31,7 +31,7 @@ const YouTubeEmbed: Component<{ id: string }> = (props) => (
         rel="noopener noreferrer"
         class="block mt-2 w-full max-w-xs"
     >
-        <div class="relative rounded-md border border-border-card overflow-hidden group">
+        <div class="relative rounded-md border border-border-base overflow-hidden group">
             <img
                 src={`https://img.youtube.com/vi/${props.id}/0.jpg`}
                 alt="Youtube thumbnail"
@@ -39,7 +39,7 @@ const YouTubeEmbed: Component<{ id: string }> = (props) => (
                 height={360}
                 class="w-full h-auto object-cover group-hover:brightness-110 transition-all"
             />
-            <div class="absolute top-1 right-1 bg-action-negative text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded">
+            <div class="absolute top-1 right-1 bg-status-danger text-accent-primary-fg text-[10px] font-bold px-1.5 py-0.5 rounded">
                 YouTube
             </div>
         </div>
@@ -54,12 +54,12 @@ interface MessageHeaderProps {
 
 const MessageHeader: Component<MessageHeaderProps> = (props) => (
     <div class={`flex items-center gap-2 ${ownerFlex(props.isOwner)}`}>
-        <span class="text-dis-white font-semibold">{props.user.username}</span>
-        <time class="text-muted-foreground text-xs">
+        <span class="text-fg-base font-semibold">{props.user.username}</span>
+        <time class="text-fg-muted text-xs">
             {new Date(props.message.createdAt).toLocaleString()}
         </time>
         <Show when={props.message.modifiedAt && props.message.modifiedAt !== props.message.createdAt}>
-            <span class="text-muted-foreground text-xs">(edited)</span>
+            <span class="text-fg-muted text-xs">(edited)</span>
         </Show>
     </div>
 );
@@ -109,7 +109,7 @@ const MessageEdit: Component<MessageEditProps> = (props) => (
         <TextEditor
             value={props.content}
             onInput={props.onInput}
-            format={(text) => formatLinks(text, "text-link hover:underline")}
+            format={(text) => formatLinks(text, "text-accent-link hover:underline")}
             maxHeight={600}
             class="min-w-48 max-w-2xl"
         />
@@ -129,7 +129,7 @@ interface MessageContentProps {
 
 const MessageContent: Component<MessageContentProps> = (props) => (
     <>
-        <span class="text-foreground font-normal break-words whitespace-pre-wrap">
+        <span class="text-fg-base font-normal break-words whitespace-pre-wrap">
             {formatMessageText(props.text)}
         </span>
         <For each={props.youtubeIds}>{(id) => <YouTubeEmbed id={id} />}</For>
@@ -221,7 +221,7 @@ const MessageComponent: Component<MessageProps> = (props) => {
                                 </Show>
 
                                 <Show when={props.message.messageText}>
-                                    <div class="rounded-lg px-4 py-2 bg-muted hover:bg-opacity-90 transition-colors duration-200 max-w-2xl">
+                                    <div class="rounded-lg px-4 py-2 bg-bg-overlay hover:bg-opacity-90 transition-colors duration-200 max-w-2xl">
                                         <Show
                                             when={isEditing()}
                                             fallback={

@@ -40,7 +40,7 @@ const MiddlePanel: Component = () => {
     });
 
     return (
-        <div class="flex-1 flex flex-col bg-background h-full overflow-hidden relative">
+        <div class="flex-1 flex flex-col bg-bg-base h-full overflow-hidden relative">
             <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
             <MessageNotification />
         </div>

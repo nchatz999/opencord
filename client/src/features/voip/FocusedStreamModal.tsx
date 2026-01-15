@@ -26,13 +26,13 @@ const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
     return (
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div
-                class={`bg-popover rounded-lg overflow-hidden flex flex-col ${isFullscreen()
+                class={`bg-bg-overlay rounded-lg overflow-hidden flex flex-col ${isFullscreen()
                     ? "w-full h-full rounded-none m-0"
                     : "w-full max-w-5xl max-h-[90vh] mx-4"
                     }`}
             >
                 <div class="flex justify-between items-center p-6 pb-4">
-                    <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
+                    <h2 class="text-2xl font-bold text-fg-base flex items-center gap-2">
                         {isCamera() ? <Camera class="w-6 h-6" /> : <Monitor class="w-6 h-6" />}
                         {isCamera() ? "Camera" : "Screen Share"}
                     </h2>
@@ -56,13 +56,13 @@ const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
                         <Show
                             when={screenVolume() !== undefined}
                             fallback={
-                                <div class="flex items-center gap-2 text-muted-foreground">
+                                <div class="flex items-center gap-2 text-fg-muted">
                                     <VolumeX size={18} />
                                     <span class="text-sm">No audio</span>
                                 </div>
                             }
                         >
-                            <Volume2 size={18} class="text-muted-foreground shrink-0" />
+                            <Volume2 size={18} class="text-fg-muted shrink-0" />
                             <Slider
                                 min={0}
                                 max={200}
@@ -70,7 +70,7 @@ const FocusedStreamModal: Component<FocusedStreamModalProps> = (props) => {
                                 onChange={(v) => livekitActions.setScreenVolume(props.publisherId, v)}
                                 class="w-64"
                             />
-                            <span class="text-sm text-muted-foreground w-12">
+                            <span class="text-sm text-fg-muted w-12">
                                 {Math.round(screenVolume()!)}%
                             </span>
                         </Show>

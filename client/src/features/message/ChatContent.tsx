@@ -189,7 +189,7 @@ const ChatContent: Component = () => {
                                 fallback={
                                     <Show when={userActions.findById(context().id)}>
                                         {(user) => (
-                                            <div class="flex-1 flex items-center justify-center text-muted-foreground min-h-[400px]">
+                                            <div class="flex-1 flex items-center justify-center text-fg-muted min-h-[400px]">
                                                 <div class="text-center">
                                                     <h3 class="text-lg font-medium mb-1">
                                                         {user().username}
@@ -215,7 +215,7 @@ const ChatContent: Component = () => {
                                 fallback={
                                     <Show when={channelActions.findById(context().id)}>
                                         {(channel) => (
-                                            <div class="flex-1 flex items-center justify-center text-muted-foreground min-h-[400px]">
+                                            <div class="flex-1 flex items-center justify-center text-fg-muted min-h-[400px]">
                                                 <div class="text-center">
                                                     <h3 class="text-lg font-medium mb-1">
                                                         {channel().channelName}

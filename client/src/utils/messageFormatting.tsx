@@ -27,7 +27,7 @@ const TOKEN_CLASSES: Record<string, string> = {
     comment: "text-syntax-comment italic",
     function: "text-syntax-function",
     punctuation: "text-syntax-punctuation",
-    text: "text-foreground",
+    text: "text-fg-base",
 };
 
 type Segment =
@@ -100,7 +100,7 @@ const formatInlineCode = (text: string, linkClass: string): JSX.Element => {
             parts.push(formatLinks(text.substring(lastIndex, match.index), linkClass));
         }
         parts.push(
-            <code class="bg-card px-1.5 py-0.5 rounded text-sm font-mono text-foreground">
+            <code class="bg-bg-elevated px-1.5 py-0.5 rounded text-sm font-mono text-fg-base">
                 {match[1]}
             </code>
         );
@@ -120,7 +120,7 @@ const HighlightedCode: Component<{ code: string }> = (props) => {
     return (
         <For each={tokens()}>
             {(token) => (
-                <span class={TOKEN_CLASSES[token.type] || "text-foreground"}>
+                <span class={TOKEN_CLASSES[token.type] || "text-fg-base"}>
                     {token.content}
                 </span>
             )}
@@ -135,18 +135,18 @@ const CodeBlock: Component<{ content: string; language: string }> = (props) => {
 
     return (
         <div class="relative group my-2">
-            <div class="flex items-center justify-between bg-sidebar px-3 py-1.5 rounded-t border-b border-border">
-                <span class="text-xs text-muted-foreground font-mono">
+            <div class="flex items-center justify-between bg-bg-elevated px-3 py-1.5 rounded-t border-b border-border-base">
+                <span class="text-xs text-fg-muted font-mono">
                     {props.language || "code"}
                 </span>
                 <button
                     onClick={handleCopy}
-                    class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    class="text-xs text-fg-muted hover:text-fg-base transition-colors"
                 >
                     Copy
                 </button>
             </div>
-            <pre class="bg-sidebar p-3 rounded-b overflow-x-auto">
+            <pre class="bg-bg-elevated p-3 rounded-b overflow-x-auto">
                 <code class="text-sm font-mono whitespace-pre">
                     <HighlightedCode code={props.content} />
                 </code>
@@ -182,7 +182,7 @@ export const formatMessageText = (
     text: string | null,
 ): JSX.Element => {
     if (!text) return <></>;
-    const linkClass = "text-link hover:text-foreground-bright hover:underline";
+    const linkClass = "text-accent-link hover:text-fg-emphasis hover:underline";
 
     const segments = parseSegments(text);
 

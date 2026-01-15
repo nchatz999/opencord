@@ -36,9 +36,9 @@ const UserInfoModal: Component<UserInfoModalProps> = (props) => {
 
     return (
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-popover rounded-lg p-6 w-full max-w-sm mx-4">
+            <div class="bg-bg-overlay rounded-lg p-6 w-full max-w-sm mx-4">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
+                    <h2 class="text-2xl font-bold text-fg-base flex items-center gap-2">
                         <UserIcon class="w-6 h-6" />
                         User Profile
                     </h2>
@@ -58,7 +58,7 @@ const UserInfoModal: Component<UserInfoModalProps> = (props) => {
                                 />
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <h3 class="text-xl font-bold text-foreground-bright">
+                                        <h3 class="text-xl font-bold text-fg-emphasis">
                                             {u().username}
                                         </h3>
                                         <Circle
@@ -66,7 +66,7 @@ const UserInfoModal: Component<UserInfoModalProps> = (props) => {
                                             class={`${getStatusColor(u().status)} fill-current`}
                                         />
                                     </div>
-                                    <p class="text-sm text-muted-foreground">
+                                    <p class="text-sm text-fg-muted">
                                         {role()?.roleName ?? "Unknown"}
                                     </p>
                                 </div>
@@ -75,20 +75,20 @@ const UserInfoModal: Component<UserInfoModalProps> = (props) => {
                             <Card>
                                 <div class="space-y-3">
                                     <div class="flex items-center gap-3">
-                                        <Shield size={16} class="text-muted-foreground" />
+                                        <Shield size={16} class="text-fg-muted" />
                                         <div>
-                                            <p class="text-xs text-muted-foreground">Role</p>
-                                            <p class="text-sm text-foreground">
+                                            <p class="text-xs text-fg-muted">Role</p>
+                                            <p class="text-sm text-fg-base">
                                                 {role()?.roleName ?? "Unknown"}
                                             </p>
                                         </div>
                                     </div>
 
                                     <div class="flex items-center gap-3">
-                                        <Calendar size={16} class="text-muted-foreground" />
+                                        <Calendar size={16} class="text-fg-muted" />
                                         <div>
-                                            <p class="text-xs text-muted-foreground">Member Since</p>
-                                            <p class="text-sm text-foreground">
+                                            <p class="text-xs text-fg-muted">Member Since</p>
+                                            <p class="text-sm text-fg-base">
                                                 {formatDate(u().createdAt)}
                                             </p>
                                         </div>

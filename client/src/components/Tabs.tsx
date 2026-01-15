@@ -43,8 +43,8 @@ export const Tabs: Component<TabsProps> = (props) => {
               class={cn(
                 "py-2 px-4 font-semibold",
                 activeTab() === item.id
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-tab-inactive"
+                  ? "text-accent-primary border-b-2 border-accent-primary"
+                  : "text-fg-subtle"
               )}
               style={{ width: tabWidth() ? `${tabWidth()}px` : undefined }}
               onClick={() => setActiveTab(item.id)}

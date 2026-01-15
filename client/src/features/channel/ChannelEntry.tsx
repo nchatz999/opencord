@@ -54,16 +54,16 @@ export const ChannelEntry: Component<{
             <button
                 onClick={async () => await handleChannelClick(props.channel)}
                 onContextMenu={handleContextMenu}
-                class="flex items-center gap-2 w-full px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all group disabled:opacity-50 disabled:pointer-events-none"
+                class="flex items-center gap-2 w-full px-2 py-1 rounded text-fg-muted hover:text-fg-base hover:bg-bg-overlay transition-all group disabled:opacity-50 disabled:pointer-events-none"
                 disabled={isReadOnly()}
             >
                 <Show
                     when={props.channel.channelType === "VoIP"}
-                    fallback={<Hash size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />}
+                    fallback={<Hash size={16} class="shrink-0" classList={{ "text-fg-base": hasUnread() }} />}
                 >
-                    <Volume2 size={16} class="shrink-0" classList={{ "text-foreground": hasUnread() }} />
+                    <Volume2 size={16} class="shrink-0" classList={{ "text-fg-base": hasUnread() }} />
                 </Show>
-                <span class="text-sm truncate" classList={{ "text-foreground font-medium": hasUnread() }}>
+                <span class="text-sm truncate" classList={{ "text-fg-base font-medium": hasUnread() }}>
                     {props.channel.channelName}
                 </span>
                 <Show when={isReadOnly()}>

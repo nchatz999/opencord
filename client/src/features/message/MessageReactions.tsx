@@ -56,8 +56,8 @@ const MessageReactions: Component<MessageReactionsProps> = (props) => {
                             class={cn(
                                 "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors",
                                 summary.hasReacted
-                                    ? "bg-primary/20 border border-primary/50 text-foreground"
-                                    : "bg-muted hover:bg-accent border border-transparent text-muted-foreground"
+                                    ? "bg-accent-primary/20 border border-accent-primary/50 text-fg-base"
+                                    : "bg-bg-overlay hover:bg-bg-emphasis border border-transparent text-fg-muted"
                             )}
                         >
                             <span class="text-sm">{summary.emoji}</span>

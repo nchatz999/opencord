@@ -11,12 +11,12 @@ const ConnectionIndicator: Component = () => {
             <div class="flex items-center gap-2 text-sm">
                 <Switch>
                     <Match when={livekitState.connectionState === 'connecting'}>
-                        <Loader size={16} class="text-status-away animate-spin" />
-                        <span class="text-status-away">Connecting</span>
+                        <Loader size={16} class="text-presence-away animate-spin" />
+                        <span class="text-presence-away">Connecting</span>
                     </Match>
                     <Match when={livekitState.connectionState === 'connected'}>
-                        <Wifi size={16} class="text-status-online" />
-                        <span class="text-status-online">Connected</span>
+                        <Wifi size={16} class="text-presence-online" />
+                        <span class="text-presence-online">Connected</span>
                     </Match>
                 </Switch>
             </div>

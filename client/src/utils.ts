@@ -62,12 +62,12 @@ export function createMonoConverter(): (value: AudioData) => AudioData {
 
 export function getStatusColor(status: UserStatusType, type: "bg" | "text" = "text") {
   const colors = {
-    [UserStatusType.Online]: "status-online",
-    [UserStatusType.Away]: "status-away",
-    [UserStatusType.DoNotDisturb]: "status-dnd",
-    [UserStatusType.Offline]: "status-offline",
+    [UserStatusType.Online]: "presence-online",
+    [UserStatusType.Away]: "presence-away",
+    [UserStatusType.DoNotDisturb]: "presence-dnd",
+    [UserStatusType.Offline]: "presence-offline",
   };
-  return `${type}-${colors[status] ?? "status-offline"}`;
+  return `${type}-${colors[status] ?? "presence-offline"}`;
 }
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

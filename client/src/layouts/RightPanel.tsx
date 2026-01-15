@@ -25,16 +25,16 @@ const RightPanel: Component<RightPanelProps> = (props) => {
     };
 
     return (
-        <div class={`bg-sidebar w-64 flex flex-col h-full ${props.class || ""}`}>
+        <div class={`bg-bg-elevated w-64 flex flex-col h-full ${props.class || ""}`}>
             {}
-            <div class="h-12 px-4 flex items-center justify-between border-b border-border shadow-sm shrink-0">
-                <h2 class="text-foreground font-semibold text-sm uppercase">Roles</h2>
+            <div class="h-12 px-4 flex items-center justify-between border-b border-border-base shadow-sm shrink-0">
+                <h2 class="text-fg-base font-semibold text-sm uppercase">Roles</h2>
                 <Show when={user().roleId === 1}>
                     <Button
                         onClick={handleCreateRole}
                         variant="ghost"
                         size="sm"
-                        class="text-muted-foreground hover:text-foreground transition-colors"
+                        class="text-fg-muted hover:text-fg-base transition-colors"
                         title="Create Role"
                     >
                         <Plus size={16} />

@@ -156,15 +156,15 @@ const MessageInput: Component<{
 
     return (
         <Show when={props.context}>
-            <div class="p-4 bg-background relative">
+            <div class="p-4 bg-bg-base relative">
                 <Show when={replyingToMessage()}>
-                    <div class="mb-3 flex items-center gap-2 p-2 bg-accent border-l-2 border-primary">
-                        <ReplyIcon size={14} class="text-muted-foreground shrink-0" />
+                    <div class="mb-3 flex items-center gap-2 p-2 bg-bg-emphasis border-l-2 border-accent-primary">
+                        <ReplyIcon size={14} class="text-fg-muted shrink-0" />
                         <div class="flex-1 min-w-0">
-                            <span class="text-xs text-primary font-medium">
+                            <span class="text-xs text-accent-primary font-medium">
                                 {replyingToUser()?.username ?? "Unknown"}
                             </span>
-                            <p class="text-sm text-muted-foreground truncate">
+                            <p class="text-sm text-fg-muted truncate">
                                 {replyingToMessage()?.messageText || "Attachment"}
                             </p>
                         </div>
@@ -180,7 +180,7 @@ const MessageInput: Component<{
                 </Show>
 
                 <Show when={files().length > 0}>
-                    <div class="absolute bottom-full left-0 right-0 mb-2 mx-4 flex flex-wrap gap-2 p-3 bg-background-dark rounded-lg border border-muted shadow-lg">
+                    <div class="absolute bottom-full left-0 right-0 mb-2 mx-4 flex flex-wrap gap-2 p-3 bg-bg-subtle rounded-lg border border-border-base shadow-lg">
                         <For each={files()}>
                             {(file) => (
                                 <FilePreview
@@ -195,15 +195,15 @@ const MessageInput: Component<{
 
                 <Show when={isUploading()}>
                     <div class="mb-3 px-1">
-                        <div class="flex items-center justify-between text-sm text-muted-foreground mb-1">
+                        <div class="flex items-center justify-between text-sm text-fg-muted mb-1">
                             <span>Uploading... {uploadProgress()}%</span>
                             <Button size="sm" variant="ghost" onClick={handleCancel} title="Cancel upload">
                                 <X size={16} />
                             </Button>
                         </div>
-                        <div class="h-1 bg-muted rounded-full overflow-hidden">
+                        <div class="h-1 bg-bg-overlay rounded-full overflow-hidden">
                             <div
-                                class="h-full bg-link transition-all duration-150"
+                                class="h-full bg-accent-link transition-all duration-150"
                                 style={{ width: `${uploadProgress()}%` }}
                             />
                         </div>
@@ -211,7 +211,7 @@ const MessageInput: Component<{
                 </Show>
 
                 <div
-                    class={`relative flex items-center gap-3 py-3 px-1 bg-muted rounded-lg transition-colors ${isDragging() ? "bg-accent border-2 border-dashed border-link" : ""}`}
+                    class={`relative flex items-center gap-3 py-3 px-1 bg-bg-overlay rounded-lg transition-colors ${isDragging() ? "bg-bg-emphasis border-2 border-dashed border-accent-link" : ""}`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
@@ -230,7 +230,7 @@ const MessageInput: Component<{
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
                         placeholder={placeholder()}
-                        format={(text) => formatLinks(text, "text-link", true)}
+                        format={(text) => formatLinks(text, "text-accent-link", true)}
                         class="flex-1 min-w-0"
                     />
 
@@ -260,12 +260,12 @@ const MessageInput: Component<{
 
                 <Show when={isDragging()}>
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-                        <div class="bg-background-dark bg-opacity-90 border-2 border-dashed border-link rounded-lg p-8 flex flex-col items-center justify-center">
-                            <div class="w-16 h-16 flex items-center justify-center rounded-full border-4 border-link border-dashed mb-4">
-                                <Paperclip size={32} class="text-link" />
+                        <div class="bg-bg-subtle bg-opacity-90 border-2 border-dashed border-accent-link rounded-lg p-8 flex flex-col items-center justify-center">
+                            <div class="w-16 h-16 flex items-center justify-center rounded-full border-4 border-accent-link border-dashed mb-4">
+                                <Paperclip size={32} class="text-accent-link" />
                             </div>
-                            <h2 class="text-xl font-semibold text-foreground-bright mb-2">Drop to Upload</h2>
-                            <p class="text-secondary-text">Files will be uploaded to this channel</p>
+                            <h2 class="text-xl font-semibold text-fg-emphasis mb-2">Drop to Upload</h2>
+                            <p class="text-fg-subtle">Files will be uploaded to this channel</p>
                         </div>
                     </div>
                 </Show>

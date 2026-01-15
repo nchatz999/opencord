@@ -115,14 +115,14 @@ export default function Select(props: SelectProps) {
     <>
       <div class={cn("relative", props.class)} ref={selectRef}>
         <Show when={props.label}>
-          <label class="block mb-2 text-sm font-medium text-foreground">
+          <label class="block mb-2 text-sm font-medium text-fg-base">
             {props.label}
           </label>
         </Show>
         <div
           class={cn(
-            "flex items-center justify-between px-2 gap-2 py-2 bg-input text-foreground cursor-pointer",
-            isOpen() ? "ring-2 ring-ring focus:border-transparent" : ""
+            "flex items-center justify-between px-2 gap-2 py-2 bg-input text-fg-base cursor-pointer",
+            isOpen() ? "ring-2 ring-focus-ring focus:border-transparent" : ""
           )}
           onClick={() => {
             if (props.options.length > 0) {
@@ -163,7 +163,7 @@ export default function Select(props: SelectProps) {
           <For each={props.options}>
             {(option) => (
               <div
-                class="px-3 py-2 text-foreground cursor-pointer hover:bg-primary-hover hover:text-primary-foreground transition-colors"
+                class="px-3 py-2 text-fg-base cursor-pointer hover:bg-accent-primary-hover hover:text-accent-primary-fg transition-colors"
                 onClick={() => handleSelect(option.value)}
                 role="option"
                 aria-selected={props.value === option.value}

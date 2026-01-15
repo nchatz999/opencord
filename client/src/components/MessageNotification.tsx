@@ -63,18 +63,18 @@ const MessageNotification: Component = () => {
           fallback={
             <button
               onClick={toggleCollapsed}
-              class="flex items-center gap-1 px-2 py-1 bg-popover border border-border-subtle rounded-lg shadow-lg text-sm text-foreground hover:bg-muted transition-colors"
+              class="flex items-center gap-1 px-2 py-1 bg-bg-overlay border border-border-subtle rounded-lg shadow-lg text-sm text-fg-base hover:bg-bg-overlay transition-colors"
             >
               <MessageSquare size={14} />
               <span>{validMessages().length}</span>
             </button>
           }
         >
-          <div class="w-64 bg-popover border border-border-subtle rounded-lg shadow-lg overflow-hidden">
-            <div class="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
+          <div class="w-64 bg-bg-overlay border border-border-subtle rounded-lg shadow-lg overflow-hidden">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-border-base bg-bg-overlay/30">
               <button
                 onClick={toggleCollapsed}
-                class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                class="flex items-center gap-1 text-xs text-fg-muted hover:text-fg-base transition-colors"
               >
                 <ChevronDown size={12} />
                 <span>{validMessages().length} new</span>
@@ -82,7 +82,7 @@ const MessageNotification: Component = () => {
               <div class="flex items-center gap-1">
                 <button
                   onClick={toggleSound}
-                  class="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  class="p-1 text-fg-muted hover:text-fg-base transition-colors"
                   title={notification.soundEnabled() ? "Mute notifications" : "Unmute notifications"}
                 >
                   <Show when={notification.soundEnabled()} fallback={<VolumeX size={12} />}>
@@ -91,7 +91,7 @@ const MessageNotification: Component = () => {
                 </button>
                 <button
                   onClick={() => notification.clearAll()}
-                  class="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  class="p-1 text-fg-muted hover:text-fg-base transition-colors"
                   title="Dismiss all"
                 >
                   <X size={12} />
@@ -103,17 +103,17 @@ const MessageNotification: Component = () => {
                 {(msg) => (
                   <div
                     onClick={() => handleClick(msg)}
-                    class="px-3 py-2 border-b border-border-subtle last:border-0 hover:bg-muted/50 cursor-pointer transition-colors"
+                    class="px-3 py-2 border-b border-border-subtle last:border-0 hover:bg-bg-overlay/50 cursor-pointer transition-colors"
                   >
                     <div class="flex items-center justify-between">
-                      <span class="text-xs font-medium text-foreground truncate">
+                      <span class="text-xs font-medium text-fg-base truncate">
                         {getSenderName(msg.senderId)}
                       </span>
-                      <span class="text-xs text-muted-foreground">
+                      <span class="text-xs text-fg-muted">
                         {getContextName(msg)}
                       </span>
                     </div>
-                    <p class="text-xs text-muted-foreground truncate mt-0.5">
+                    <p class="text-xs text-fg-muted truncate mt-0.5">
                       {msg.messageText?.slice(0, 50) || "[attachment]"}
                     </p>
                   </div>

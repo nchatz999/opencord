@@ -73,13 +73,13 @@ export const ConfirmProvider: Component<{ children: JSX.Element }> = (props) => 
               onKeyDown={handleKeyDown}
             >
               <div
-                class="bg-popover text-foreground rounded-lg p-6 w-full max-w-sm"
+                class="bg-bg-overlay text-fg-base rounded-lg p-6 w-full max-w-sm"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Show when={current().title}>
                   <h3 class="text-lg font-semibold mb-2">{current().title}</h3>
                 </Show>
-                <p class="text-muted-foreground mb-6">{current().message}</p>
+                <p class="text-fg-muted mb-6">{current().message}</p>
                 <div class="flex justify-end gap-2">
                   <Button variant="secondary" size="sm" onClick={handleCancel}>
                     {current().cancelText || "Cancel"}

@@ -69,18 +69,18 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
                                 value={searchTerm()}
                                 onChange={setSearchTerm}
                                 placeholder="Search users..."
-                                icon={<Search class="w-4 h-4 text-muted-foreground" />}
+                                icon={<Search class="w-4 h-4 text-fg-muted" />}
                             />
                             <ul class="space-y-2 max-h-80 overflow-y-auto">
                                 <For each={filteredUsers()}>
                                     {(user) => (
-                                        <li class="flex items-center gap-2 bg-muted p-2 rounded">
+                                        <li class="flex items-center gap-2 bg-bg-overlay p-2 rounded">
                                             <Avatar
                                                 avatarFileId={user.avatarFileId}
                                                 alt={user.username}
                                                 size="sm"
                                             />
-                                            <span class="text-foreground">{user.username}</span>
+                                            <span class="text-fg-base">{user.username}</span>
                                         </li>
                                     )}
                                 </For>
@@ -168,9 +168,9 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
 
     return (
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-popover rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="bg-bg-overlay rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-foreground flex items-center gap-2">
+                    <h2 class="text-2xl font-bold text-fg-base flex items-center gap-2">
                         <Shield class="w-6 h-6" />
                         Role Settings
                     </h2>

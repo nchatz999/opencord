@@ -58,7 +58,7 @@ const StreamsContent: Component = () => {
         <Show
             when={voipActions.findById(currentUser().userId)}
             fallback={
-                <div class="flex-1 flex items-center justify-center text-muted-foreground">
+                <div class="flex-1 flex items-center justify-center text-fg-muted">
                     <div class="text-center">
                         <Video size={48} class="mx-auto mb-4 mt-4 opacity-50" />
                         <h3 class="text-lg font-medium mb-1">No active stream</h3>
@@ -70,7 +70,7 @@ const StreamsContent: Component = () => {
             <Show
                 when={getCurrentParticipants().length > 0}
                 fallback={
-                    <div class="flex-1 flex items-center justify-center text-muted-foreground mt-6">
+                    <div class="flex-1 flex items-center justify-center text-fg-muted mt-6">
                         <div class="text-center">
                             <Users size={48} class="mx-auto mb-4 mt-4 opacity-50" />
                             <h3 class="text-lg font-medium mb-1">No one in voice</h3>
@@ -82,10 +82,10 @@ const StreamsContent: Component = () => {
                 }
             >
                 <div class="flex-1 flex flex-col min-h-0">
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-background shrink-0">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-border-base bg-bg-base shrink-0">
                         <div class="flex items-center gap-2">
-                            <Video size={20} class="text-muted-foreground" />
-                            <h3 class="text-foreground font-medium">
+                            <Video size={20} class="text-fg-muted" />
+                            <h3 class="text-fg-base font-medium">
                                 <Show when={contextState.context}>
                                     {(context) =>
                                         context().type === 'channel'
@@ -96,7 +96,7 @@ const StreamsContent: Component = () => {
                             </h3>
                         </div>
 
-                        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div class="flex items-center gap-2 text-sm text-fg-muted">
                             <Users size={16} />
                             <span>
                                 {streamCount()} stream{streamCount() !== 1 ? "s" : ""}
@@ -121,7 +121,7 @@ const StreamsContent: Component = () => {
                                                 <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                                     <Button
                                                         variant="ghost"
-                                                        class="p-3 rounded-full bg-background/60 pointer-events-auto"
+                                                        class="p-3 rounded-full bg-bg-base/60 pointer-events-auto"
                                                         onClick={() => openStreamModal(participant.userId, MediaType.Camera)}
                                                     >
                                                         <Expand size={24} />
@@ -139,7 +139,7 @@ const StreamsContent: Component = () => {
                                                 <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                                     <Button
                                                         variant="ghost"
-                                                        class="p-3 rounded-full bg-background/60 pointer-events-auto"
+                                                        class="p-3 rounded-full bg-bg-base/60 pointer-events-auto"
                                                         onClick={() => openStreamModal(participant.userId, MediaType.Screen)}
                                                     >
                                                         <Expand size={24} />

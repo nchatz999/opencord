@@ -45,8 +45,8 @@ const PrivateCallStatusPanel: Component = () => {
     return (
         <Show when={privateCallInfo()}>
             {(info) => (
-                <div class="bg-sidebar rounded-lg p-2 flex flex-col gap-2">
-                    <div class="flex items-center justify-between text-[10px] text-muted-foreground uppercase tracking-wide">
+                <div class="bg-bg-subtle rounded-lg p-2 flex flex-col gap-2">
+                    <div class="flex items-center justify-between text-[10px] text-fg-muted uppercase tracking-wide">
                         <span>Private Call</span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -56,7 +56,7 @@ const PrivateCallStatusPanel: Component = () => {
                                     avatarFileId={info().currentUser.avatarFileId}
                                     alt={info().currentUser.username}
                                     size="xs"
-                                    class="border-2 border-sidebar"
+                                    class="border-2 border-bg-elevated"
                                 />
                             </div>
                             <div class="relative">
@@ -64,18 +64,18 @@ const PrivateCallStatusPanel: Component = () => {
                                     avatarFileId={info().otherUser.avatarFileId}
                                     alt={info().otherUser.username}
                                     size="xs"
-                                    class="border-2 border-sidebar"
+                                    class="border-2 border-bg-elevated"
                                 />
-                                <div class={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-sidebar ${info().otherUserConnected ? 'bg-status-online' : 'bg-status-away'}`} />
+                                <div class={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-bg-elevated ${info().otherUserConnected ? 'bg-presence-online' : 'bg-presence-away'}`} />
                             </div>
                         </div>
 
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-1">
-                                <span class="text-xs text-foreground truncate">
+                                <span class="text-xs text-fg-base truncate">
                                     {info().otherUser.username}
                                 </span>
-                                <span class={`text-[10px] ${info().otherUserConnected ? 'text-status-online' : 'text-status-away'}`}>
+                                <span class={`text-[10px] ${info().otherUserConnected ? 'text-presence-online' : 'text-presence-away'}`}>
                                     {info().otherUserConnected ? 'Connected' : 'Waiting'}
                                 </span>
                             </div>
@@ -83,26 +83,27 @@ const PrivateCallStatusPanel: Component = () => {
 
                         <div class="flex items-center gap-0.5">
                             <Show when={info().otherUserVoip?.localMute}>
-                                <MicOff size={12} class="text-destructive" />
+                                <MicOff size={12} class="text-status-danger" />
                             </Show>
                             <Show when={info().otherUserVoip?.localDeafen}>
-                                <Headphones size={12} class="text-destructive" />
+                                <Headphones size={12} class="text-status-danger" />
                             </Show>
                             <Show when={info().currentUserVoip?.publishCamera || info().otherUserVoip?.publishCamera}>
-                                <Video size={12} class="text-action-positive" />
+                                <Video size={12} class="text-status-success" />
                             </Show>
                             <Show when={info().currentUserVoip?.publishScreen || info().otherUserVoip?.publishScreen}>
-                                <Monitor size={12} class="text-action-positive" />
+                                <Monitor size={12} class="text-status-success" />
                             </Show>
                         </div>
                     </div>
 
                     <div class="flex flex-col gap-1">
-                        <span class="text-[10px] text-muted-foreground">{info().otherUser.username}'s volume</span>
+                        <span class="text-[10px] text-fg-muted">{info().otherUser.username}'s volume</span>
                         <Slider
                             value={volume()}
                             min={0}
                             max={200}
+                            disabled={!info().otherUserConnected}
                             onChange={(value) => {
                                 livekitActions.setVolume(info().otherUser.userId, value)
                             }}

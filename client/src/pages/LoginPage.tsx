@@ -70,20 +70,20 @@ const LoginPage: Component = () => {
                     value={serverDomain()}
                     onChange={setServerDomain}
                     placeholder="Server Address"
-                    icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<Globe class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Input
                     value={username()}
                     onChange={setUsername}
                     placeholder="Username"
-                    icon={<User class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<User class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Input
                     value={password()}
                     onChange={setPassword}
                     type="password"
                     placeholder="Password"
-                    icon={<Lock class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<Lock class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Checkbox
                     label="Remember me"
@@ -94,11 +94,11 @@ const LoginPage: Component = () => {
                     Log In
                 </Button>
             </form>
-            <p class="mt-4 text-sm text-center text-muted-foreground-dark">
+            <p class="mt-4 text-sm text-center text-fg-subtle">
                 Need an account?{" "}
                 <button
                     onClick={() => setActiveForm("register")}
-                    class="text-primary hover:underline"
+                    class="text-accent-primary hover:underline"
                 >
                     Register
                 </button>
@@ -113,43 +113,43 @@ const LoginPage: Component = () => {
                     value={serverDomain()}
                     onChange={setServerDomain}
                     placeholder="Server Address"
-                    icon={<Globe class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<Globe class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Input
                     value={username()}
                     onChange={setUsername}
                     placeholder="Username"
-                    icon={<User class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<User class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Input
                     value={password()}
                     onChange={setPassword}
                     type="password"
                     placeholder="Password"
-                    icon={<Lock class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<Lock class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Input
                     value={repeatPassword()}
                     onChange={setRepeatPassword}
                     type="password"
                     placeholder="Repeat Password"
-                    icon={<Lock class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<Lock class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Input
                     value={inviteCode()}
                     onChange={setInviteCode}
                     placeholder="Invite Code"
-                    icon={<Ticket class="w-5 h-5 text-muted-foreground-dark" />}
+                    icon={<Ticket class="w-5 h-5 text-fg-subtle" />}
                 />
                 <Button type="submit" class="w-full">
                     Register
                 </Button>
             </form>
-            <p class="mt-4 text-sm text-center text-muted-foreground-dark">
+            <p class="mt-4 text-sm text-center text-fg-subtle">
                 Already have an account?{" "}
                 <button
                     onClick={() => setActiveForm("login")}
-                    class="text-primary hover:underline"
+                    class="text-accent-primary hover:underline"
                 >
                     Log in
                 </button>
@@ -158,9 +158,9 @@ const LoginPage: Component = () => {
     );
 
     return (
-        <div class="min-h-screen bg-popover flex items-center justify-center p-4">
-            <div class="w-full max-w-md bg-card p-8 rounded-lg shadow-lg">
-                <h1 class="text-3xl font-bold text-foreground-bright mb-6 text-center">
+        <div class="min-h-screen bg-bg-overlay flex items-center justify-center p-4">
+            <div class="w-full max-w-md bg-bg-elevated p-8 rounded-lg shadow-lg">
+                <h1 class="text-3xl font-bold text-fg-emphasis mb-6 text-center">
                     <Switch>
                         <Match when={activeForm() === "login"}>Welcome Back!</Match>
                         <Match when={activeForm() === "register"}>Create an Account</Match>

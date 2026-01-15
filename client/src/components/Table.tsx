@@ -29,7 +29,7 @@ export const TableHead: Component<JSX.HTMLAttributes<HTMLTableSectionElement>> =
   const [local, rest] = splitProps(props, ["class", "children"]);
 
   return (
-    <thead class={cn("bg-card", local.class)} {...rest}>
+    <thead class={cn("bg-bg-elevated", local.class)} {...rest}>
       {local.children}
     </thead>
   );
@@ -39,7 +39,7 @@ export const TableBody: Component<JSX.HTMLAttributes<HTMLTableSectionElement>> =
   const [local, rest] = splitProps(props, ["class", "children"]);
 
   return (
-    <tbody class={cn("bg-popover divide-y divide-border-subtle", local.class)} {...rest}>
+    <tbody class={cn("bg-bg-overlay divide-y divide-border-subtle", local.class)} {...rest}>
       {local.children}
     </tbody>
   );
@@ -65,14 +65,14 @@ export const TableHeader: Component<TableHeaderProps> = (props) => {
   return (
     <th
       class={cn(
-        "py-3 px-6 sticky top-0 z-10 bg-card",
+        "py-3 px-6 sticky top-0 z-10 bg-bg-elevated",
         "first:left-0 first:z-20 first:bg-input",
         local.class
       )}
       {...rest}
     >
       <div class={cn("flex items-center", alignClasses[local.align ?? "left"])}>
-        <span class="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+        <span class="text-xs text-fg-muted font-medium uppercase tracking-wider">
           {local.children}
         </span>
       </div>
@@ -91,13 +91,13 @@ export const TableCell: Component<TableCellProps> = (props) => {
     <td
       class={cn(
         "px-6 py-4 whitespace-nowrap",
-        "first:sticky first:left-0 first:z-10 first:bg-popover",
+        "first:sticky first:left-0 first:z-10 first:bg-bg-overlay",
         local.class
       )}
       {...rest}
     >
       <div class={cn("flex items-center", alignClasses[local.align ?? "left"])}>
-        <span class="text-sm text-foreground">
+        <span class="text-sm text-fg-base">
           {local.children}
         </span>
       </div>

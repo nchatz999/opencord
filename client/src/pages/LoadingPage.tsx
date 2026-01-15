@@ -60,7 +60,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
     };
 
     return (
-        <div class="fixed inset-0 bg-background flex items-center justify-center">
+        <div class="fixed inset-0 bg-bg-base flex items-center justify-center">
             <div class="flex flex-col items-center gap-4">
                 <img
                     src={logo}
@@ -72,7 +72,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
                         "animation-iteration-count": "infinite",
                     }}
                 />
-                <div class="text-secondary-text text-sm font-medium">Connecting...</div>
+                <div class="text-fg-subtle text-sm font-medium">Connecting...</div>
             </div>
         </div>
     );

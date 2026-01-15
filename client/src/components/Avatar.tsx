@@ -37,12 +37,12 @@ const Avatar: Component<AvatarProps> = (props) => {
       fallback={
         <div
           class={cn(
-            "rounded-full bg-muted flex items-center justify-center flex-shrink-0",
+            "rounded-full bg-bg-overlay flex items-center justify-center flex-shrink-0",
             sizeClasses[size()],
             props.class
           )}
         >
-          <User size={iconSizes[size()]} class="text-muted-foreground" />
+          <User size={iconSizes[size()]} class="text-fg-muted" />
         </div>
       }
     >

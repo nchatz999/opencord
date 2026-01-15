@@ -62,9 +62,9 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
 
     return (
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-popover rounded-lg p-6 w-full max-w-sm mx-4">
+            <div class="bg-bg-overlay rounded-lg p-6 w-full max-w-sm mx-4">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-foreground flex items-center gap-2">
+                    <h2 class="text-xl font-bold text-fg-base flex items-center gap-2">
                         <Volume2 class="w-5 h-5" />
                         User Volume
                     </h2>
@@ -83,10 +83,10 @@ const VoipUserSettingsModal: Component<VoipUserSettingsModalProps> = (props) => 
                                     size="lg"
                                 />
                                 <div>
-                                    <h3 class="text-lg font-bold text-foreground-bright">
+                                    <h3 class="text-lg font-bold text-fg-emphasis">
                                         {u().username}
                                     </h3>
-                                    <p class="text-sm text-muted-foreground">
+                                    <p class="text-sm text-fg-muted">
                                         {props.callType === "private" ? "Private Call" : "Voice Channel"}
                                     </p>
                                 </div>

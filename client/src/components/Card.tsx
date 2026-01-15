@@ -28,9 +28,9 @@ const Card: Component<CardProps> & { Sub: typeof CardSub } = (props) => {
   const [local, rest] = splitProps(props, ["title", "icon", "children", "class"]);
 
   return (
-    <div class={cn("bg-card rounded-md p-4", local.class)} {...rest}>
+    <div class={cn("bg-bg-elevated rounded-md p-4", local.class)} {...rest}>
       <Show when={local.title}>
-        <h3 class="text-base font-medium mb-3 flex items-center text-foreground">
+        <h3 class="text-base font-medium mb-3 flex items-center text-fg-base">
           <Show when={local.icon}>
             <span class="w-5 h-5 mr-2">{local.icon}</span>
           </Show>

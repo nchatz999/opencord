@@ -3,7 +3,7 @@ import logo from "../assets/opencord.webp";
 
 const Loading: Component = () => {
     return (
-        <div class="fixed inset-0 bg-background flex items-center justify-center">
+        <div class="fixed inset-0 bg-bg-base flex items-center justify-center">
             <div class="flex flex-col items-center gap-4">
                 <div class="relative">
                     <img
@@ -17,7 +17,7 @@ const Loading: Component = () => {
                         }}
                     />
                 </div>
-                <div class="text-secondary-text text-sm font-medium">
+                <div class="text-fg-subtle text-sm font-medium">
                     Loading...
                 </div>
             </div>

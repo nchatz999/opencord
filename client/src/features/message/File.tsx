@@ -37,7 +37,7 @@ const FileItem: Component<FileProps> = (props) => {
                     expandable
                 />
             ) : (
-                <div class="bg-sidebar p-4 mt-2 rounded-xl">
+                <div class="bg-bg-subtle p-4 mt-2 rounded-xl">
                     <div class="flex flex-row gap-3">
                         <svg
                             fill="none"
@@ -56,10 +56,10 @@ const FileItem: Component<FileProps> = (props) => {
                             />
                         </svg>
                         <div class="flex flex-col">
-                            <a href="#" onClick={handleDownload} class="text-link cursor-pointer">
+                            <a href="#" onClick={handleDownload} class="text-accent-link cursor-pointer">
                                 {props.file.fileName}
                             </a>
-                            <div class="text-sm text-muted-foreground-dark">
+                            <div class="text-sm text-fg-subtle">
                                 {props.file.fileSize} bytes
                             </div>
                         </div>

@@ -50,38 +50,38 @@ export const DevicePickerProvider: Component<{ children: JSX.Element }> = (props
             onKeyDown={handleKeyDown}
           >
             <div
-              class="bg-popover text-foreground rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden border border-border"
+              class="bg-bg-overlay text-fg-base rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden border border-border-base"
               onClick={(e) => e.stopPropagation()}
             >
-              <div class="p-5 border-b border-border">
-                <h2 class="text-xl font-semibold text-foreground-bright">Share your screen</h2>
-                <p class="text-sm text-muted-foreground mt-1">Choose what you'd like to share</p>
+              <div class="p-5 border-b border-border-base">
+                <h2 class="text-xl font-semibold text-fg-emphasis">Share your screen</h2>
+                <p class="text-sm text-fg-muted mt-1">Choose what you'd like to share</p>
               </div>
 
               <div class="p-5 overflow-y-auto max-h-[60vh]">
                 <Show when={screens().length > 0}>
                   <div class="mb-6">
-                    <h3 class="text-sm font-medium text-muted-foreground mb-3">Screens</h3>
+                    <h3 class="text-sm font-medium text-fg-muted mb-3">Screens</h3>
                     <div class="grid grid-cols-2 gap-3">
                       <For each={screens()}>
                         {(source) => (
                           <button
-                            class="group relative rounded-lg overflow-hidden border-2 border-transparent hover:border-primary focus:border-primary focus:outline-none transition-all bg-card"
+                            class="group relative rounded-lg overflow-hidden border-2 border-transparent hover:border-accent-primary focus:border-accent-primary focus:outline-none transition-all bg-bg-elevated"
                             onClick={() => handleSelect(source.id)}
                           >
-                            <div class="aspect-video bg-background-dark">
+                            <div class="aspect-video bg-bg-subtle">
                               <img
                                 src={source.thumbnail}
                                 alt={source.name}
                                 class="w-full h-full object-contain"
                               />
                             </div>
-                            <div class="p-2 bg-card">
-                              <p class="text-sm text-foreground truncate">
+                            <div class="p-2 bg-bg-elevated">
+                              <p class="text-sm text-fg-base truncate">
                                 {source.name || 'Entire Screen'}
                               </p>
                             </div>
-                            <div class="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div class="absolute inset-0 bg-accent-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
                         )}
                       </For>
@@ -91,22 +91,22 @@ export const DevicePickerProvider: Component<{ children: JSX.Element }> = (props
 
                 <Show when={windows().length > 0}>
                   <div>
-                    <h3 class="text-sm font-medium text-muted-foreground mb-3">Windows</h3>
+                    <h3 class="text-sm font-medium text-fg-muted mb-3">Windows</h3>
                     <div class="grid grid-cols-2 gap-3">
                       <For each={windows()}>
                         {(source) => (
                           <button
-                            class="group relative rounded-lg overflow-hidden border-2 border-transparent hover:border-primary focus:border-primary focus:outline-none transition-all bg-card"
+                            class="group relative rounded-lg overflow-hidden border-2 border-transparent hover:border-accent-primary focus:border-accent-primary focus:outline-none transition-all bg-bg-elevated"
                             onClick={() => handleSelect(source.id)}
                           >
-                            <div class="aspect-video bg-background-dark">
+                            <div class="aspect-video bg-bg-subtle">
                               <img
                                 src={source.thumbnail}
                                 alt={source.name}
                                 class="w-full h-full object-contain"
                               />
                             </div>
-                            <div class="p-2 bg-card flex items-center gap-2">
+                            <div class="p-2 bg-bg-elevated flex items-center gap-2">
                               <Show when={source.appIcon}>
                                 <img
                                   src={source.appIcon!}
@@ -114,11 +114,11 @@ export const DevicePickerProvider: Component<{ children: JSX.Element }> = (props
                                   class="w-4 h-4 flex-shrink-0"
                                 />
                               </Show>
-                              <p class="text-sm text-foreground truncate">
+                              <p class="text-sm text-fg-base truncate">
                                 {source.name || 'Window'}
                               </p>
                             </div>
-                            <div class="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div class="absolute inset-0 bg-accent-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
                         )}
                       </For>
@@ -128,12 +128,12 @@ export const DevicePickerProvider: Component<{ children: JSX.Element }> = (props
 
                 <Show when={sources()?.length === 0}>
                   <div class="text-center py-12">
-                    <p class="text-muted-foreground">No screens or windows available</p>
+                    <p class="text-fg-muted">No screens or windows available</p>
                   </div>
                 </Show>
               </div>
 
-              <div class="p-4 border-t border-border flex justify-end">
+              <div class="p-4 border-t border-border-base flex justify-end">
                 <Button variant="secondary" size="sm" onClick={handleCancel}>
                   Cancel
                 </Button>

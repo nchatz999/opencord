@@ -33,11 +33,11 @@ const Button: Component<ButtonProps> = (props) => {
     "font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
 
   const variantStyles = {
-    primary: "bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring",
-    secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover focus:ring-secondary",
-    ghost: "bg-transparent text-foreground hover:bg-secondary hover:text-foreground-bright focus:ring-secondary",
-    destructive: "bg-destructive text-destructive-foreground hover:bg-destructive-hover focus:ring-destructive",
-    success: "bg-action-positive text-primary-foreground hover:bg-action-positive-hover focus:ring-action-positive",
+    primary: "bg-accent-primary text-accent-primary-fg hover:bg-accent-primary-hover focus:ring-focus-ring",
+    secondary: "bg-accent-secondary text-accent-secondary-fg hover:bg-accent-secondary-hover focus:ring-focus-ring",
+    ghost: "bg-transparent text-fg-base hover:bg-accent-secondary hover:text-fg-emphasis focus:ring-focus-ring",
+    destructive: "bg-status-danger text-status-danger-fg hover:bg-status-danger-hover focus:ring-status-danger",
+    success: "bg-status-success text-accent-primary-fg hover:bg-status-success-hover focus:ring-status-success",
   };
 
   const sizeStyles = {

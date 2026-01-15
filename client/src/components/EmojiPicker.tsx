@@ -110,16 +110,16 @@ const EmojiPicker: Component<EmojiPickerProps> = (props) => {
         <Portal>
           <div
             ref={dropdownRef}
-            class="fixed w-80 bg-popover rounded-lg border border-border shadow-lg overflow-hidden z-[9999]"
+            class="fixed w-80 bg-bg-overlay rounded-lg border border-border-base shadow-lg overflow-hidden z-[9999]"
             style={{ top: `${position().top}px`, left: `${position().left}px` }}
           >
-            <div class="p-2 border-b border-border">
+            <div class="p-2 border-b border-border-base">
               <input
                 type="text"
                 value={search()}
                 onInput={(e) => setSearch(e.currentTarget.value)}
                 placeholder="Search emojis..."
-                class="w-full px-3 py-2 bg-input text-foreground text-sm rounded focus:outline-none focus:ring-2 focus:ring-ring placeholder-muted-foreground-dark"
+                class="w-full px-3 py-2 bg-input text-fg-base text-sm rounded focus:outline-none focus:ring-2 focus:ring-focus-ring placeholder:text-fg-subtle"
               />
             </div>
 
@@ -128,7 +128,7 @@ const EmojiPicker: Component<EmojiPickerProps> = (props) => {
                 {(category) => (
                   <Show when={filteredCategories()[category]?.length > 0}>
                     <div class="mb-3">
-                      <h3 class="text-xs font-medium text-muted-foreground mb-2 bg-popover py-1">
+                      <h3 class="text-xs font-medium text-fg-muted mb-2 bg-bg-overlay py-1">
                         {category}
                       </h3>
                       <div class="grid grid-cols-8 gap-1">
@@ -136,7 +136,7 @@ const EmojiPicker: Component<EmojiPickerProps> = (props) => {
                           {(emoji) => (
                             <button
                               onClick={() => handleSelect(emoji)}
-                              class="w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-muted transition-colors"
+                              class="w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-bg-overlay transition-colors"
                             >
                               {emoji}
                             </button>
