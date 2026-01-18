@@ -1,5 +1,5 @@
 import type { Component } from "solid-js";
-import { Show } from "solid-js";
+import { Show, createSignal } from "solid-js";
 import { Hash, Settings, UsersIcon } from "lucide-solid";
 import { useGroup, useModal, useUser, useServer, useAuth, useContext, useNotification } from "../store/index";
 import { ChannelBrowser } from "../features/channel/ChannelBrowser";
@@ -18,6 +18,7 @@ const LeftPanel: Component = () => {
     const [, contextActions] = useContext();
     const notification = useNotification();
 
+    const [activeTab, setActiveTab] = createSignal("channels");
     const user = () => authActions.getUser();
     const serverConfig = () => serverActions.get();
     const tabItems = () => [
@@ -110,7 +111,8 @@ const LeftPanel: Component = () => {
             <div class="flex-1 flex flex-col min-h-0">
                 <Tabs
                     items={tabItems()}
-                    defaultActiveTab="channels"
+                    value={activeTab()}
+                    onChange={setActiveTab}
                     class="flex flex-col h-full"
                 />
             </div>

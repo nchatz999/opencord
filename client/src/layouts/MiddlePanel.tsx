@@ -9,7 +9,7 @@ import { Tabs } from "../components/Tabs";
 import MessageNotification from "../components/MessageNotification";
 
 const MiddlePanel: Component = () => {
-    const [contextState] = useContext();
+    const [contextState, contextActions] = useContext();
 
     const tabItems = createMemo(() => {
         const items = [
@@ -41,7 +41,7 @@ const MiddlePanel: Component = () => {
 
     return (
         <div class="flex-1 flex flex-col bg-bg-base h-full overflow-hidden relative">
-            <Tabs items={tabItems()} defaultActiveTab="chat" class="h-full" />
+            <Tabs items={tabItems()} value={contextState.activeTab} onChange={contextActions.setActiveTab} class="h-full" />
             <MessageNotification />
         </div>
     );

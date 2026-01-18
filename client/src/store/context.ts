@@ -9,9 +9,12 @@ interface MessageContext {
     id: number;
 }
 
+type MiddlePanelTab = "chat" | "streams";
+
 interface ContextState {
     context: MessageContext | null;
     replyingToMessageId: number | null;
+    activeTab: MiddlePanelTab;
 }
 
 interface ContextActions {
@@ -30,6 +33,9 @@ interface ContextActions {
     setReplyingTo: (messageId: number | null) => void;
     getReplyingTo: () => number | null;
 
+    setActiveTab: (tab: MiddlePanelTab) => void;
+    getActiveTab: () => MiddlePanelTab;
+
     cleanup: () => void;
 }
 
@@ -43,6 +49,7 @@ function createContextStore(): ContextStore {
     const [state, setState] = createStore<ContextState>({
         context: null,
         replyingToMessageId: null,
+        activeTab: "chat",
     });
 
     const scrollPositions = new Map<ContextKey, number>();
@@ -55,6 +62,7 @@ function createContextStore(): ContextStore {
 
         set(ctx) {
             setState("context", ctx);
+            setState("activeTab", "chat");
         },
 
         clear() {
@@ -96,9 +104,18 @@ function createContextStore(): ContextStore {
             return state.replyingToMessageId;
         },
 
+        setActiveTab(tab) {
+            setState("activeTab", tab);
+        },
+
+        getActiveTab() {
+            return state.activeTab;
+        },
+
         cleanup() {
             setState("context", null);
             setState("replyingToMessageId", null);
+            setState("activeTab", "chat");
             scrollPositions.clear();
             visitedContexts.clear();
         },

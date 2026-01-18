@@ -51,6 +51,7 @@ const ServerSettingsModal: Component = () => {
     const [logsLoading, setLogsLoading] = createSignal(false)
     const [logCategoryFilter, setLogCategoryFilter] = createSignal<string>('')
     const [logSearchTerm, setLogSearchTerm] = createSignal('')
+    const [activeTab, setActiveTab] = createSignal("general")
 
     const { addToast } = useToaster()
     const confirm = useConfirm()
@@ -631,7 +632,7 @@ const ServerSettingsModal: Component = () => {
                         <X class="w-6 h-6" />
                     </Button>
                 </div>
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
             </div>
         </div>
     )

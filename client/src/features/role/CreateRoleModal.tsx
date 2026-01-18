@@ -20,6 +20,7 @@ const CreateRoleModal: Component = () => {
 
     const [name, setName] = createSignal("");
     const [groupRights, setGroupRights] = createSignal<Record<number, number>>({});
+    const [activeTab, setActiveTab] = createSignal("general");
 
     const tabItems = createMemo(() => [
         {
@@ -126,7 +127,7 @@ const CreateRoleModal: Component = () => {
                     </Button>
                 </div>
 
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
 
                 <div class="mt-6 flex justify-end gap-2">
                     <Button onClick={() => modalActions.close()} variant="secondary">

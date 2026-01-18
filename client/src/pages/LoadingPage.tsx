@@ -72,7 +72,7 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
                         "animation-iteration-count": "infinite",
                     }}
                 />
-                <div class="text-fg-subtle text-sm font-medium">Connecting...</div>
+                <div class="text-fg-muted text-sm font-medium">Connecting...</div>
             </div>
         </div>
     );

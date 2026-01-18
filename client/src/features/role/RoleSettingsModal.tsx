@@ -28,6 +28,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
 
     const [name, setName] = createSignal(props.role.roleName);
     const [searchTerm, setSearchTerm] = createSignal("");
+    const [activeTab, setActiveTab] = createSignal("general");
 
     const [groupRights] = createSignal<Record<number, number>>(
         Object.fromEntries(
@@ -179,7 +180,7 @@ export const RoleSettingsModal: Component<RoleSettingsModalProps> = (props) => {
                     </Button>
                 </div>
 
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
 
                 <div class="mt-6 flex justify-between items-center">
                     <Button onClick={handleDelete} variant="destructive">

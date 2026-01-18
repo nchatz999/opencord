@@ -24,6 +24,7 @@ const CreateChannelModal: Component = () => {
     const [group, setGroup] = createSignal<number | null>(null);
     const [type, setType] = createSignal<ChannelType>(ChannelType.Text);
     const [roleRights, setRoleRights] = createSignal<Record<number, number>>({});
+    const [activeTab, setActiveTab] = createSignal("general");
 
     createEffect(() => {
         const groupId = group();
@@ -152,7 +153,7 @@ const CreateChannelModal: Component = () => {
                     </Button>
                 </div>
 
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
 
                 <div class="mt-6 flex justify-end gap-2">
                     <Button onClick={() => modalActions.close()} variant="secondary">

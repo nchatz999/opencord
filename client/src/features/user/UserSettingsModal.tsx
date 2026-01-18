@@ -61,6 +61,7 @@ const UserSettingsModal: Component = () => {
     const [sessions, setSessions] = createSignal<Session[]>([]);
 
     const { addToast } = useToaster();
+    const [activeTab, setActiveTab] = createSignal("account");
 
     const statusOptions = [
         { value: UserStatusType.Online, label: 'Online', color: 'text-presence-online' },
@@ -503,7 +504,7 @@ const UserSettingsModal: Component = () => {
                         <X class="w-6 h-6" />
                     </Button>
                 </div>
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
                 <div class="mt-6 flex justify-end gap-2">
                     <Button onClick={async () => {
                         await authActions.logout();

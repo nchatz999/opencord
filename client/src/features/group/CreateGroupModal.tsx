@@ -19,6 +19,7 @@ const CreateGroupModal: Component = () => {
     const { addToast } = useToaster();
 
     const [name, setName] = createSignal("");
+    const [activeTab, setActiveTab] = createSignal("general");
     const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
         Object.fromEntries(
             roleActions.list()
@@ -132,7 +133,7 @@ const CreateGroupModal: Component = () => {
                     </Button>
                 </div>
 
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
 
                 <div class="mt-6 flex justify-end gap-2">
                     <Button onClick={() => modalActions.close()} variant="secondary">

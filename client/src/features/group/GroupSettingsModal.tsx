@@ -25,6 +25,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
     const confirm = useConfirm();
 
     const [name, setName] = createSignal(props.group.groupName);
+    const [activeTab, setActiveTab] = createSignal("general");
     const [roleRights, setRoleRights] = createSignal<Record<number, number>>(
         Object.fromEntries(
             roleActions.list()
@@ -159,7 +160,7 @@ const GroupSettingsModal: Component<GroupSettingsProps> = (props) => {
                     </Button>
                 </div>
 
-                <Tabs items={tabItems()} />
+                <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
 
                 <div class="mt-6 flex justify-between items-center">
                     <Button onClick={handleDelete} variant="destructive">
