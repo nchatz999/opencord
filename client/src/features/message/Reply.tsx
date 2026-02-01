@@ -14,7 +14,7 @@ const Reply: Component<ReplyProps> = (props) => {
 
     const [isLoading, setIsLoading] = createSignal(false);
 
-    const isDeleted = () => props.messageId === -1;
+    const isDeleted = () => props.messageId == null;
     const message = createMemo(() => messageActions.findById(props.messageId));
     const author = createMemo(() => {
         const msg = message();

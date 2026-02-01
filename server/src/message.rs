@@ -46,6 +46,7 @@ pub struct Message {
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::iso8601::option")]
     pub modified_at: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to_message_id: Option<i64>,
 }
 
@@ -1074,10 +1075,9 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "reply_to_message_id" => DomainError::BadRequest(format!(
-                        "Reply message {} not found",
-                        reply_to_message_id.unwrap_or(-1)
-                    )),
+                    "reply_to_message_id" => DomainError::BadRequest(
+                        "Reply message not found".to_string()
+                    ),
                     "channel_id" => {
                         DomainError::BadRequest(format!("Channel {} not found", channel_id))
                     }
@@ -1140,10 +1140,9 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
             .await
             .map_err(|e| match &e {
                 DatabaseError::ForeignKeyViolation { column } => match column.as_str() {
-                    "reply_to_message_id" => DomainError::BadRequest(format!(
-                        "Reply message {} not found",
-                        reply_to_message_id.unwrap_or(-1)
-                    )),
+                    "reply_to_message_id" => DomainError::BadRequest(
+                        "Reply message not found".to_string()
+                    ),
                     "recipient_id" => {
                         DomainError::BadRequest(format!("Recipient {} not found", recipient_id))
                     }

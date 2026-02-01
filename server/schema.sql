@@ -103,18 +103,14 @@ CREATE TABLE messages (
     CHECK ( (channel_id IS NOT NULL AND recipient_id IS NULL) OR (channel_id IS NULL AND recipient_id IS NOT NULL) )
 );
 
--- Trigger to set reply_to_message_id to -1 when referenced message is deleted
-CREATE OR REPLACE FUNCTION set_reply_deleted() RETURNS TRIGGER AS $$
-BEGIN
-    UPDATE messages SET reply_to_message_id = -1 WHERE reply_to_message_id = OLD.id;
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER before_message_delete
-    BEFORE DELETE ON messages
-    FOR EACH ROW
-    EXECUTE FUNCTION set_reply_deleted();
+-- Self-referencing foreign key for reply chains
+-- Automatically sets reply_to_message_id to NULL when parent is deleted
+-- No trigger needed, handled natively by PostgreSQL
+ALTER TABLE messages 
+ADD CONSTRAINT fk_reply_to_message 
+FOREIGN KEY (reply_to_message_id) 
+REFERENCES messages(id) 
+ON DELETE SET NULL;
 
 -- Files table - stores all file attachments
 CREATE TABLE files (

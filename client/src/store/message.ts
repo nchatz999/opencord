@@ -45,7 +45,7 @@ interface MessageActions {
         contextId: number,
         text: string | undefined,
         files?: File[],
-        replyToMessageId?: number | null,
+        replyToMessageId?: number | undefined,
         onProgress?: (percent: number) => void,
         signal?: AbortSignal
     ) => Promise<Result<void, string>>;
@@ -86,7 +86,7 @@ function createMessageStore(): MessageStore {
                         recipientId,
                         messageText,
                         createdAt: timestamp,
-                        modifiedAt: null,
+                        modifiedAt: undefined,
                         replyToMessageId,
                     });
 
@@ -204,7 +204,7 @@ function createMessageStore(): MessageStore {
             setState("messages", (msgs) =>
                 msgs.map((m) =>
                     m.replyToMessageId === deletedMessageId
-                        ? { ...m, replyToMessageId: -1 }
+                        ? { ...m, replyToMessageId: undefined }
                         : m
                 )
             );
@@ -270,7 +270,7 @@ function createMessageStore(): MessageStore {
             return ok(result.value.messages);
         },
 
-        async send(contextType, contextId, text, files = [], replyToMessageId = null, onProgress, signal) {
+        async send(contextType, contextId, text, files = [], replyToMessageId = undefined, onProgress, signal) {
             const endpoint =
                 contextType === "dm"
                     ? `/message/dm/${contextId}/messages`

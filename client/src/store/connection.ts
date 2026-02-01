@@ -51,7 +51,7 @@ export type EventPayload =
         senderId: number;
         messageType: string;
         messageText: string | null;
-        replyToMessageId: number | null;
+        replyToMessageId: number | undefined;
         timestamp: string;
         files: File[];
     }
