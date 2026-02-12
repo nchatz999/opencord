@@ -8,7 +8,7 @@ import type { User, Session } from "../model";
 import { useUser } from "./user";
 import { useConnection } from "./connection";
 import { useApp } from "./app";
-import { clearImageCache } from "../components/Image";
+import { clearImageCache } from "../components/ImagePreview";
 
 interface AuthSession {
     userId: number;

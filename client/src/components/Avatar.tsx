@@ -1,7 +1,7 @@
 import { Show, type Component } from "solid-js";
 import { User } from "lucide-solid";
 import { cn } from "../utils";
-import Image from "./Image";
+import ImagePreview from "./ImagePreview";
 
 type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -46,7 +46,7 @@ const Avatar: Component<AvatarProps> = (props) => {
         </div>
       }
     >
-      <Image
+      <ImagePreview
         src={`/user/${props.avatarFileId}/avatar`}
         alt={props.alt ?? "Avatar"}
         class={cn(

@@ -1,7 +1,9 @@
 import type { Component } from "solid-js";
 import type { File } from "../../model";
 import { useFile } from "../../store/index";
-import Image from "../../components/Image";
+import ImagePreview from "../../components/ImagePreview";
+import VideoPreview from "../../components/VideoPreview";
+import SoundPreview from "../../components/SoundPreview";
 
 interface FileProps {
     file: File;
@@ -30,11 +32,18 @@ const FileItem: Component<FileProps> = (props) => {
     return (
         <div>
             {props.file.fileType.startsWith("image/") ? (
-                <Image
+                <ImagePreview
                     class="rounded-lg max-w-sm max-h-96 object-contain"
                     src={`/message/files/${props.file.fileId}`}
                     alt="File preview"
                     expandable
+                />
+            ) : props.file.fileType.startsWith("video/") ? (
+                <VideoPreview src={`/message/files/${props.file.fileId}`} />
+            ) : props.file.fileType.startsWith("audio/") ? (
+                <SoundPreview
+                    src={`/message/files/${props.file.fileId}`}
+                    fileName={props.file.fileName}
                 />
             ) : (
                 <div class="bg-bg-subtle p-4 mt-2 rounded-xl">

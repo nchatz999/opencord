@@ -5,12 +5,12 @@ import { getSessionToken, cn } from '../utils';
 
 const cache = new Map<string, string>();
 
-interface ImageProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement>, 'onLoad'> {
+interface ImagePreviewProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement>, 'onLoad'> {
   onLoad?: () => void;
   expandable?: boolean;
 }
 
-const Image: Component<ImageProps> = (props) => {
+const ImagePreview: Component<ImagePreviewProps> = (props) => {
   const [local, rest] = splitProps(props, ['src', 'onLoad', 'expandable', 'class']);
   const [url, setUrl] = createSignal<string | undefined>(undefined);
   const [expanded, setExpanded] = createSignal(false);
@@ -72,4 +72,4 @@ export function clearImageCache(): void {
   cache.clear();
 }
 
-export default Image;
+export default ImagePreview;

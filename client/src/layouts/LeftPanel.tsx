@@ -7,7 +7,7 @@ import { UserBrowser } from "../features/user/UserBrowser";
 import { Tabs } from "../components/Tabs";
 import IncomingCallsPanel from "../features/voip/IncomingCallsPanel";
 import UserPanel from "../features/user/UserPanel";
-import Image from "../components/Image";
+import ImagePreview from "../components/ImagePreview";
 
 const LeftPanel: Component = () => {
     const [, groupActions] = useGroup();
@@ -80,7 +80,7 @@ const LeftPanel: Component = () => {
                                     }
                                 >
                                     {(avatarId) => (
-                                        <Image
+                                        <ImagePreview
                                             src={`/server/avatar/${avatarId()}`}
                                             alt="Server avatar"
                                             class="w-7 h-7 rounded-full object-cover"
