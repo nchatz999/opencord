@@ -4,8 +4,8 @@ import { useApp } from "../store/app";
 import { useLiveKit } from "../lib/livekit";
 import logo from "../assets/opencord.webp";
 
-const MAX_RETRIES = 5;
-const RETRY_DELAY = 500;
+const MAX_RETRIES = 20;
+const RETRY_DELAY = 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface LoadingPageProps {
