@@ -64,7 +64,7 @@ impl ServerRepository for Postgre {
             Session,
             r#"SELECT * FROM sessions
                WHERE session_token = $1
-               AND (expires_at IS NULL OR expires_at > NOW())"#,
+               AND expires_at > NOW()"#,
             session_token
         )
         .fetch_optional(&self.pool)
@@ -300,17 +300,21 @@ async fn handle_socket<L: LogManager>(mut socket: WebSocket, state: WebSocketSta
     use crate::subscriber_session::SubscriberSession;
     use axum::extract::ws::Message;
 
+    use crate::transport::ConnectionMessage;
+
     let session = match state.session_service.authenticate_session(&token).await {
         Ok(Some(session)) => session,
         _ => {
-            let close_frame = CloseFrame {
-                code: CLOSE_CODE_AUTH_FAILED,
-                reason: "Authentication failed".into(),
-            };
-            let _ = socket.send(Message::Close(Some(close_frame))).await;
+            let answer = rmp_serde::to_vec_named(&ConnectionMessage::Answer { ok: false })
+                .expect("serialization");
+            let _ = socket.send(Message::Binary(answer.into())).await;
             return;
         }
     };
+
+    let answer =
+        rmp_serde::to_vec_named(&ConnectionMessage::Answer { ok: true }).expect("serialization");
+    let _ = socket.send(Message::Binary(answer.into())).await;
 
     let identifier = Uuid::new_v4().to_string();
     let mut subscriber_session = SubscriberSession::new(
@@ -509,6 +513,9 @@ impl<L: LogManager + 'static> RealtimeServer<L> {
         }
         self.observers
             .retain(|subscriber| subscriber.user_id() != user_id);
+        self.handle_user_status_update(user_id, UserStatusType::Offline)
+            .await?;
+        self.handle_voip_participant_removal(user_id).await?;
         Ok(())
     }
 

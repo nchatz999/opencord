@@ -49,7 +49,7 @@ export type EventPayload =
         type: "messageCreated";
         messageId: number;
         senderId: number;
-        messageType: string;
+        messageType: { type: "Channel"; channel_id: number } | { type: "Direct"; recipient_id: number };
         messageText: string | null;
         replyToMessageId: number | undefined;
         timestamp: string;
@@ -73,6 +73,7 @@ export type EventPayload =
     | { type: "speakStatusUpdated"; userId: number; speaking: boolean };
 
 type ConnectionMessage =
+    | { type: "answer"; ok: boolean }
     | { type: "ping"; timestamp: number }
     | { type: "pong"; timestamp: number }
     | { type: "event"; payload: EventPayload };
@@ -148,6 +149,19 @@ function createConnectionStore(): ConnectionActions {
         const message = decode(data) as ConnectionMessage;
 
         switch (message.type) {
+            case "answer":
+                if (connectResolve) {
+                    if (message.ok) {
+                        startPingPong();
+                        connectResolve(ok(undefined));
+                    } else {
+                        connectResolve(err({ type: "authFailed" }));
+                        disconnect();
+                    }
+                    connectResolve = null;
+                }
+                break;
+
             case "ping":
                 if (socket && socket.readyState === WebSocket.OPEN) {
                     socket.send(encode({ type: "pong", timestamp: message.timestamp }));
@@ -167,14 +181,6 @@ function createConnectionStore(): ConnectionActions {
             case "event":
                 notifyServerEvent(message.payload);
                 break;
-        }
-    }
-
-    function handleOpen() {
-        startPingPong();
-        if (connectResolve) {
-            connectResolve(ok(undefined));
-            connectResolve = null;
         }
     }
 
@@ -231,7 +237,6 @@ function createConnectionStore(): ConnectionActions {
                 const wsUrl = `${getWsUrl()}/ws?token=${encodeURIComponent(token)}`;
                 socket = new WebSocket(wsUrl);
                 socket.binaryType = "arraybuffer";
-                socket.onopen = handleOpen;
                 socket.onmessage = (event) => handleMessage(event.data);
                 socket.onclose = handleClose;
 

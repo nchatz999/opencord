@@ -56,7 +56,7 @@ impl SessionRepository for Postgre {
             Session,
             r#"SELECT * FROM sessions
                WHERE session_token = $1
-               AND (expires_at IS NULL OR expires_at > NOW())"#,
+               AND expires_at > NOW()"#,
             session_token
         )
         .fetch_optional(&self.pool)
@@ -237,6 +237,7 @@ impl<R: SessionRepository, L: LogManager> SubscriberSession<R, L> {
                 self.pending_pings.retain(|p| p.timestamp != timestamp);
                 self.missed_pongs = 0;
             }
+            ConnectionMessage::Answer { .. } => {}
             ConnectionMessage::Event { payload } => {
                 if let EventPayload::SpeakStatusUpdated { user_id, speaking } = payload {
                     if user_id == self.session.user_id {

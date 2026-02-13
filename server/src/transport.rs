@@ -69,6 +69,7 @@ pub enum SubscriberMessage {
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectionMessage {
+    Answer { ok: bool },
     Ping { timestamp: u64 },
     Pong { timestamp: u64 },
     Event { payload: EventPayload },
