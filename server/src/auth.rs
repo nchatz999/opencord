@@ -46,8 +46,8 @@ pub struct Session {
     pub user_id: i64,
     #[serde(with = "time::serde::iso8601")]
     pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::iso8601::option")]
-    pub expires_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::iso8601")]
+    pub expires_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -119,7 +119,7 @@ pub trait AuthTransaction: Send + Sync {
         &mut self,
         session_token: &str,
         user_id: i64,
-        expires_at: Option<OffsetDateTime>,
+        expires_at: OffsetDateTime,
     ) -> Result<Session, DatabaseError>;
 
     async fn create_user_with_role(
@@ -139,6 +139,11 @@ pub trait AuthTransaction: Send + Sync {
         session_token: &str,
         user_id: i64,
     ) -> Result<Option<Session>, DatabaseError>;
+
+    async fn invalidate_sessions(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Vec<String>, DatabaseError>;
 
     async fn create_invite(
         &mut self,
@@ -210,7 +215,7 @@ impl AuthTransaction for PgAuthTransaction {
         &mut self,
         session_token: &str,
         user_id: i64,
-        expires_at: Option<OffsetDateTime>,
+        expires_at: OffsetDateTime,
     ) -> Result<Session, DatabaseError> {
         let result = sqlx::query_as!(
             Session,
@@ -303,6 +308,17 @@ impl AuthTransaction for PgAuthTransaction {
         .await?;
 
         Ok(result)
+    }
+
+    async fn invalidate_sessions(&mut self, user_id: i64) -> Result<Vec<String>, DatabaseError> {
+        let tokens = sqlx::query_scalar!(
+            r#"DELETE FROM sessions WHERE user_id = $1 RETURNING session_token"#,
+            user_id
+        )
+        .fetch_all(&mut *self.transaction)
+        .await?;
+
+        Ok(tokens)
     }
 
     async fn create_invite(
@@ -671,7 +687,7 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
         self.lockout_manager.record_successful_login(username);
 
         let session_token = Uuid::new_v4().to_string();
-        let expires_at = Some(OffsetDateTime::now_utc() + Duration::days(30));
+        let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
 
         let session = tx
             .create_session(&session_token, auth.user_id, expires_at)
@@ -733,14 +749,23 @@ impl<R: AuthRepository, L: LockoutManager, P: PasswordValidator, N: NotifierMana
                 user_id
             )))?;
 
+        let invalidated_count = tx.invalidate_sessions(user_id).await?.len();
+
         self.repository.commit(tx).await?;
+
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Command(
+                crate::transport::CommandPayload::DisconnectUser(user_id),
+            ))
+            .await;
 
         let _ = self
             .logger
             .log_entry(
                 format!(
-                    "Password changed: user_id={}, session_id={}",
-                    user_id, session_id
+                    "Password changed: user_id={}, session_id={}, sessions_invalidated={}",
+                    user_id, session_id, invalidated_count
                 ),
                 "auth".to_string(),
             )
@@ -948,8 +973,8 @@ pub struct RegisterResponse {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct LoginResponse {
     pub session_token: String,
-    #[serde(with = "time::serde::iso8601::option")]
-    pub expires_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::iso8601")]
+    pub expires_at: OffsetDateTime,
     pub user_id: i64,
 }
 

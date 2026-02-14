@@ -26,71 +26,58 @@ export interface MediaDevice {
     label: string;
 }
 
-export type CameraQuality = "720p30" | "720p60" | "1080p30" | "1080p60";
-export type ScreenQuality = "480p30" | "480p60" | "720p30" | "720p60" | "1080p30" | "1080p60" | "1440p30" | "1440p60" | "4k30" | "4k60";
+export type CameraResolution = "720p" | "1080p";
+export type ScreenResolution = "480p" | "720p" | "1080p" | "1440p" | "4k";
+export type FrameRate = 30 | 60;
 
-interface QualityOption<T> {
+interface Option<T> {
     value: T;
     label: string;
 }
 
-const CAMERA_PRESETS: Record<CameraQuality, VideoPreset> = {
-    "720p30": new VideoPreset(1280, 720, 1_500_000, 30),
-    "720p60": new VideoPreset(1280, 720, 2_500_000, 60),
-    "1080p30": new VideoPreset(1920, 1080, 3_000_000, 30),
-    "1080p60": new VideoPreset(1920, 1080, 5_000_000, 60),
-};
+const CAMERA_RESOLUTION = {
+    "720p":  { width: 1280, height: 720,  bitrate: 2_000_000 },
+    "1080p": { width: 1920, height: 1080, bitrate: 4_000_000 },
+} as const;
 
-const SCREEN_PRESETS: Record<ScreenQuality, VideoPreset> = {
-    "480p30": new VideoPreset(854, 480, 2_000_000, 30),
-    "480p60": new VideoPreset(854, 480, 3_000_000, 60),
-    "720p30": new VideoPreset(1280, 720, 4_000_000, 30),
-    "720p60": new VideoPreset(1280, 720, 6_000_000, 60),
-    "1080p30": new VideoPreset(1920, 1080, 8_000_000, 30),
-    "1080p60": new VideoPreset(1920, 1080, 12_000_000, 60),
-    "1440p30": new VideoPreset(2560, 1440, 12_000_000, 30),
-    "1440p60": new VideoPreset(2560, 1440, 18_000_000, 60),
-    "4k30": new VideoPreset(3840, 2160, 20_000_000, 30),
-    "4k60": new VideoPreset(3840, 2160, 30_000_000, 60),
-};
+const SCREEN_RESOLUTION = {
+    "480p":  { width: 854,  height: 480,  bitrate: 2_500_000 },
+    "720p":  { width: 1280, height: 720,  bitrate: 5_000_000 },
+    "1080p": { width: 1920, height: 1080, bitrate: 10_000_000 },
+    "1440p": { width: 2560, height: 1440, bitrate: 15_000_000 },
+    "4k":    { width: 3840, height: 2160, bitrate: 25_000_000 },
+} as const;
 
-const CAMERA_QUALITY_OPTIONS: QualityOption<CameraQuality>[] = [
-    { value: "720p30", label: "720p 30fps" },
-    { value: "720p60", label: "720p 60fps" },
-    { value: "1080p30", label: "1080p 30fps" },
-    { value: "1080p60", label: "1080p 60fps" },
+const CAMERA_RESOLUTION_OPTIONS: Option<CameraResolution>[] = [
+    { value: "720p", label: "720p" },
+    { value: "1080p", label: "1080p" },
 ];
 
-const SCREEN_QUALITY_OPTIONS: QualityOption<ScreenQuality>[] = [
-    { value: "480p30", label: "480p 30fps" },
-    { value: "480p60", label: "480p 60fps" },
-    { value: "720p30", label: "720p 30fps" },
-    { value: "720p60", label: "720p 60fps" },
-    { value: "1080p30", label: "1080p 30fps" },
-    { value: "1080p60", label: "1080p 60fps" },
-    { value: "1440p30", label: "1440p 30fps" },
-    { value: "1440p60", label: "1440p 60fps" },
-    { value: "4k30", label: "4K 30fps" },
-    { value: "4k60", label: "4K 60fps" },
+const SCREEN_RESOLUTION_OPTIONS: Option<ScreenResolution>[] = [
+    { value: "480p", label: "480p" },
+    { value: "720p", label: "720p" },
+    { value: "1080p", label: "1080p" },
+    { value: "1440p", label: "1440p" },
+    { value: "4k", label: "4K" },
 ];
 
-const SCREEN_CODEC_OPTIONS: QualityOption<ScreenCodec>[] = [
+const FRAME_RATE_OPTIONS: Option<FrameRate>[] = [
+    { value: 30, label: "30 fps" },
+    { value: 60, label: "60 fps" },
+];
+
+const SCREEN_CODEC_OPTIONS: Option<ScreenCodec>[] = [
     { value: "h264", label: "H.264" },
     { value: "vp9", label: "VP9" },
 ];
 
-const SCREEN_CONTENT_HINT_OPTIONS: QualityOption<ScreenContentHint>[] = [
+const SCREEN_CONTENT_HINT_OPTIONS: Option<ScreenContentHint>[] = [
     { value: "motion", label: "Motion (Gaming)" },
     { value: "detail", label: "Detail (Text)" },
 ];
 
 const ALL_SOURCES = [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare, Track.Source.ScreenShareAudio];
 const DEFAULT_VOLUME = 100;
-
-const getSimulcastLayers = (preset: VideoPreset): VideoPreset[] => [
-    new VideoPreset(preset.width / 4, preset.height / 4, preset.encoding.maxBitrate / 6, 15),
-    new VideoPreset(preset.width / 2, preset.height / 2, preset.encoding.maxBitrate / 3, 30),
-];
 
 type TrackKey = `${number}:${Track.Source}`;
 type AudioSource = Track.Source.Microphone | Track.Source.ScreenShareAudio;
@@ -118,8 +105,10 @@ interface LiveKitState {
     outputDevices: MediaDevice[];
     activeInput: string;
     activeOutput: string;
-    cameraQuality: CameraQuality;
-    screenQuality: ScreenQuality;
+    cameraResolution: CameraResolution;
+    cameraFps: FrameRate;
+    screenResolution: ScreenResolution;
+    screenFps: FrameRate;
     screenCodec: ScreenCodec;
     screenContentHint: ScreenContentHint;
     muted: boolean;
@@ -150,18 +139,23 @@ interface LiveKitActions {
     getVolume: (userId: number) => number;
     setScreenVolume: (userId: number, volume: number) => void;
     getScreenVolume: (userId: number) => number | undefined;
-    getCameraQuality: () => CameraQuality;
-    setCameraQuality: (quality: CameraQuality) => void;
-    getCameraQualityOptions: () => QualityOption<CameraQuality>[];
-    getScreenQuality: () => ScreenQuality;
-    setScreenQuality: (quality: ScreenQuality) => void;
-    getScreenQualityOptions: () => QualityOption<ScreenQuality>[];
+    getCameraResolution: () => CameraResolution;
+    setCameraResolution: (resolution: CameraResolution) => void;
+    getCameraResolutionOptions: () => Option<CameraResolution>[];
+    getCameraFps: () => FrameRate;
+    setCameraFps: (fps: FrameRate) => void;
+    getScreenResolution: () => ScreenResolution;
+    setScreenResolution: (resolution: ScreenResolution) => void;
+    getScreenResolutionOptions: () => Option<ScreenResolution>[];
+    getScreenFps: () => FrameRate;
+    setScreenFps: (fps: FrameRate) => void;
+    getFpsOptions: () => Option<FrameRate>[];
     getScreenCodec: () => ScreenCodec;
     setScreenCodec: (codec: ScreenCodec) => void;
-    getScreenCodecOptions: () => QualityOption<ScreenCodec>[];
+    getScreenCodecOptions: () => Option<ScreenCodec>[];
     getScreenContentHint: () => ScreenContentHint;
     setScreenContentHint: (hint: ScreenContentHint) => void;
-    getScreenContentHintOptions: () => QualityOption<ScreenContentHint>[];
+    getScreenContentHintOptions: () => Option<ScreenContentHint>[];
     getMuted: () => boolean;
     setMuted: (muted: boolean) => Promise<void>;
     getDeafened: () => boolean;
@@ -188,8 +182,10 @@ function createLiveKitStore(): LiveKitStore {
         outputDevices: [],
         activeInput: "",
         activeOutput: "",
-        cameraQuality: prefActions.get<CameraQuality>("cameraQuality") ?? "1080p30",
-        screenQuality: prefActions.get<ScreenQuality>("screenQuality") ?? "1080p30",
+        cameraResolution: prefActions.get<CameraResolution>("cameraResolution") ?? "1080p",
+        cameraFps: prefActions.get<FrameRate>("cameraFps") ?? 30,
+        screenResolution: prefActions.get<ScreenResolution>("screenResolution") ?? "1080p",
+        screenFps: prefActions.get<FrameRate>("screenFps") ?? 60,
         screenCodec: prefActions.get<ScreenCodec>("screenCodec") ?? "vp9",
         screenContentHint: prefActions.get<ScreenContentHint>("screenContentHint") ?? "motion",
         muted: false,
@@ -450,12 +446,18 @@ function createLiveKitStore(): LiveKitStore {
             if (!room?.localParticipant) return;
 
             if (enabled) {
-                const preset = CAMERA_PRESETS[state.cameraQuality];
+                const res = CAMERA_RESOLUTION[state.cameraResolution];
+                const fps = state.cameraFps;
+                const bitrate = fps === 60 ? res.bitrate * 1.5 : res.bitrate;
+
                 await room.localParticipant.setCameraEnabled(true, {
-                    resolution: { width: preset.width, height: preset.height, frameRate: preset.encoding.maxFramerate },
+                    resolution: { width: res.width, height: res.height, frameRate: fps },
                 }, {
-                    videoEncoding: preset.encoding,
-                    videoSimulcastLayers: getSimulcastLayers(preset),
+                    videoEncoding: { maxBitrate: bitrate, maxFramerate: fps },
+                    videoSimulcastLayers: [
+                        new VideoPreset(res.width / 4, res.height / 4, bitrate / 8, Math.min(fps, 15)),
+                        new VideoPreset(res.width / 2, res.height / 2, bitrate / 4, Math.min(fps, 30)),
+                    ],
                 });
             } else {
                 await room.localParticipant.setCameraEnabled(false);
@@ -466,7 +468,10 @@ function createLiveKitStore(): LiveKitStore {
             if (!room?.localParticipant) return;
 
             if (enabled) {
-                const preset = SCREEN_PRESETS[state.screenQuality];
+                const res = SCREEN_RESOLUTION[state.screenResolution];
+                const fps = state.screenFps;
+                const bitrate = fps === 60 ? res.bitrate * 1.5 : res.bitrate;
+
                 await room.localParticipant.setScreenShareEnabled(true, {
                     audio: {
                         echoCancellation: false,
@@ -474,12 +479,15 @@ function createLiveKitStore(): LiveKitStore {
                         autoGainControl: false,
                         channelCount: 2,
                     },
-                    resolution: { width: preset.width, height: preset.height, frameRate: preset.encoding.maxFramerate },
+                    resolution: { width: res.width, height: res.height, frameRate: fps },
                     contentHint: state.screenContentHint,
                 }, {
                     videoCodec: state.screenCodec,
-                    screenShareEncoding: preset.encoding,
-                    screenShareSimulcastLayers: getSimulcastLayers(preset),
+                    screenShareEncoding: { maxBitrate: bitrate, maxFramerate: fps },
+                    screenShareSimulcastLayers: [
+                        new VideoPreset(res.width / 4, res.height / 4, bitrate / 8, Math.min(fps, 15)),
+                        new VideoPreset(res.width / 2, res.height / 2, bitrate / 4, Math.min(fps, 30)),
+                    ],
                     degradationPreference: "maintain-framerate",
                 });
             } else {
@@ -533,13 +541,21 @@ function createLiveKitStore(): LiveKitStore {
             return playback.audio[toTrackKey(userId, Track.Source.ScreenShareAudio)]?.volume;
         },
 
-        getCameraQuality: () => state.cameraQuality,
-        setCameraQuality: (quality) => { setState("cameraQuality", quality); prefActions.set("cameraQuality", quality); },
-        getCameraQualityOptions: () => CAMERA_QUALITY_OPTIONS,
+        getCameraResolution: () => state.cameraResolution,
+        setCameraResolution: (resolution) => { setState("cameraResolution", resolution); prefActions.set("cameraResolution", resolution); },
+        getCameraResolutionOptions: () => CAMERA_RESOLUTION_OPTIONS,
 
-        getScreenQuality: () => state.screenQuality,
-        setScreenQuality: (quality) => { setState("screenQuality", quality); prefActions.set("screenQuality", quality); },
-        getScreenQualityOptions: () => SCREEN_QUALITY_OPTIONS,
+        getCameraFps: () => state.cameraFps,
+        setCameraFps: (fps) => { setState("cameraFps", fps); prefActions.set("cameraFps", fps); },
+
+        getScreenResolution: () => state.screenResolution,
+        setScreenResolution: (resolution) => { setState("screenResolution", resolution); prefActions.set("screenResolution", resolution); },
+        getScreenResolutionOptions: () => SCREEN_RESOLUTION_OPTIONS,
+
+        getScreenFps: () => state.screenFps,
+        setScreenFps: (fps) => { setState("screenFps", fps); prefActions.set("screenFps", fps); },
+
+        getFpsOptions: () => FRAME_RATE_OPTIONS,
 
         getScreenCodec: () => state.screenCodec,
         setScreenCodec: (codec) => { setState("screenCodec", codec); prefActions.set("screenCodec", codec); },

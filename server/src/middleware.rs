@@ -27,10 +27,8 @@ impl<T: AuthRepository> AuthorizeService<T> {
 
         match result {
             Some(session) => {
-                if let Some(expires_at) = session.expires_at {
-                    if expires_at < OffsetDateTime::now_utc() {
-                        return Err(StatusCode::UNAUTHORIZED);
-                    }
+                if session.expires_at < OffsetDateTime::now_utc() {
+                    return Err(StatusCode::UNAUTHORIZED);
                 }
                 Ok(session)
             }

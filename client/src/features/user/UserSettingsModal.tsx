@@ -23,7 +23,7 @@ import {
 } from "lucide-solid";
 import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
 import { useApp } from "../../store/app";
-import { useLiveKit, type CameraQuality, type ScreenQuality, type ScreenCodec, type ScreenContentHint } from "../../lib/livekit";
+import { useLiveKit, type CameraResolution, type ScreenResolution, type FrameRate, type ScreenCodec, type ScreenContentHint } from "../../lib/livekit";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
@@ -361,24 +361,42 @@ const UserSettingsModal: Component = () => {
             icon: <Settings class="w-4 h-4" />,
             content: (
                 <div class="space-y-4 mt-6">
-                    <Card title="Camera Quality" icon={<Settings class="w-4 h-4" />}>
-                        <Select
-                            label="Quality"
-                            options={livekitActions.getCameraQualityOptions()}
-                            value={livekitActions.getCameraQuality()}
-                            onChange={(value) => livekitActions.setCameraQuality(value as CameraQuality)}
-                            class="w-full"
-                        />
-                    </Card>
-                    <Card title="Screen Share Quality" icon={<Monitor class="w-4 h-4" />}>
-                        <div class="space-y-3">
+                    <Card title="Camera" icon={<Settings class="w-4 h-4" />}>
+                        <div class="flex gap-3">
                             <Select
-                                label="Quality"
-                                options={livekitActions.getScreenQualityOptions()}
-                                value={livekitActions.getScreenQuality()}
-                                onChange={(value) => livekitActions.setScreenQuality(value as ScreenQuality)}
-                                class="w-full"
+                                label="Resolution"
+                                options={livekitActions.getCameraResolutionOptions()}
+                                value={livekitActions.getCameraResolution()}
+                                onChange={(value) => livekitActions.setCameraResolution(value as CameraResolution)}
+                                class="flex-1"
                             />
+                            <Select
+                                label="Frame Rate"
+                                options={livekitActions.getFpsOptions()}
+                                value={livekitActions.getCameraFps()}
+                                onChange={(value) => livekitActions.setCameraFps(value as FrameRate)}
+                                class="flex-1"
+                            />
+                        </div>
+                    </Card>
+                    <Card title="Screen Share" icon={<Monitor class="w-4 h-4" />}>
+                        <div class="space-y-3">
+                            <div class="flex gap-3">
+                                <Select
+                                    label="Resolution"
+                                    options={livekitActions.getScreenResolutionOptions()}
+                                    value={livekitActions.getScreenResolution()}
+                                    onChange={(value) => livekitActions.setScreenResolution(value as ScreenResolution)}
+                                    class="flex-1"
+                                />
+                                <Select
+                                    label="Frame Rate"
+                                    options={livekitActions.getFpsOptions()}
+                                    value={livekitActions.getScreenFps()}
+                                    onChange={(value) => livekitActions.setScreenFps(value as FrameRate)}
+                                    class="flex-1"
+                                />
+                            </div>
                             <Select
                                 label="Codec"
                                 options={livekitActions.getScreenCodecOptions()}
@@ -454,12 +472,7 @@ const UserSettingsModal: Component = () => {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell class="text-fg-subtle text-sm">
-                                                    <Show
-                                                        when={session.expiresAt}
-                                                        fallback={<span class="text-fg-subtle">Never</span>}
-                                                    >
-                                                        {formatDate(session.expiresAt)}
-                                                    </Show>
+                                                    {formatDate(session.expiresAt)}
                                                 </TableCell>
                                                 <TableCell align="center">
                                                     <Button

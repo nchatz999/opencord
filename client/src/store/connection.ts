@@ -23,7 +23,6 @@ const MAX_MISSED_PONGS = 1;
 const CLOSE_CODE_NORMAL = 1000;
 const CLOSE_CODE_GOING_AWAY = 1001;
 const CLOSE_CODE_ABNORMAL = 1006;
-const CLOSE_CODE_AUTH_FAILED = 4001;
 const CLOSE_CODE_DISCONNECTED = 4002;
 
 
@@ -189,12 +188,6 @@ function createConnectionStore(): ConnectionActions {
 
         switch (event.code) {
             case CLOSE_CODE_NORMAL:
-                break;
-            case CLOSE_CODE_AUTH_FAILED:
-                if (connectResolve) {
-                    connectResolve(err({ type: "authFailed" }));
-                    connectResolve = null;
-                }
                 break;
             case CLOSE_CODE_DISCONNECTED:
                 if (connectResolve) {

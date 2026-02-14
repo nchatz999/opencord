@@ -86,7 +86,7 @@ function createAuthStore(): AuthStore {
 
             const result = await request<{
                 session_token: string;
-                expires_at?: string;
+                expires_at: string;
                 user_id: number;
             }>("/auth/login", {
                 method: "POST",

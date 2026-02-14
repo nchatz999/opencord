@@ -20,7 +20,6 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use uuid::Uuid;
 
-const CLOSE_CODE_AUTH_FAILED: u16 = 4001;
 const CLOSE_CODE_DISCONNECTED: u16 = 4002;
 
 pub struct ServerError;

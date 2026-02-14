@@ -74,17 +74,17 @@ function createMessageStore(): MessageStore {
 
             cleanupFn = connection.onServerEvent((event) => {
                 if (event.type === "messageCreated") {
-                    const { messageId, senderId, messageType, messageText, timestamp, replyToMessageId, files } = event as any;
+                    const { messageId, senderId, messageType, messageText, timestamp, replyToMessageId, files } = event;
 
-                    const channelId = messageType.type === "Channel" ? messageType.channel_id : null;
-                    const recipientId = messageType.type === "Direct" ? messageType.recipient_id : null;
+                    const channelId = messageType.type === "Channel" ? messageType.channel_id : undefined;
+                    const recipientId = messageType.type === "Direct" ? messageType.recipient_id : undefined;
 
                     actions.add({
                         id: messageId,
                         senderId,
                         channelId,
                         recipientId,
-                        messageText,
+                        messageText: messageText ?? undefined,
                         createdAt: timestamp,
                         modifiedAt: undefined,
                         replyToMessageId,
@@ -96,14 +96,14 @@ function createMessageStore(): MessageStore {
 
                     const currentUserId = authActions.getUser().userId;
                     if (senderId !== currentUserId) {
-                        if (messageType.type === "Channel" && !context.isCurrentContext("channel", channelId)) {
-                            notification.pushChannel(messageId, channelId);
+                        if (messageType.type === "Channel" && !context.isCurrentContext("channel", messageType.channel_id)) {
+                            notification.pushChannel(messageId, messageType.channel_id);
                         } else if (messageType.type === "Direct" && !context.isCurrentContext("dm", senderId)) {
                             notification.pushDM(messageId, senderId);
                         }
                     }
                 } else if (event.type === "messageUpdated") {
-                    const { messageId, messageText } = event as any;
+                    const { messageId, messageText } = event;
                     const existing = actions.findById(messageId);
                     if (existing) {
                         actions.update({
@@ -113,7 +113,7 @@ function createMessageStore(): MessageStore {
                         });
                     }
                 } else if (event.type === "messageDeleted") {
-                    const deletedId = (event as any).messageId;
+                    const { messageId: deletedId } = event;
                     actions.markRepliesDeleted(deletedId);
                     fileActions.removeByMessageId(deletedId);
                     reactionActions.removeByMessageId(deletedId);
