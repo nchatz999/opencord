@@ -175,6 +175,8 @@ export type LiveKitStore = [LiveKitState, LiveKitActions];
 
 function createLiveKitStore(): LiveKitStore {
     const [, prefActions] = usePreference();
+    const [, authActions] = useAuth();
+    const connection = useConnection();
 
     const [state, setState] = createStore<LiveKitState>({
         connectionState: undefined,
@@ -287,8 +289,6 @@ function createLiveKitStore(): LiveKitStore {
         await track.setProcessor(noiseProcessor);
         noiseProcessor.enabled = state.noiseCancellation;
         noiseProcessor.setVad((speaking) => {
-            const [, authActions] = useAuth();
-            const connection = useConnection();
             connection.sendSpeakStatus(authActions.getUser().userId, speaking);
         });
     };
@@ -580,6 +580,9 @@ function createLiveKitStore(): LiveKitStore {
         setNoiseCancellation(enabled) {
             setState("noiseCancellation", enabled);
             noiseProcessor.enabled = enabled;
+            if (!enabled) {
+                connection.sendSpeakStatus(authActions.getUser().userId, false);
+            }
         },
 
         async refreshDevices() {
