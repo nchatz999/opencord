@@ -1049,6 +1049,14 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
     ) -> Result<(Message, Vec<File>), DomainError> {
+        if let Some(ref text) = message_text {
+            if text.len() > 4000 {
+                return Err(DomainError::BadRequest(
+                    "Message exceeds 4000 character limit".to_string(),
+                ));
+            }
+        }
+
         let rights = self
             .repository
             .find_user_channel_rights(channel_id, sender_id)
@@ -1061,6 +1069,16 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
             return Err(DomainError::PermissionDenied(
                 "Insufficient permissions to send messages".to_string(),
             ));
+        }
+
+        if let Some(reply_id) = reply_to_message_id {
+            if let Some(reply_msg) = self.repository.find_message_by_id(reply_id).await? {
+                if reply_msg.channel_id != Some(channel_id) {
+                    return Err(DomainError::BadRequest(
+                        "Reply must reference a message in the same channel".to_string(),
+                    ));
+                }
+            }
         }
 
         let mut db_tx = self.repository.begin().await?;
@@ -1128,6 +1146,29 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         reply_to_message_id: Option<i64>,
         files: Vec<NewFileAttachment>,
     ) -> Result<(Message, Vec<File>), DomainError> {
+        if let Some(ref text) = message_text {
+            if text.len() > 4000 {
+                return Err(DomainError::BadRequest(
+                    "Message exceeds 4000 character limit".to_string(),
+                ));
+            }
+        }
+
+        if let Some(reply_id) = reply_to_message_id {
+            if let Some(reply_msg) = self.repository.find_message_by_id(reply_id).await? {
+                let valid_dm = reply_msg.recipient_id.is_some()
+                    && ((reply_msg.sender_id == sender_id
+                        && reply_msg.recipient_id == Some(recipient_id))
+                        || (reply_msg.sender_id == recipient_id
+                            && reply_msg.recipient_id == Some(sender_id)));
+                if !valid_dm {
+                    return Err(DomainError::BadRequest(
+                        "Reply must reference a message in the same conversation".to_string(),
+                    ));
+                }
+            }
+        }
+
         let mut db_tx = self.repository.begin().await?;
 
         let message = db_tx
@@ -1375,6 +1416,12 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         message_id: i64,
         new_text: String,
     ) -> Result<Message, DomainError> {
+        if new_text.len() > 4000 {
+            return Err(DomainError::BadRequest(
+                "Message exceeds 4000 character limit".to_string(),
+            ));
+        }
+
         let mut tx = self.repository.begin().await?;
 
         let message = tx
@@ -1612,6 +1659,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         message_id: i64,
         emoji: String,
     ) -> Result<Reaction, DomainError> {
+        if emojis::get(&emoji).is_none() {
+            return Err(DomainError::BadRequest("Invalid emoji".to_string()));
+        }
+
         let message = self
             .repository
             .find_message_by_id(message_id)
@@ -1707,6 +1758,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         message_id: i64,
         emoji: String,
     ) -> Result<(), DomainError> {
+        if emojis::get(&emoji).is_none() {
+            return Err(DomainError::BadRequest("Invalid emoji".to_string()));
+        }
+
         let message = self
             .repository
             .find_message_by_id(message_id)

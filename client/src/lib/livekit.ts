@@ -212,6 +212,7 @@ function createLiveKitStore(): LiveKitStore {
                 noiseSuppression: false,
                 echoCancellation: true,
                 autoGainControl: true,
+                channelCount: 2,
             },
             publishDefaults: {
                 videoCodec: "h264",
