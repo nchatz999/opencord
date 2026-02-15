@@ -37,7 +37,7 @@ export class EnergyVad {
     private workletNode?: AudioWorkletNode;
 
     async start(track: MediaStreamTrack, callback: (speaking: boolean) => void): Promise<void> {
-        this.stop();
+        await this.stop();
         this.audioContext = new AudioContext();
         await this.audioContext.audioWorklet.addModule(workletUrl);
 
@@ -49,10 +49,10 @@ export class EnergyVad {
         this.workletNode.connect(this.audioContext.destination);
     }
 
-    stop(): void {
+    async stop(): Promise<void> {
         this.sourceNode?.disconnect();
         this.workletNode?.disconnect();
-        this.audioContext?.close();
+        await this.audioContext?.close();
         this.sourceNode = undefined;
         this.workletNode = undefined;
         this.audioContext = undefined;

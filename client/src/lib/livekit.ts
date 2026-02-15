@@ -319,7 +319,7 @@ function createLiveKitStore(): LiveKitStore {
         if (!track) return;
 
         await track.stopProcessor();
-        energyVad.stop();
+        await energyVad.stop();
 
         if (state.muted) {
             await track.mute();
@@ -391,8 +391,7 @@ function createLiveKitStore(): LiveKitStore {
 
     const handlePermissionsChanged = async (_: unknown, participant: Participant): Promise<void> => {
         if (participant === room.localParticipant && participant.permissions?.canPublish) {
-            await room.localParticipant.setMicrophoneEnabled(true);
-            await syncMicrophoneState();
+            await actions.setMicEnabled(true);
         }
     };
 
@@ -424,6 +423,7 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         async disconnect() {
+            await energyVad.stop();
             for (const key of Object.keys(playback.audio) as TrackKey[]) {
                 playback.audio[key]?.track.detach();
             }
@@ -639,18 +639,8 @@ function createLiveKitStore(): LiveKitStore {
 
         async setAudioInputDevice(deviceId) {
             setState("activeInput", deviceId);
-
-            const track = getMicrophoneTrack();
-            if (track) {
-                await track.stopProcessor();
-            }
-
             await room?.switchActiveDevice("audioinput", deviceId);
-
-            const newTrack = getMicrophoneTrack();
-            if (newTrack && !state.muted) {
-                await applyNoiseProcessor(newTrack);
-            }
+            await syncMicrophoneState();
         },
 
         async setAudioOutputDevice(deviceId) {
