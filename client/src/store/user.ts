@@ -19,6 +19,7 @@ interface UserActions {
     add: (user: User) => void;
     update: (user: User) => void;
     remove: (id: number) => void;
+    updateUsername: (name: string) => Promise<Result<void, string>>;
     updateStatus: (userId: number, status: UserStatusType) => Promise<Result<void, string>>;
     updateAvatar: (file: File) => Promise<Result<void, string>>;
     delete: (userId: number) => Promise<Result<void, string>>;
@@ -89,6 +90,17 @@ function createUserStore(): UserStore {
 
         remove(id) {
             setState("users", (users) => users.filter((u) => u.userId !== id));
+        },
+
+        async updateUsername(name) {
+            const result = await request("/user/username", {
+                method: "PUT",
+                body: { username: name },
+            });
+            if (result.isErr()) {
+                return err(result.error.reason);
+            }
+            return ok(undefined);
         },
 
         async updateStatus(userId, status) {

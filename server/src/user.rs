@@ -133,6 +133,12 @@ pub trait UserTransaction: Send + Sync {
         avatar_file_id: i64,
     ) -> Result<Option<User>, DatabaseError>;
 
+    async fn update_username(
+        &mut self,
+        user_id: i64,
+        username: &str,
+    ) -> Result<Option<User>, DatabaseError>;
+
     async fn update_manual_user_status(
         &mut self,
         user_id: i64,
@@ -237,6 +243,33 @@ impl UserTransaction for PgUserTransaction {
         .fetch_optional(&mut *self.transaction)
         .await?;
 
+        Ok(result)
+    }
+
+    async fn update_username(
+        &mut self,
+        user_id: i64,
+        username: &str,
+    ) -> Result<Option<User>, DatabaseError> {
+        let result = sqlx::query_as!(
+            User,
+            r#"UPDATE users
+               SET username = $2
+               WHERE user_id = $1
+               RETURNING
+                   user_id,
+                   username,
+                   created_at,
+                   avatar_file_id,
+                   role_id,
+                   server_deafen,
+                   server_mute,
+                   CASE WHEN status = 'Offline' THEN status ELSE COALESCE(manual_status, status) END as "status!: UserStatusType""#,
+            user_id,
+            username
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
         Ok(result)
     }
 
@@ -545,6 +578,49 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
         Ok((avatar_file, file_data))
     }
 
+    pub async fn update_username(
+        &self,
+        user_id: i64,
+        session_id: i64,
+        username: String,
+    ) -> Result<(), DomainError> {
+        let mut tx = self.repository.begin().await?;
+
+        let updated_user = tx
+            .update_username(user_id, &username)
+            .await?
+            .ok_or(DomainError::BadRequest(format!(
+                "User {} not found",
+                user_id
+            )))?;
+
+        self.repository.commit(tx).await?;
+
+        let event = EventPayload::UserUpdated {
+            user: updated_user.clone(),
+        };
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "Username updated: user_id={}, session_id={}, username={}",
+                    user_id, session_id, username
+                ),
+                "user".to_string(),
+            )
+            .await;
+
+        Ok(())
+    }
+
     pub async fn update_manual_user_status(
         &self,
         user_id: i64,
@@ -756,6 +832,12 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct UpdateUsernameRequest {
+    pub username: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateManualUserStatusRequest {
     pub manual_status: UserStatusType,
 }
@@ -775,6 +857,7 @@ pub fn user_routes(
     authorize_service: AuthorizeService<Postgre>,
 ) -> OpenApiRouter<Postgre> {
     OpenApiRouter::new()
+        .routes(routes!(update_username_handler))
         .routes(routes!(update_user_avatar_handler))
         .routes(routes!(get_user_avatar_handler))
         .routes(routes!(update_manual_user_status_handler))
@@ -787,6 +870,32 @@ pub fn user_routes(
 // ═══════════════════════════════════════════════════════════════════════════════
 // HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+#[utoipa::path(
+    put,
+    tag = "user",
+    path = "/username",
+    request_body = UpdateUsernameRequest,
+    responses(
+        (status = 200, description = "Username updated successfully"),
+        (status = 422, body = ApiError),
+        (status = 500, body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn update_username_handler(
+    State(service): State<
+        UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
+    >,
+    Extension(session): Extension<Session>,
+    Json(payload): Json<UpdateUsernameRequest>,
+) -> Result<(), ApiError> {
+    service
+        .update_username(session.user_id, session.session_id, payload.username)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(())
+}
 
 #[utoipa::path(
     post,

@@ -50,8 +50,6 @@ const UserSettingsModal: Component = () => {
     const user = () => authActions.getUser();
 
 
-    const [username, setUsername] = createSignal(user().username);
-
     const [currentPassword, setCurrentPassword] = createSignal("");
     const [newPassword, setNewPassword] = createSignal("");
     const [confirmPassword, setConfirmPassword] = createSignal("");
@@ -149,7 +147,16 @@ const UserSettingsModal: Component = () => {
             content: (
                 <div class="space-y-4 mt-6">
                     <Card title="Profile" icon={<UserIcon class="w-4 h-4" />}>
-                        <Input label="Username" value={username()} onChange={setUsername} />
+                        <Input
+                            label="Username"
+                            value={user().username}
+                            onBlur={async (e) => {
+                                const result = await userActions.updateUsername(e.currentTarget.value);
+                                if (result.isErr()) {
+                                    addToast(result.error, "error");
+                                }
+                            }}
+                        />
                     </Card>
 
                     <Card title="Status" icon={<Circle class="w-4 h-4" />}>
