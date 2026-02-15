@@ -23,6 +23,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      deepfilternet3-noise-filter:
+        specifier: ^1.2.1
+        version: 1.2.1(livekit-client@2.16.1(@types/dom-mediacapture-record@1.0.22))
       electron-updater:
         specifier: ^6.6.2
         version: 6.7.3
@@ -1044,6 +1047,12 @@ packages:
   decompress-response@6.0.0:
     resolution: {integrity: sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ==}
     engines: {node: '>=10'}
+
+  deepfilternet3-noise-filter@1.2.1:
+    resolution: {integrity: sha512-OAyrHTDlUHH+AhfpVNKYEOhVqb9cZpu0fdNThplA/tB/Ts4PF/UsI+abl2n1IbSxUkhiF0OqDejEhk1n42Oqpw==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      livekit-client: ^2.0.0
 
   defaults@1.0.4:
     resolution: {integrity: sha512-eFuaLoy/Rxalv2kr+lqMlUnrDWV+3j4pljOIJgLIhI058IQfWJ7vXhyEIHu+HtC738klGALYxOKDO0bQP3tg8A==}
@@ -3299,6 +3308,10 @@ snapshots:
   decompress-response@6.0.0:
     dependencies:
       mimic-response: 3.1.0
+
+  deepfilternet3-noise-filter@1.2.1(livekit-client@2.16.1(@types/dom-mediacapture-record@1.0.22)):
+    dependencies:
+      livekit-client: 2.16.1(@types/dom-mediacapture-record@1.0.22)
 
   defaults@1.0.4:
     dependencies:

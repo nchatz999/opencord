@@ -24,13 +24,13 @@ import {
 import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
 import { selectFile } from "../../utils";
 import { useApp } from "../../store/app";
-import { useLiveKit, type CameraResolution, type ScreenResolution, type FrameRate, type ScreenCodec, type ScreenContentHint } from "../../lib/livekit";
+import { useLiveKit, type CameraResolution, type ScreenResolution, type FrameRate, type ScreenCodec, type ScreenContentHint, type NoiseCancellationType } from "../../lib/livekit";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
 import Slider from "../../components/Slider";
 import Avatar from "../../components/Avatar";
-import Checkbox from "../../components/CheckBox";
+
 import { Tabs } from "../../components/Tabs";
 import Card from "../../components/Card";
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../components/Table";
@@ -228,11 +228,12 @@ const UserSettingsModal: Component = () => {
                             onChange={async (id) => await livekitActions.setAudioInputDevice(id as string)}
                             class="w-full"
                         />
-                        <Checkbox
+                        <Select
                             label="Noise Cancellation"
-                            checked={livekitActions.getNoiseCancellation()}
-                            onChange={(checked) => livekitActions.setNoiseCancellation(checked)}
-                            class="mt-3"
+                            options={livekitActions.getNoiseCancellationOptions()}
+                            value={livekitActions.getNoiseCancellation()}
+                            onChange={(value) => livekitActions.setNoiseCancellation(value as NoiseCancellationType)}
+                            class="mt-3 w-full"
                         />
                     </Card>
 

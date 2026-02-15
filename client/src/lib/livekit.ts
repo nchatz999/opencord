@@ -17,6 +17,8 @@ import { createStore } from "solid-js/store";
 import { usePreference } from "../store/preference";
 import { NoiseSuppressorProcessor } from "rnnoise-wasm";
 import workletUrl from "rnnoise-wasm/worklet-bundle?url";
+import { DeepFilterNoiseFilterProcessor } from "deepfilternet3-noise-filter";
+import { EnergyVad } from "./energy-vad";
 import { useVoip, useAuth, useConnection } from "../store";
 
 export { Track, VideoQuality } from "livekit-client";
@@ -76,6 +78,12 @@ const SCREEN_CONTENT_HINT_OPTIONS: Option<ScreenContentHint>[] = [
     { value: "detail", label: "Detail (Text)" },
 ];
 
+const NOISE_CANCELLATION_OPTIONS: Option<NoiseCancellationType>[] = [
+    { value: "rnnoise", label: "RNNoise" },
+    { value: "deepfilter", label: "DeepFilter" },
+    { value: "off", label: "Off" },
+];
+
 const ALL_SOURCES = [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare, Track.Source.ScreenShareAudio];
 const DEFAULT_VOLUME = 100;
 
@@ -98,6 +106,7 @@ type PublicationKey = `${number}-${Track.Source}`;
 export type LiveKitConnectionState = "connecting" | "connected" | undefined;
 export type ScreenCodec = "h264" | "vp9";
 export type ScreenContentHint = "motion" | "detail";
+export type NoiseCancellationType = "rnnoise" | "deepfilter" | "off";
 
 interface LiveKitState {
     connectionState: LiveKitConnectionState;
@@ -113,7 +122,7 @@ interface LiveKitState {
     screenContentHint: ScreenContentHint;
     muted: boolean;
     deafened: boolean;
-    noiseCancellation: boolean;
+    noiseCancellation: NoiseCancellationType;
 }
 
 interface LiveKitActions {
@@ -160,8 +169,9 @@ interface LiveKitActions {
     setMuted: (muted: boolean) => Promise<void>;
     getDeafened: () => boolean;
     setDeafened: (deafened: boolean) => void;
-    getNoiseCancellation: () => boolean;
-    setNoiseCancellation: (enabled: boolean) => void;
+    getNoiseCancellation: () => NoiseCancellationType;
+    setNoiseCancellation: (type: NoiseCancellationType) => Promise<void>;
+    getNoiseCancellationOptions: () => Option<NoiseCancellationType>[];
     refreshDevices: () => Promise<void>;
     getAudioInputDevices: () => MediaDevice[];
     getAudioOutputDevices: () => MediaDevice[];
@@ -192,7 +202,7 @@ function createLiveKitStore(): LiveKitStore {
         screenContentHint: prefActions.get<ScreenContentHint>("screenContentHint") ?? "motion",
         muted: false,
         deafened: false,
-        noiseCancellation: true,
+        noiseCancellation: prefActions.get<NoiseCancellationType>("noiseCancellation") ?? "rnnoise",
     });
 
     const [playback, setPlayback] = createStore<PlaybackState>({
@@ -202,7 +212,14 @@ function createLiveKitStore(): LiveKitStore {
     });
 
     const publications = new Map<PublicationKey, RemoteTrackPublication>();
-    const noiseProcessor = new NoiseSuppressorProcessor(workletUrl);
+    const rnnoiseProcessor = new NoiseSuppressorProcessor(workletUrl);
+    const deepFilterProcessor = new DeepFilterNoiseFilterProcessor({
+        sampleRate: 48000,
+        noiseReductionLevel: 80,
+        enabled: true,
+        assetConfig: { cdnUrl: "https://nchatz999.github.io/opencord-cdn/deepfilter" },
+    });
+    const energyVad = new EnergyVad();
 
     const createRoom = (): Room => {
         return new Room({
@@ -286,24 +303,33 @@ function createLiveKitStore(): LiveKitStore {
         room?.localParticipant?.getTrackPublication(Track.Source.Microphone)?.track as LocalTrack | undefined;
 
     const applyNoiseProcessor = async (track: LocalTrack): Promise<void> => {
-        await track.setProcessor(noiseProcessor);
-        noiseProcessor.enabled = state.noiseCancellation;
-        noiseProcessor.setVad((speaking) => {
-            connection.sendSpeakStatus(authActions.getUser().userId, speaking);
-        });
+        const type = state.noiseCancellation;
+        if (type === "off") return;
+
+        if (type === "rnnoise") {
+            await track.setProcessor(rnnoiseProcessor);
+            rnnoiseProcessor.enabled = true;
+        } else {
+            await track.setProcessor(deepFilterProcessor);
+        }
     };
 
     const syncMicrophoneState = async (): Promise<void> => {
         const track = getMicrophoneTrack();
         if (!track) return;
 
+        await track.stopProcessor();
+        energyVad.stop();
+
         if (state.muted) {
-            noiseProcessor.setVad(() => { });
-            await track.stopProcessor();
             await track.mute();
+            connection.sendSpeakStatus(authActions.getUser().userId, false);
         } else {
             await track.unmute();
             await applyNoiseProcessor(track);
+            await energyVad.start(track.mediaStreamTrack, (speaking) => {
+                connection.sendSpeakStatus(authActions.getUser().userId, speaking);
+            });
         }
     };
 
@@ -577,13 +603,12 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         getNoiseCancellation: () => state.noiseCancellation,
-        setNoiseCancellation(enabled) {
-            setState("noiseCancellation", enabled);
-            noiseProcessor.enabled = enabled;
-            if (!enabled) {
-                connection.sendSpeakStatus(authActions.getUser().userId, false);
-            }
+        async setNoiseCancellation(type) {
+            setState("noiseCancellation", type);
+            prefActions.set("noiseCancellation", type);
+            await syncMicrophoneState();
         },
+        getNoiseCancellationOptions: () => NOISE_CANCELLATION_OPTIONS,
 
         async refreshDevices() {
             const [inputs, outputs] = await Promise.all([
