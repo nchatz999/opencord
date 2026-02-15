@@ -36,16 +36,16 @@ interface Option<T> {
 }
 
 const CAMERA_RESOLUTION = {
-    "720p":  { width: 1280, height: 720,  bitrate: 2_000_000 },
+    "720p": { width: 1280, height: 720, bitrate: 2_000_000 },
     "1080p": { width: 1920, height: 1080, bitrate: 4_000_000 },
 } as const;
 
 const SCREEN_RESOLUTION = {
-    "480p":  { width: 854,  height: 480,  bitrate: 2_500_000 },
-    "720p":  { width: 1280, height: 720,  bitrate: 5_000_000 },
+    "480p": { width: 854, height: 480, bitrate: 2_500_000 },
+    "720p": { width: 1280, height: 720, bitrate: 5_000_000 },
     "1080p": { width: 1920, height: 1080, bitrate: 10_000_000 },
     "1440p": { width: 2560, height: 1440, bitrate: 15_000_000 },
-    "4k":    { width: 3840, height: 2160, bitrate: 25_000_000 },
+    "4k": { width: 3840, height: 2160, bitrate: 25_000_000 },
 } as const;
 
 const CAMERA_RESOLUTION_OPTIONS: Option<CameraResolution>[] = [
@@ -212,7 +212,6 @@ function createLiveKitStore(): LiveKitStore {
                 noiseSuppression: false,
                 echoCancellation: true,
                 autoGainControl: true,
-                channelCount: 2,
             },
             publishDefaults: {
                 videoCodec: "h264",

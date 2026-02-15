@@ -20,12 +20,11 @@ use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
 use crate::voip::VoipParticipant;
 use crate::transport::{CommandPayload, ControlRoutingPolicy, ServerMessage};
 
-use base64::{Engine as _, engine::general_purpose};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use axum::Json;
-use axum::extract::{Extension, Path, State};
+use axum::extract::{Extension, Multipart, Path, State};
 use axum::middleware::from_fn_with_state;
 use axum::response::IntoResponse;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -94,8 +93,6 @@ pub enum DomainError {
     #[error("File manager error")]
     FileManagerError(#[from] FileError),
 
-    #[error("File decode failed")]
-    FileDecodeError,
 }
 
 impl From<DomainError> for ApiError {
@@ -111,9 +108,6 @@ impl From<DomainError> for ApiError {
             DomainError::FileManagerError(file_err) => {
                 tracing::error!("File manager error: {}", file_err);
                 ApiError::InternalServerError("File system error".to_string())
-            }
-            DomainError::FileDecodeError => {
-                ApiError::UnprocessableEntity("Invalid file data encoding".to_string())
             }
         }
     }
@@ -455,7 +449,9 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
         user_id: i64,
         requester_id: i64,
         session_id: i64,
-        avatar_data: NewAvatarRequest,
+        file_name: String,
+        content_type: String,
+        file_data: Vec<u8>,
     ) -> Result<User, DomainError> {
         if user_id != requester_id {
             return Err(DomainError::PermissionDenied(
@@ -463,9 +459,11 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
             ));
         }
 
-        let file_data = general_purpose::STANDARD
-            .decode(&avatar_data.data)
-            .map_err(|_| DomainError::FileDecodeError)?;
+        if file_data.len() > 4 * 1024 * 1024 {
+            return Err(DomainError::BadRequest(
+                "Avatar exceeds 4 MB limit".to_string(),
+            ));
+        }
 
         let file_uuid = Uuid::new_v4().to_string();
         let file_hash = format!("{:x}", Sha256::digest(&file_data));
@@ -475,8 +473,8 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
         let avatar_file = tx
             .create_avatar(
                 &file_uuid,
-                &avatar_data.file_name,
-                &avatar_data.content_type,
+                &file_name,
+                &content_type,
                 file_data.len() as i64,
                 &file_hash,
             )
@@ -754,14 +752,6 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct NewAvatarRequest {
-    pub file_name: String,
-    pub content_type: String,
-    pub data: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateManualUserStatusRequest {
     pub manual_status: UserStatusType,
 }
@@ -795,18 +785,14 @@ pub fn user_routes(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[utoipa::path(
-    put,
+    post,
     tag = "user",
     path = "/avatar",
-    params(
-        ("user_id", Path, description = "The ID of the user to update avatar for"),
-    ),
-    request_body = NewAvatarRequest,
+    request_body(content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "User avatar updated successfully", body = User),
-        (status = 403, description = "Permission denied", body = ApiError),
-        (status = 404, description = "User not found", body = ApiError),
-        (status = 500, description = "Internal Server Error", body = ApiError),
+        (status = 200, body = User),
+        (status = 422, body = ApiError),
+        (status = 500, body = ApiError),
     ),
     security(("api_key" = []))
 )]
@@ -815,14 +801,30 @@ async fn update_user_avatar_handler(
         UserService<Postgre, LocalFileManager, DefaultNotifierManager, TextLogManager>,
     >,
     Extension(session): Extension<Session>,
-    Json(payload): Json<NewAvatarRequest>,
+    mut multipart: Multipart,
 ) -> Result<Json<User>, ApiError> {
+    let field = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::UnprocessableEntity(format!("Invalid upload: {}", e)))?
+        .ok_or(ApiError::UnprocessableEntity("No file provided".to_string()))?;
+
+    let file_name = field.file_name().unwrap_or("avatar").to_string();
+    let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+    let data = field
+        .bytes()
+        .await
+        .map_err(|e| ApiError::UnprocessableEntity(format!("Failed to read file: {}", e)))?
+        .to_vec();
+
     let updated_user = service
         .update_user_avatar(
             session.user_id,
             session.user_id,
             session.session_id,
-            payload,
+            file_name,
+            content_type,
+            data,
         )
         .await
         .map_err(ApiError::from)?;

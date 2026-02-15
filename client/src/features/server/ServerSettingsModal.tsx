@@ -7,6 +7,7 @@ import Button from '../../components/Button'
 import { Tabs } from '../../components/Tabs'
 import Card from '../../components/Card'
 import { useAcl, useAuth, useModal, useRole, useServer, useUser } from '../../store/index'
+import { selectFile } from '../../utils'
 import { Input } from '../../components/Input'
 import Select from '../../components/Select'
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table'
@@ -40,7 +41,6 @@ const ServerSettingsModal: Component = () => {
     const [, userActions] = useUser()
     const currentUser = () => authActions.getUser()
     const [searchTerm, setSearchTerm] = createSignal('')
-    let avatarInputRef: HTMLInputElement | undefined;
 
     const [invites, setInvites] = createSignal<Invite[]>([])
     const [newInviteCode, setNewInviteCode] = createSignal('')
@@ -80,24 +80,6 @@ const ServerSettingsModal: Component = () => {
         }
     };
 
-    const handleAvatarChange = async (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        if (!target.files || !target.files[0]) return;
-
-        const file = target.files[0];
-
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64data = (reader.result as string).split(',')[1];
-
-            const result = await serverActions.updateAvatar(file.name, file.type, base64data);
-
-            if (result.isErr()) {
-                addToast(result.error, 'error');
-            }
-        };
-        reader.readAsDataURL(file);
-    };
 
     const loadInvites = async () => {
         if (!isAdmin()) return;
@@ -257,7 +239,14 @@ const ServerSettingsModal: Component = () => {
                                         </Show>
                                         <Show when={isAdmin()}>
                                             <Button
-                                                onClick={() => avatarInputRef?.click()}
+                                                onClick={async () => {
+                                                    const file = await selectFile("image/*");
+                                                    if (!file) return;
+                                                    const result = await serverActions.updateAvatar(file);
+                                                    if (result.isErr()) {
+                                                        addToast(result.error, 'error');
+                                                    }
+                                                }}
                                                 variant="primary"
                                                 size="sm"
                                                 class="absolute bottom-0 right-0 rounded-full p-1.5"
@@ -265,13 +254,6 @@ const ServerSettingsModal: Component = () => {
                                                 <Upload class="w-4 h-4" />
                                             </Button>
                                         </Show>
-                                        <input
-                                            ref={avatarInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleAvatarChange}
-                                            class="hidden"
-                                        />
                                     </div>
                                     <div class="flex-1">
                                         <Show

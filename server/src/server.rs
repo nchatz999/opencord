@@ -14,7 +14,6 @@ use crate::role::ADMIN_ROLE_ID;
 use crate::user::AvatarFile;
 use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
-use base64::{Engine as _, engine::general_purpose};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -32,8 +31,6 @@ pub enum DomainError {
     #[error("File manager error")]
     FileManagerError(#[from] FileError),
 
-    #[error("File decode failed")]
-    FileDecodeError,
 }
 
 pub trait ServerTransaction: Send + Sync {
@@ -167,7 +164,9 @@ impl<R: ServerRepository, F: FileManager + Clone + Send, N: NotifierManager, G: 
         &self,
         user_id: i64,
         session_id: i64,
-        avatar_data: NewAvatarRequest,
+        file_name: String,
+        content_type: String,
+        file_data: Vec<u8>,
     ) -> Result<ServerConfig, DomainError> {
         let mut repo = self.repository.clone();
         let role_id = repo
@@ -181,9 +180,11 @@ impl<R: ServerRepository, F: FileManager + Clone + Send, N: NotifierManager, G: 
             ));
         }
 
-        let file_data = general_purpose::STANDARD
-            .decode(&avatar_data.data)
-            .map_err(|_| DomainError::FileDecodeError)?;
+        if file_data.len() > 4 * 1024 * 1024 {
+            return Err(DomainError::BadRequest(
+                "Avatar exceeds 4 MB limit".to_string(),
+            ));
+        }
 
         let file_uuid = Uuid::new_v4().to_string();
         let file_hash = format!("{:x}", Sha256::digest(&file_data));
@@ -193,8 +194,8 @@ impl<R: ServerRepository, F: FileManager + Clone + Send, N: NotifierManager, G: 
         let avatar_file = tx
             .create_avatar(
                 &file_uuid,
-                &avatar_data.file_name,
-                &avatar_data.content_type,
+                &file_name,
+                &content_type,
                 file_data.len() as i64,
                 &file_hash,
             )
@@ -388,14 +389,6 @@ impl ServerRepository for Postgre {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct NewAvatarRequest {
-    pub file_name: String,
-    pub content_type: String,
-    pub data: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateServerNameRequest {
     pub server_name: String,
 }
@@ -413,16 +406,13 @@ impl From<DomainError> for ApiError {
                 tracing::error!("File manager error: {}", file_err);
                 ApiError::InternalServerError("File system error".to_string())
             }
-            DomainError::FileDecodeError => {
-                ApiError::UnprocessableEntity("Invalid file data encoding".to_string())
-            }
         }
     }
 }
 
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Extension, Multipart, Path, State},
     middleware::from_fn_with_state,
     response::IntoResponse,
 };
@@ -487,24 +477,44 @@ async fn update_server_name_handler(
 }
 
 #[utoipa::path(
-    put,
+    post,
     tag = "server",
     path = "/avatar",
-    request_body = NewAvatarRequest,
+    request_body(content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Server avatar updated successfully", body = ServerConfig),
-        (status = 403, description = "Permission denied", body = ApiError),
-        (status = 500, description = "Internal Server Error", body = ApiError),
+        (status = 200, body = ServerConfig),
+        (status = 422, body = ApiError),
+        (status = 500, body = ApiError),
     ),
     security(("api_key" = []))
 )]
 async fn update_server_avatar_handler(
     State(service): State<AppServerService>,
     Extension(session): Extension<Session>,
-    Json(payload): Json<NewAvatarRequest>,
+    mut multipart: Multipart,
 ) -> Result<Json<ServerConfig>, ApiError> {
+    let field = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::UnprocessableEntity(format!("Invalid upload: {}", e)))?
+        .ok_or(ApiError::UnprocessableEntity("No file provided".to_string()))?;
+
+    let file_name = field.file_name().unwrap_or("avatar").to_string();
+    let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+    let data = field
+        .bytes()
+        .await
+        .map_err(|e| ApiError::UnprocessableEntity(format!("Failed to read file: {}", e)))?
+        .to_vec();
+
     let config = service
-        .update_avatar(session.user_id, session.session_id, payload)
+        .update_avatar(
+            session.user_id,
+            session.session_id,
+            file_name,
+            content_type,
+            data,
+        )
         .await
         .map_err(ApiError::from)?;
     Ok(Json(config))

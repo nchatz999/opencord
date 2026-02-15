@@ -3,7 +3,7 @@ import { createRoot } from "solid-js";
 import type { ServerConfig } from "../model";
 import type { Result } from "opencord-utils";
 import { ok, err } from "opencord-utils";
-import { request } from "../utils";
+import { request, upload } from "../utils";
 import { useConnection } from "./connection";
 
 interface ServerState {
@@ -16,7 +16,7 @@ interface ServerActions {
     get: () => ServerConfig | null;
     set: (config: ServerConfig) => void;
     updateName: (name: string) => Promise<Result<void, string>>;
-    updateAvatar: (fileName: string, contentType: string, base64Data: string) => Promise<Result<void, string>>;
+    updateAvatar: (file: File) => Promise<Result<void, string>>;
 }
 
 export type ServerStore = [ServerState, ServerActions];
@@ -75,11 +75,10 @@ function createServerStore(): ServerStore {
             return ok(undefined);
         },
 
-        async updateAvatar(fileName, contentType, base64Data) {
-            const result = await request<ServerConfig>("/server/avatar", {
-                method: "PUT",
-                body: { fileName, contentType, data: base64Data },
-            });
+        async updateAvatar(file: File) {
+            const formData = new FormData();
+            formData.append("file", file);
+            const result = await upload("/server/avatar", formData);
             if (result.isErr()) {
                 return err(result.error.reason);
             }

@@ -22,6 +22,7 @@ import {
     Settings,
 } from "lucide-solid";
 import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
+import { selectFile } from "../../utils";
 import { useApp } from "../../store/app";
 import { useLiveKit, type CameraResolution, type ScreenResolution, type FrameRate, type ScreenCodec, type ScreenContentHint } from "../../lib/livekit";
 import { Input } from "../../components/Input";
@@ -50,9 +51,6 @@ const UserSettingsModal: Component = () => {
 
 
     const [username, setUsername] = createSignal(user().username);
-    const [avatarFile, setAvatarFile] = createSignal<File | null>(null);
-    const [_avatarPreview, setAvatarPreview] = createSignal<string | null>(null);
-    let fileInputRef: HTMLInputElement | undefined;
 
     const [currentPassword, setCurrentPassword] = createSignal("");
     const [newPassword, setNewPassword] = createSignal("");
@@ -142,30 +140,6 @@ const UserSettingsModal: Component = () => {
 
     };
 
-    const handleAvatarChange = async (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        if (target.files && target.files[0]) {
-            const file = target.files[0];
-
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64data = (reader.result as string).split(',')[1];
-
-                const result = await userActions.updateAvatar(file.name, file.type, base64data);
-
-                if (result.isErr()) {
-                    addToast(result.error, "error");
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleAvatarUpload = async () => {
-        if (!avatarFile()) return;
-        setAvatarPreview(null);
-        setAvatarFile(null);
-    };
 
     const tabItems = createMemo(() => [
         {
@@ -212,43 +186,22 @@ const UserSettingsModal: Component = () => {
                                     size="xl"
                                 />
                                 <Button
-                                    onClick={() => fileInputRef?.click()}
+                                    onClick={async () => {
+                                        const file = await selectFile("image/*");
+                                        if (!file) return;
+                                        const result = await userActions.updateAvatar(file);
+                                        if (result.isErr()) {
+                                            addToast(result.error, "error");
+                                        }
+                                    }}
                                     variant="primary"
                                     size="sm"
                                     class="absolute bottom-0 right-0 p-2 rounded-full"
                                 >
                                     <Upload class="w-4 h-4" />
                                 </Button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleAvatarChange}
-                                    class="hidden"
-                                />
                             </div>
-
-                            <Show when={avatarFile()}>
-                                <div class="flex space-x-2">
-                                    <Button onClick={handleAvatarUpload} size="sm">
-                                        Upload Avatar
-                                    </Button>
-                                    <Button
-                                        onClick={() => {
-                                            setAvatarPreview(null);
-                                            setAvatarFile(null);
-                                        }}
-                                        variant="secondary"
-                                        size="sm"
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
-                            </Show>
-
-                            <p class="text-xs text-fg-subtle">
-                                Recommended: Square image, at least 128x128px
-                            </p>
+                            <p class="text-xs text-fg-subtle">Square image, max 4 MB</p>
                         </div>
                     </Card>
                 </div>
