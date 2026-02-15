@@ -450,7 +450,6 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
         requester_id: i64,
         session_id: i64,
         file_name: String,
-        content_type: String,
         file_data: Vec<u8>,
     ) -> Result<User, DomainError> {
         if user_id != requester_id {
@@ -464,6 +463,11 @@ impl<R: UserRepository, F: FileManager + Clone + Send, N: NotifierManager, G: Lo
                 "Avatar exceeds 4 MB limit".to_string(),
             ));
         }
+
+        let content_type = infer::get(&file_data)
+            .filter(|kind| kind.mime_type().starts_with("image/"))
+            .map(|kind| kind.mime_type().to_string())
+            .ok_or(DomainError::BadRequest("Avatar must be an image".to_string()))?;
 
         let file_uuid = Uuid::new_v4().to_string();
         let file_hash = format!("{:x}", Sha256::digest(&file_data));
@@ -810,7 +814,6 @@ async fn update_user_avatar_handler(
         .ok_or(ApiError::UnprocessableEntity("No file provided".to_string()))?;
 
     let file_name = field.file_name().unwrap_or("avatar").to_string();
-    let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
     let data = field
         .bytes()
         .await
@@ -823,7 +826,6 @@ async fn update_user_avatar_handler(
             session.user_id,
             session.session_id,
             file_name,
-            content_type,
             data,
         )
         .await
