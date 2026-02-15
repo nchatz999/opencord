@@ -52,6 +52,12 @@ pub trait ServerTransaction: Send + Sync {
         &mut self,
         name: &str,
     ) -> Result<Option<ServerConfig>, DatabaseError>;
+
+    async fn update_file_limits(
+        &mut self,
+        max_file_size_mb: i32,
+        max_files_per_message: i32,
+    ) -> Result<Option<ServerConfig>, DatabaseError>;
 }
 
 pub trait ServerRepository: Send + Sync + Clone {
@@ -152,6 +158,61 @@ impl<R: ServerRepository, F: FileManager + Clone + Send, N: NotifierManager, G: 
                 format!(
                     "Server name updated: user_id={}, session_id={}, name={}",
                     user_id, session_id, name
+                ),
+                "server".to_string(),
+            )
+            .await;
+
+        Ok(config)
+    }
+
+    pub async fn update_file_limits(
+        &self,
+        user_id: i64,
+        session_id: i64,
+        max_file_size_mb: i32,
+        max_files_per_message: i32,
+    ) -> Result<ServerConfig, DomainError> {
+        let mut repo = self.repository.clone();
+        let role_id = repo
+            .find_user_role(user_id)
+            .await?
+            .ok_or(DomainError::BadRequest("User not found".to_string()))?;
+
+        if role_id > ADMIN_ROLE_ID {
+            return Err(DomainError::PermissionDenied(
+                "Only admins can update server settings".to_string(),
+            ));
+        }
+
+        let mut tx = self.repository.begin().await?;
+
+        let config = tx
+            .update_file_limits(max_file_size_mb, max_files_per_message)
+            .await?
+            .ok_or(DomainError::BadRequest(
+                "Server config not found".to_string(),
+            ))?;
+
+        self.repository.commit(tx).await?;
+
+        let event = EventPayload::ServerUpdated {
+            server: config.clone(),
+        };
+        let _ = self
+            .notifier
+            .notify(ServerMessage::Control(
+                event,
+                ControlRoutingPolicy::Broadcast,
+            ))
+            .await;
+
+        let _ = self
+            .logger
+            .log_entry(
+                format!(
+                    "File limits updated: user_id={}, session_id={}, max_file_size_mb={}, max_files_per_message={}",
+                    user_id, session_id, max_file_size_mb, max_files_per_message
                 ),
                 "server".to_string(),
             )
@@ -305,7 +366,7 @@ impl ServerTransaction for PgServerTransaction {
             r#"UPDATE server_config
                SET avatar_file_id = $1
                WHERE id = 1
-               RETURNING id, server_name, avatar_file_id"#,
+               RETURNING id, server_name, avatar_file_id, max_file_size_mb, max_files_per_message"#,
             avatar_file_id
         )
         .fetch_optional(&mut *self.transaction)
@@ -323,8 +384,28 @@ impl ServerTransaction for PgServerTransaction {
             r#"UPDATE server_config
                SET server_name = $1
                WHERE id = 1
-               RETURNING id, server_name, avatar_file_id"#,
+               RETURNING id, server_name, avatar_file_id, max_file_size_mb, max_files_per_message"#,
             name
+        )
+        .fetch_optional(&mut *self.transaction)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn update_file_limits(
+        &mut self,
+        max_file_size_mb: i32,
+        max_files_per_message: i32,
+    ) -> Result<Option<ServerConfig>, DatabaseError> {
+        let result = sqlx::query_as!(
+            ServerConfig,
+            r#"UPDATE server_config
+               SET max_file_size_mb = $1, max_files_per_message = $2
+               WHERE id = 1
+               RETURNING id, server_name, avatar_file_id, max_file_size_mb, max_files_per_message"#,
+            max_file_size_mb,
+            max_files_per_message
         )
         .fetch_optional(&mut *self.transaction)
         .await?;
@@ -354,7 +435,7 @@ impl ServerRepository for Postgre {
     async fn get_server_config(&self) -> Result<Option<ServerConfig>, DatabaseError> {
         let result = sqlx::query_as!(
             ServerConfig,
-            r#"SELECT id, server_name, avatar_file_id
+            r#"SELECT id, server_name, avatar_file_id, max_file_size_mb, max_files_per_message
                FROM server_config
                WHERE id = 1"#
         )
@@ -397,6 +478,13 @@ pub struct UpdateServerNameRequest {
     pub server_name: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateFileLimitsRequest {
+    pub max_file_size_mb: i32,
+    pub max_files_per_message: i32,
+}
+
 impl From<DomainError> for ApiError {
     fn from(err: DomainError) -> Self {
         match err {
@@ -434,6 +522,7 @@ pub fn server_routes(
         .routes(routes!(get_server_avatar_handler))
         .routes(routes!(update_server_name_handler))
         .routes(routes!(update_server_avatar_handler))
+        .routes(routes!(update_file_limits_handler))
         .layer(from_fn_with_state(authorize_service, authorize))
         .with_state(server_service)
 }
@@ -520,6 +609,35 @@ async fn update_server_avatar_handler(
         .await
         .map_err(ApiError::from)?;
     Ok(Json(config))
+}
+
+#[utoipa::path(
+    put,
+    tag = "server",
+    path = "/file-limits",
+    request_body = UpdateFileLimitsRequest,
+    responses(
+        (status = 200, description = "File limits updated successfully"),
+        (status = 403, description = "Permission denied", body = ApiError),
+        (status = 500, description = "Internal Server Error", body = ApiError),
+    ),
+    security(("api_key" = []))
+)]
+async fn update_file_limits_handler(
+    State(service): State<AppServerService>,
+    Extension(session): Extension<Session>,
+    Json(payload): Json<UpdateFileLimitsRequest>,
+) -> Result<(), ApiError> {
+    service
+        .update_file_limits(
+            session.user_id,
+            session.session_id,
+            payload.max_file_size_mb,
+            payload.max_files_per_message,
+        )
+        .await
+        .map_err(ApiError::from)?;
+    Ok(())
 }
 
 #[utoipa::path(

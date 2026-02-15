@@ -4,7 +4,7 @@ import { Send, Paperclip, X, ReplyIcon } from "lucide-solid";
 import FilePreview from "./FilePreview";
 import TextEditor from "../../components/TextEditor";
 import { useToaster } from "../../components/Toaster";
-import { useChannel, useContext, useUser, useMessage } from "../../store/index";
+import { useChannel, useContext, useUser, useMessage, useServer } from "../../store/index";
 import Button from "../../components/Button";
 import EmojiPicker from "../../components/EmojiPicker";
 import { formatLinks } from "../../utils/messageFormatting";
@@ -16,6 +16,7 @@ const MessageInput: Component<{
     const [contextState, contextActions] = useContext();
     const [, userActions] = useUser();
     const [, messageActions] = useMessage();
+    const [, serverActions] = useServer();
 
     const [content, setContent] = createSignal("");
     const [files, setFiles] = createSignal<File[]>([]);
@@ -107,8 +108,17 @@ const MessageInput: Component<{
     };
 
     const addFiles = (newFiles: File[]) => {
-        if (newFiles.length > 0) {
-            setFiles((prev) => [...prev, ...newFiles]);
+        const config = serverActions.get();
+        for (const f of newFiles) {
+            if (config && f.size > config.maxFileSizeMb * 1024 * 1024) {
+                addToast(`File exceeds ${config.maxFileSizeMb} MB limit`, "error");
+                continue;
+            }
+            if (config && files().length >= config.maxFilesPerMessage) {
+                addToast(`Maximum ${config.maxFilesPerMessage} files per message`, "error");
+                break;
+            }
+            setFiles((prev) => [...prev, f]);
         }
     };
 

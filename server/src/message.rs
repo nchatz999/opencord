@@ -1238,24 +1238,10 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
         message_id: i64,
         files: Vec<NewFileAttachment>,
     ) -> Result<Vec<File>, DomainError> {
-        if files.len() > 5 {
-            return Err(DomainError::BadRequest("Maximum 5 files per message".to_string()));
-        }
-
         let mut file_tx = self.file_manager.begin()?;
         let mut file_attachments = Vec::new();
 
         for f in &files {
-            if f.data.len() > 20 * 1024 * 1024 {
-                return Err(DomainError::BadRequest(
-                    format!("File '{}' exceeds 20 MB limit", f.file_name),
-                ));
-            }
-
-            let content_type = infer::get(&f.data)
-                .map(|kind| kind.mime_type().to_string())
-                .unwrap_or_else(|| f.content_type.clone());
-
             let file_hash = format!("{:x}", Sha256::digest(&f.data));
             let file_size = f.data.len() as i64;
 
@@ -1264,7 +1250,7 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                     message_id,
                     &f.file_name,
                     file_size,
-                    &content_type,
+                    &f.content_type,
                     &file_hash,
                 )
                 .await?;

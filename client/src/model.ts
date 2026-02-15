@@ -149,6 +149,8 @@ export interface ServerConfig {
   id: number;
   serverName: string;
   avatarFileId: number | undefined;
+  maxFileSizeMb: number;
+  maxFilesPerMessage: number;
 }
 
 export type QualityPreset = "720p" | "1080p" | "1440p" | "4k";

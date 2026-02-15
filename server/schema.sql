@@ -210,7 +210,9 @@ CREATE INDEX idx_voip_participants_recipient ON voip_participants(recipient_id);
 CREATE TABLE server_config (
     id BIGSERIAL PRIMARY KEY,
     server_name VARCHAR(100) NOT NULL DEFAULT 'Opencord',
-    avatar_file_id BIGINT REFERENCES avatar_files(file_id) ON DELETE SET NULL
+    avatar_file_id BIGINT REFERENCES avatar_files(file_id) ON DELETE SET NULL,
+    max_file_size_mb INTEGER NOT NULL DEFAULT 20,
+    max_files_per_message INTEGER NOT NULL DEFAULT 5
 );
 
 -- ============================================

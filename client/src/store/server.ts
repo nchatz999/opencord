@@ -17,6 +17,7 @@ interface ServerActions {
     set: (config: ServerConfig) => void;
     updateName: (name: string) => Promise<Result<void, string>>;
     updateAvatar: (file: File) => Promise<Result<void, string>>;
+    updateFileLimits: (maxFileSizeMb: number, maxFilesPerMessage: number) => Promise<Result<void, string>>;
 }
 
 export type ServerStore = [ServerState, ServerActions];
@@ -79,6 +80,17 @@ function createServerStore(): ServerStore {
             const formData = new FormData();
             formData.append("file", file);
             const result = await upload("/server/avatar", formData);
+            if (result.isErr()) {
+                return err(result.error.reason);
+            }
+            return ok(undefined);
+        },
+
+        async updateFileLimits(maxFileSizeMb, maxFilesPerMessage) {
+            const result = await request("/server/file-limits", {
+                method: "PUT",
+                body: { maxFileSizeMb, maxFilesPerMessage },
+            });
             if (result.isErr()) {
                 return err(result.error.reason);
             }

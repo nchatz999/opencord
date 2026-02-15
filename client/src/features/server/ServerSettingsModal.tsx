@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js'
 import { createSignal, createMemo, For, Show } from 'solid-js'
-import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw, Upload } from 'lucide-solid'
+import { Search, Trash2, X, Plus, Copy, Users, FileText, RefreshCw, Upload, HardDrive } from 'lucide-solid'
 import { useToaster } from '../../components/Toaster'
 import { useConfirm } from '../../components/ConfirmDialog'
 import Button from '../../components/Button'
@@ -269,6 +269,38 @@ const ServerSettingsModal: Component = () => {
                                             />
                                         </Show>
                                     </div>
+                                </div>
+                            </Card>
+                        )}
+                    </Show>
+                    <Show when={serverConfig()}>
+                        {(config) => (
+                            <Card title="File Limits" icon={<HardDrive class="w-4 h-4" />}>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input
+                                        label="Max File Size (MB)"
+                                        type="number"
+                                        value={String(config().maxFileSizeMb)}
+                                        onBlur={async (e) => {
+                                            const result = await serverActions.updateFileLimits(parseInt(e.currentTarget.value), config().maxFilesPerMessage);
+                                            if (result.isErr()) {
+                                                addToast(result.error, 'error');
+                                            }
+                                        }}
+                                        min="1"
+                                    />
+                                    <Input
+                                        label="Max Files Per Message"
+                                        type="number"
+                                        value={String(config().maxFilesPerMessage)}
+                                        onBlur={async (e) => {
+                                            const result = await serverActions.updateFileLimits(config().maxFileSizeMb, parseInt(e.currentTarget.value));
+                                            if (result.isErr()) {
+                                                addToast(result.error, 'error');
+                                            }
+                                        }}
+                                        min="1"
+                                    />
                                 </div>
                             </Card>
                         )}

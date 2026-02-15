@@ -16,6 +16,8 @@ pub struct ServerConfig {
     pub id: i64,
     pub server_name: String,
     pub avatar_file_id: Option<i64>,
+    pub max_file_size_mb: i32,
+    pub max_files_per_message: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
