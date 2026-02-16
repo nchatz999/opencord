@@ -18,7 +18,7 @@ import { usePreference } from "../store/preference";
 import { NoiseSuppressorProcessor } from "rnnoise-wasm";
 import workletUrl from "rnnoise-wasm/worklet-bundle?url";
 import { DeepFilterNoiseFilterProcessor } from "deepfilternet3-noise-filter";
-import { EnergyVad } from "./energy-vad";
+import { EnergyVad } from "./vad";
 import { useVoip, useAuth, useConnection } from "../store";
 
 export { Track, VideoQuality } from "livekit-client";
