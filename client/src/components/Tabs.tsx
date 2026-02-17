@@ -58,7 +58,7 @@ export const Tabs: Component<TabsProps> = (props) => {
       <For each={props.items}>
         {(item) => (
           <div
-            class="flex-grow"
+            class="flex-grow min-h-0 flex flex-col"
             classList={{ hidden: props.value !== item.id }}
           >
             {item.content}

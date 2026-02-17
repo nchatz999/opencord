@@ -34,11 +34,32 @@ const LeftPanel: Component = () => {
                 </div>
             ),
             content: (
-                <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                    <ChannelBrowser
-                        groups={groupActions.list()}
-                    />
-                </div>
+                <>
+                    <div class="flex items-center justify-between px-4 py-2">
+                        <h3 class="text-xs font-semibold text-fg-muted uppercase">Organize</h3>
+                        <div class="flex gap-1">
+                            <button
+                                onClick={() => modalActions.open({ type: "createChannel", groupId: 0 })}
+                                class="p-1.5 bg-bg-overlay hover:bg-bg-emphasis text-fg-base rounded transition-colors"
+                                title="Create a new channel"
+                            >
+                                <Hash size={16} />
+                            </button>
+                            <button
+                                onClick={() => modalActions.open({ type: "createGroup" })}
+                                class="p-1.5 bg-bg-overlay hover:bg-bg-emphasis text-fg-base rounded transition-colors"
+                                title="Create a new group"
+                            >
+                                <UsersIcon size={16} />
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                        <ChannelBrowser
+                            groups={groupActions.list()}
+                        />
+                    </div>
+                </>
             ),
         },
         {

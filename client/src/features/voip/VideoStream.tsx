@@ -49,13 +49,13 @@ const VideoStream: Component<VideoStreamProps> = (props) => {
     return (
         <Show when={publisher()}>
             {(pub) => (
-                <div class="relative bg-bg-subtle rounded-lg overflow-hidden flex items-center justify-center min-h-[200px]">
+                <div class="relative bg-bg-subtle rounded-lg overflow-hidden flex items-center justify-center aspect-video">
                     <video
                         ref={videoRef}
                         autoplay
                         playsinline
                         muted={true}
-                        class="w-full h-full object-cover"
+                        class="w-full h-full object-contain"
                     />
 
                     <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">

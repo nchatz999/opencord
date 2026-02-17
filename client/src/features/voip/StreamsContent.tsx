@@ -106,7 +106,7 @@ const StreamsContent: Component = () => {
 
                     <div class="flex-1 min-h-0 overflow-auto">
                         <div
-                            class={`grid gap-4 h-full p-4 ${getGridCols(getCurrentParticipants())}`}
+                            class={`grid gap-4 p-4 ${getGridCols(getCurrentParticipants())}`}
                         >
                             <For each={getCurrentParticipants()}>
                                 {(participant) => (
