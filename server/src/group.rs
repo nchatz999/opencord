@@ -15,9 +15,9 @@ use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
 use crate::transport::{ControlRoutingPolicy, ServerMessage};
 
-use axum::http::StatusCode;
 use axum::Json;
 use axum::extract::{Extension, Path, State};
+use axum::http::StatusCode;
 use axum::middleware::from_fn_with_state;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -250,6 +250,8 @@ impl<R: GroupRepository, N: NotifierManager, G: LogManager> GroupService<R, N, G
 
         self.repository.commit(tx).await?;
 
+        let _ = self.notifier.notify(ServerMessage::InvalidateAcl).await;
+
         let event = EventPayload::GroupCreated {
             group: group.clone(),
         };
@@ -388,6 +390,8 @@ impl<R: GroupRepository, N: NotifierManager, G: LogManager> GroupService<R, N, G
             )))?;
 
         self.repository.commit(tx).await?;
+
+        let _ = self.notifier.notify(ServerMessage::InvalidateAcl).await;
 
         let event = EventPayload::GroupDeleted { group_id };
         let _ = self
