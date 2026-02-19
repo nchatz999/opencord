@@ -242,7 +242,7 @@ const UserSettingsModal: Component = () => {
                                 max={100}
                                 value={livekitActions.getNoisePower()}
                                 onChange={(value) => livekitActions.setNoisePower(value)}
-                                class="mt-3"
+                                class="mt-3 w-full"
                             />
                         </Show>
                     </Card>
