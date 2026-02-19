@@ -1,4 +1,4 @@
-import { type Component, onMount } from "solid-js";
+import { type Component, onMount, onCleanup } from "solid-js";
 import { useAuth, useConnection, initializeStores, useVoip } from "../store/index";
 import { useApp } from "../store/app";
 import { useLiveKit } from "../lib/livekit";
@@ -19,9 +19,10 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
     const [, livekitActions] = useLiveKit();
     const connection = useConnection();
 
-    onMount(() => {
-        connectWithRetry();
-    });
+    let cancelled = false;
+
+    onMount(() => connectWithRetry());
+    onCleanup(() => { cancelled = true; });
 
     const connectWithRetry = async () => {
         if (!auth.session) {
@@ -31,32 +32,39 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
 
         let retries = 0;
         while (retries < MAX_RETRIES) {
-            const result = await connection.connect(auth.session.sessionToken);
+            if (cancelled) return;
 
-            if (result.isErr()) {
-                if (result.error.type === "authFailed") {
+            const connectResult = await connection.connect(auth.session.sessionToken);
+            if (cancelled) return;
+
+            if (connectResult.isErr()) {
+                if (connectResult.error.type === "authFailed") {
                     await authActions.logout();
                     appActions.setView({ type: "unauthenticated" });
                     return;
                 }
-
                 retries++;
-                if (retries < MAX_RETRIES) {
-                    await sleep(RETRY_DELAY);
-                    continue;
-                }
-
-                appActions.setView({ type: "error", error: "Connection failed" });
-                return;
+                await sleep(RETRY_DELAY);
+                continue;
             }
 
-            await initializeStores();
+            const initResult = await initializeStores();
+            if (cancelled) return;
+
+            if (initResult.isErr()) {
+                retries++;
+                await sleep(RETRY_DELAY);
+                continue;
+            }
+
             if (props.channelId) {
                 await voipActions.joinChannel(props.channelId, livekitActions.getMuted(), livekitActions.getDeafened());
             }
             appActions.setView({ type: "app" });
             return;
         }
+
+        appActions.setView({ type: "error", error: "Connection failed" });
     };
 
     return (

@@ -6,8 +6,6 @@ import { request } from "../utils";
 import { setDomain } from "../lib/ServerConfig";
 import type { User, Session } from "../model";
 import { useUser } from "./user";
-import { useConnection } from "./connection";
-import { useApp } from "./app";
 import { clearImageCache } from "../components/ImagePreview";
 
 interface AuthSession {
@@ -45,6 +43,7 @@ export interface AuthState {
 export interface AuthActions {
     getUser: () => User;
     getSession: () => AuthSession;
+    clearLocal: () => void;
     login: (username: string, password: string, domain?: string) => Promise<Result<void, string>>;
     register: (username: string, password: string, inviteCode: string, domain?: string) => Promise<Result<void, string>>;
     logout: () => Promise<Result<void, string>>;
@@ -75,6 +74,12 @@ function createAuthStore(): AuthStore {
         getSession() {
             if (!state.session) throw new Error("Not authenticated");
             return state.session;
+        },
+
+        clearLocal() {
+            clearSession();
+            clearImageCache();
+            setState("session", null);
         },
 
         async login(username, password, domain) {
@@ -181,16 +186,6 @@ function createAuthStore(): AuthStore {
             return ok(undefined);
         },
     };
-
-    const connection = useConnection();
-    const [, appActions] = useApp();
-
-    connection.onConnectionClosed(() => {
-        clearSession();
-        clearImageCache();
-        setState("session", null);
-        appActions.setView({ type: "unauthenticated" });
-    });
 
     return [state, actions];
 }

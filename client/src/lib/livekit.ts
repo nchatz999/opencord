@@ -123,6 +123,7 @@ interface LiveKitState {
     muted: boolean;
     deafened: boolean;
     noiseCancellation: NoiseCancellationType;
+    noisePower: number;
 }
 
 interface LiveKitActions {
@@ -172,6 +173,8 @@ interface LiveKitActions {
     getNoiseCancellation: () => NoiseCancellationType;
     setNoiseCancellation: (type: NoiseCancellationType) => Promise<void>;
     getNoiseCancellationOptions: () => Option<NoiseCancellationType>[];
+    getNoisePower: () => number;
+    setNoisePower: (power: number) => void;
     refreshDevices: () => Promise<void>;
     getAudioInputDevices: () => MediaDevice[];
     getAudioOutputDevices: () => MediaDevice[];
@@ -203,6 +206,7 @@ function createLiveKitStore(): LiveKitStore {
         muted: false,
         deafened: false,
         noiseCancellation: prefActions.get<NoiseCancellationType>("noiseCancellation") ?? "rnnoise",
+        noisePower: prefActions.get<number>("noisePower") ?? 75,
     });
 
     const [playback, setPlayback] = createStore<PlaybackState>({
@@ -309,8 +313,10 @@ function createLiveKitStore(): LiveKitStore {
         if (type === "rnnoise") {
             await track.setProcessor(rnnoiseProcessor);
             rnnoiseProcessor.enabled = true;
+            rnnoiseProcessor.power = state.noisePower;
         } else {
             await track.setProcessor(deepFilterProcessor);
+            deepFilterProcessor.setSuppressionLevel(state.noisePower);
         }
     };
 
@@ -425,9 +431,11 @@ function createLiveKitStore(): LiveKitStore {
         async disconnect() {
             await energyVad.stop();
             for (const key of Object.keys(playback.audio) as TrackKey[]) {
+                playback.audio[key]?.track.stop();
                 playback.audio[key]?.track.detach();
             }
             for (const key of Object.keys(playback.tracks) as TrackKey[]) {
+                playback.tracks[key]?.stop();
                 playback.tracks[key]?.detach();
             }
             setPlayback({ tracks: {}, audio: {}, speaking: {} });
@@ -609,6 +617,14 @@ function createLiveKitStore(): LiveKitStore {
             await syncMicrophoneState();
         },
         getNoiseCancellationOptions: () => NOISE_CANCELLATION_OPTIONS,
+
+        getNoisePower: () => state.noisePower,
+        setNoisePower(power) {
+            setState("noisePower", power);
+            prefActions.set("noisePower", power);
+            rnnoiseProcessor.power = power;
+            deepFilterProcessor.setSuppressionLevel(power);
+        },
 
         async refreshDevices() {
             const [inputs, outputs] = await Promise.all([

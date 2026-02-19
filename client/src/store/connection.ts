@@ -21,8 +21,6 @@ const PONG_TIMEOUT_MS = 2000;
 const MAX_MISSED_PONGS = 1;
 
 const CLOSE_CODE_NORMAL = 1000;
-const CLOSE_CODE_GOING_AWAY = 1001;
-const CLOSE_CODE_ABNORMAL = 1006;
 const CLOSE_CODE_DISCONNECTED = 4002;
 
 
@@ -118,6 +116,9 @@ function createConnectionStore(): ConnectionActions {
         pendingPings = [];
         missedPongs = 0;
         if (socket) {
+            socket.onmessage = null;
+            socket.onclose = null;
+            socket.onerror = null;
             socket.close(1000, "Client disconnect");
             socket = null;
         }
@@ -150,14 +151,15 @@ function createConnectionStore(): ConnectionActions {
         switch (message.type) {
             case "answer":
                 if (connectResolve) {
+                    const resolve = connectResolve;
+                    connectResolve = null;
                     if (message.ok) {
                         startPingPong();
-                        connectResolve(ok(undefined));
+                        resolve(ok(undefined));
                     } else {
-                        connectResolve(err({ type: "authFailed" }));
+                        resolve(err({ type: "authFailed" }));
                         disconnect();
                     }
-                    connectResolve = null;
                 }
                 break;
 
@@ -184,29 +186,18 @@ function createConnectionStore(): ConnectionActions {
     }
 
     function handleClose(event: CloseEvent) {
+        const wasConnecting = !!connectResolve;
+        if (connectResolve) {
+            connectResolve(err({ type: "networkError" }));
+            connectResolve = null;
+        }
         disconnect();
+        if (wasConnecting) return;
 
-        switch (event.code) {
-            case CLOSE_CODE_NORMAL:
-                break;
-            case CLOSE_CODE_DISCONNECTED:
-                if (connectResolve) {
-                    connectResolve(err({ type: "networkError" }));
-                    connectResolve = null;
-                } else {
-                    notifyClosed();
-                }
-                break;
-            case CLOSE_CODE_GOING_AWAY:
-            case CLOSE_CODE_ABNORMAL:
-            default:
-                if (connectResolve) {
-                    connectResolve(err({ type: "networkError" }));
-                    connectResolve = null;
-                } else {
-                    notifyConnectionLost();
-                }
-                break;
+        if (event.code === CLOSE_CODE_DISCONNECTED) {
+            notifyClosed();
+        } else if (event.code !== CLOSE_CODE_NORMAL) {
+            notifyConnectionLost();
         }
     }
 
@@ -224,6 +215,10 @@ function createConnectionStore(): ConnectionActions {
 
     const actions: ConnectionActions = {
         connect(token: string): Promise<Result<void, ConnectionError>> {
+            if (connectResolve) {
+                connectResolve(err({ type: "networkError" }));
+                connectResolve = null;
+            }
             disconnect();
 
             try {
@@ -232,6 +227,7 @@ function createConnectionStore(): ConnectionActions {
                 socket.binaryType = "arraybuffer";
                 socket.onmessage = (event) => handleMessage(event.data);
                 socket.onclose = handleClose;
+                socket.onerror = () => {};
 
             } catch {
                 return Promise.resolve(err({ type: "networkError" }));

@@ -40,7 +40,7 @@ importers:
         version: link:../utils
       rnnoise-wasm:
         specifier: github:nchatz999/rnnoise-wasm
-        version: https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/b0bd072277ab07f7c99407f248953b61d6dccf0b
+        version: https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/e2499ec21767d4ea0c132c20c2236edec638580e
       solid-js:
         specifier: ^1.9.11
         version: 1.9.11
@@ -1946,8 +1946,8 @@ packages:
     deprecated: Rimraf versions prior to v4 are no longer supported
     hasBin: true
 
-  rnnoise-wasm@https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/b0bd072277ab07f7c99407f248953b61d6dccf0b:
-    resolution: {tarball: https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/b0bd072277ab07f7c99407f248953b61d6dccf0b}
+  rnnoise-wasm@https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/e2499ec21767d4ea0c132c20c2236edec638580e:
+    resolution: {tarball: https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/e2499ec21767d4ea0c132c20c2236edec638580e}
     version: 1.0.0
 
   roarr@2.15.4:
@@ -4291,7 +4291,7 @@ snapshots:
     dependencies:
       glob: 7.2.3
 
-  rnnoise-wasm@https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/b0bd072277ab07f7c99407f248953b61d6dccf0b: {}
+  rnnoise-wasm@https://codeload.github.com/nchatz999/rnnoise-wasm/tar.gz/e2499ec21767d4ea0c132c20c2236edec638580e: {}
 
   roarr@2.15.4:
     dependencies:

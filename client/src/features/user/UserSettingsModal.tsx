@@ -235,6 +235,16 @@ const UserSettingsModal: Component = () => {
                             onChange={(value) => livekitActions.setNoiseCancellation(value as NoiseCancellationType)}
                             class="mt-3 w-full"
                         />
+                        <Show when={livekitActions.getNoiseCancellation() !== "off"}>
+                            <Slider
+                                title="Suppression Strength"
+                                min={0}
+                                max={100}
+                                value={livekitActions.getNoisePower()}
+                                onChange={(value) => livekitActions.setNoisePower(value)}
+                                class="mt-3"
+                            />
+                        </Show>
                     </Card>
 
                     <Card title="Output" icon={<Headphones class="w-4 h-4" />}>

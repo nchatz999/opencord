@@ -12,6 +12,8 @@ import { useFile } from "./file";
 import { useReaction } from "./reaction";
 import { useAcl } from "./acl";
 import { useLiveKit } from "../lib/livekit";
+import type { Result } from "opencord-utils";
+import { ok, err } from "opencord-utils";
 
 const connection = useConnection();
 const [, appActions] = useApp();
@@ -27,7 +29,7 @@ connection.onConnectionLost(async () => {
 
 connection.onConnectionClosed(async () => {
     await livekitActions.disconnect();
-    await authActions.logout();
+    authActions.clearLocal();
     appActions.setView({ type: "unauthenticated" });
 });
 
@@ -37,7 +39,7 @@ export async function resetStore() {
     await livekitActions.disconnect();
 }
 
-export async function initializeStores() {
+export async function initializeStores(): Promise<Result<void, string>> {
     const [, userActions] = useUser();
     const [, serverActions] = useServer();
     const [, roleActions] = useRole();
@@ -48,7 +50,7 @@ export async function initializeStores() {
     const [, reactionActions] = useReaction();
     const [, aclActions] = useAcl();
 
-    await Promise.all([
+    const results = await Promise.all([
         userActions.init(),
         serverActions.init(),
         roleActions.init(),
@@ -60,4 +62,10 @@ export async function initializeStores() {
         aclActions.init(),
         voipActions.init(),
     ]);
+
+    const failed = results.find((r) => r.isErr());
+    if (failed?.isErr()) {
+        return err(failed.error);
+    }
+    return ok(undefined);
 }
