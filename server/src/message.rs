@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use time::OffsetDateTime;
-use tracing::{error, warn};
+use tracing::warn;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -57,11 +57,12 @@ pub struct File {
     pub file_uuid: String,
     pub message_id: i64,
     pub file_name: String,
-    pub file_type: String,
     pub file_size: i64,
     pub file_hash: String,
     #[serde(with = "time::serde::iso8601")]
     pub created_at: OffsetDateTime,
+    #[schema(value_type = FileMetadata)]
+    pub metadata: sqlx::types::Json<FileMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -90,11 +91,12 @@ pub struct FileAttachment {
     pub file_uuid: String,
     pub message_id: i64,
     pub file_name: String,
-    pub file_type: String,
     pub file_size: i64,
     pub file_hash: String,
     #[serde(with = "time::serde::iso8601")]
     pub created_at: OffsetDateTime,
+    #[schema(value_type = FileMetadata)]
+    pub metadata: sqlx::types::Json<FileMetadata>,
 }
 
 #[derive(Debug)]
@@ -102,6 +104,26 @@ pub struct NewFileAttachment {
     pub file_name: String,
     pub content_type: String,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum FileMetadata {
+    Image { mime: String, width: i32, height: i32 },
+    Video { mime: String, width: i32, height: i32 },
+    Audio { mime: String },
+    File { mime: String },
+}
+
+impl FileMetadata {
+    pub fn mime(&self) -> &str {
+        match self {
+            Self::Image { mime, .. } => mime,
+            Self::Video { mime, .. } => mime,
+            Self::Audio { mime } => mime,
+            Self::File { mime } => mime,
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -166,8 +188,8 @@ pub trait MessageTransaction: Send + Sync {
         message_id: i64,
         file_name: &str,
         file_size: i64,
-        content_type: &str,
         file_hash: &str,
+        metadata: sqlx::types::Json<FileMetadata>,
     ) -> Result<File, DatabaseError>;
 
     async fn delete_message_files(&mut self, message_id: i64) -> Result<Vec<File>, DatabaseError>;
@@ -405,22 +427,22 @@ impl MessageTransaction for PgMessageTransaction {
         message_id: i64,
         file_name: &str,
         file_size: i64,
-        content_type: &str,
         file_hash: &str,
+        metadata: sqlx::types::Json<FileMetadata>,
     ) -> Result<File, DatabaseError> {
         let file_uuid = Uuid::new_v4().to_string();
 
         let created_file = sqlx::query_as!(
             File,
-            r#"INSERT INTO files (file_uuid, message_id, file_name, file_type, file_size, file_hash)
+            r#"INSERT INTO files (file_uuid, message_id, file_name, file_size, file_hash, metadata)
                VALUES ($1, $2, $3, $4, $5, $6)
-               RETURNING file_id, file_uuid, message_id, file_name, file_type, file_size, file_hash, created_at"#,
+               RETURNING file_id, file_uuid, message_id, file_name, file_size, file_hash, created_at, metadata as "metadata: sqlx::types::Json<FileMetadata>""#,
             file_uuid,
             message_id,
             file_name,
-            content_type,
             file_size,
-            file_hash
+            file_hash,
+            metadata as _
         )
         .fetch_one(&mut *self.transaction)
         .await?;
@@ -433,7 +455,7 @@ impl MessageTransaction for PgMessageTransaction {
             File,
             r#"DELETE FROM files
                WHERE message_id = $1
-               RETURNING file_id, file_uuid, message_id, file_name, file_type, file_size, file_hash, created_at"#,
+               RETURNING file_id, file_uuid, message_id, file_name, file_size, file_hash, created_at, metadata as "metadata: sqlx::types::Json<FileMetadata>""#,
             message_id
         )
         .fetch_all(&mut *self.transaction)
@@ -594,7 +616,7 @@ impl MessageRepository for Postgre {
     async fn find_file_by_id(&self, file_id: i64) -> Result<Option<FileAttachment>, DatabaseError> {
         let result = sqlx::query_as!(
             FileAttachment,
-            r#"SELECT f.file_id, f.file_uuid, f.message_id, f.file_name, f.file_type, f.file_size, f.file_hash, f.created_at
+            r#"SELECT f.file_id, f.file_uuid, f.message_id, f.file_name, f.file_size, f.file_hash, f.created_at, f.metadata as "metadata: sqlx::types::Json<FileMetadata>"
                FROM files f
                WHERE f.file_id = $1"#,
             file_id
@@ -665,10 +687,10 @@ impl MessageRepository for Postgre {
                 f.file_uuid,
                 f.message_id,
                 f.file_name,
-                f.file_type,
                 f.file_size,
                 f.file_hash,
-                f.created_at
+                f.created_at,
+                f.metadata as "metadata: sqlx::types::Json<FileMetadata>"
             FROM files f
             WHERE f.message_id IN (SELECT message_id FROM limited_messages)
             ORDER BY f.message_id, f.file_id"#,
@@ -708,10 +730,10 @@ impl MessageRepository for Postgre {
                 f.file_uuid,
                 f.message_id,
                 f.file_name,
-                f.file_type,
                 f.file_size,
                 f.file_hash,
-                f.created_at
+                f.created_at,
+                f.metadata as "metadata: sqlx::types::Json<FileMetadata>"
             FROM files f
             WHERE f.message_id IN (SELECT message_id FROM limited_messages)
             ORDER BY f.message_id, f.file_id"#,
@@ -885,10 +907,10 @@ impl MessageRepository for Postgre {
                 f.file_uuid,
                 f.message_id,
                 f.file_name,
-                f.file_type,
                 f.file_size,
                 f.file_hash,
-                f.created_at
+                f.created_at,
+                f.metadata as "metadata: sqlx::types::Json<FileMetadata>"
             FROM files f
             JOIN messages m ON f.message_id = m.id
             WHERE m.channel_id = $1
@@ -919,10 +941,10 @@ impl MessageRepository for Postgre {
                 f.file_uuid,
                 f.message_id,
                 f.file_name,
-                f.file_type,
                 f.file_size,
                 f.file_hash,
-                f.created_at
+                f.created_at,
+                f.metadata as "metadata: sqlx::types::Json<FileMetadata>"
             FROM files f
             JOIN messages m ON f.message_id = m.id
             WHERE m.recipient_id IS NOT NULL
@@ -1245,13 +1267,30 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
             let file_hash = format!("{:x}", Sha256::digest(&f.data));
             let file_size = f.data.len() as i64;
 
+            let metadata = if f.content_type.starts_with("image/") {
+                match imagesize::blob_size(&f.data) {
+                    Ok(dims) => FileMetadata::Image {
+                        mime: f.content_type.clone(),
+                        width: dims.width as i32,
+                        height: dims.height as i32,
+                    },
+                    Err(_) => FileMetadata::File { mime: f.content_type.clone() },
+                }
+            } else if f.content_type.starts_with("video/") {
+                FileMetadata::Video { mime: f.content_type.clone(), width: 0, height: 0 }
+            } else if f.content_type.starts_with("audio/") {
+                FileMetadata::Audio { mime: f.content_type.clone() }
+            } else {
+                FileMetadata::File { mime: f.content_type.clone() }
+            };
+
             let file_attachment = db_tx
                 .create_file(
                     message_id,
                     &f.file_name,
                     file_size,
-                    &f.content_type,
                     &file_hash,
+                    sqlx::types::Json(metadata),
                 )
                 .await?;
 
@@ -2278,7 +2317,7 @@ async fn get_file_handler(
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
-        HeaderValue::from_str(&file.0.file_type)
+        HeaderValue::from_str(file.0.metadata.mime())
             .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
     headers.insert(

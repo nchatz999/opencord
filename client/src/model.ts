@@ -33,12 +33,18 @@ export interface Channel {
 }
 
 
+export type FileMetadata =
+  | { type: "image"; mime: string; width: number; height: number }
+  | { type: "video"; mime: string; width: number; height: number }
+  | { type: "audio"; mime: string }
+  | { type: "file"; mime: string };
+
 export interface File {
   fileId: number;
   fileUuid: string;
   messageId: number;
   fileName: string;
-  fileType: string;
+  metadata: FileMetadata;
   fileSize: number;
   fileHash: string;
   createdAt: string;

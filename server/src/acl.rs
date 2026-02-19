@@ -15,7 +15,7 @@ use crate::managers::{
     DefaultNotifierManager, FileError, FileManager, LocalFileManager, LogManager, NotifierManager,
     TextLogManager,
 };
-use crate::message::File;
+use crate::message::{File, FileMetadata};
 use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
@@ -279,7 +279,7 @@ impl AclTransaction for PgAclTransaction {
                AND m.channel_id = c.channel_id
                AND u.role_id = $1
                AND c.group_id = $2
-               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.file_type, files.file_size, files.file_hash, files.created_at"#,
+               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.metadata as "metadata: sqlx::types::Json<FileMetadata>", files.file_size, files.file_hash, files.created_at"#,
             role_id,
             group_id
         )
@@ -301,7 +301,7 @@ impl AclTransaction for PgAclTransaction {
                AND m.channel_id = c.channel_id
                AND m.sender_id = $1
                AND c.group_id = $2
-               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.file_type, files.file_size, files.file_hash, files.created_at"#,
+               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.metadata as "metadata: sqlx::types::Json<FileMetadata>", files.file_size, files.file_hash, files.created_at"#,
             user_id,
             group_id
         )

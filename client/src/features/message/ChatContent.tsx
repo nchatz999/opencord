@@ -18,25 +18,6 @@ const SCROLL_THRESHOLD = 5;
 
 const toContextId = (c: { type: string; id: number }) => `${c.type}-${c.id}`;
 
-const waitForImages = (container: HTMLElement, timeout = 3000): Promise<void> => {
-    return new Promise((resolve) => {
-        const start = Date.now();
-
-        const check = () => {
-            const images = Array.from(container.querySelectorAll("img"));
-            const allReady = images.every((img) => img.src && img.complete);
-
-            if (allReady || Date.now() - start > timeout) {
-                resolve();
-            } else {
-                requestAnimationFrame(check);
-            }
-        };
-
-        check();
-    });
-};
-
 const waitForRender = (): Promise<void> =>
     new Promise((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
@@ -142,7 +123,6 @@ const ChatContent: Component = () => {
         }
 
         await waitForRender();
-        if (containerRef) await waitForImages(containerRef);
         if (!containerRef) return;
 
         const savedPosition = contextActions.getScrollPosition(context);
@@ -167,11 +147,8 @@ const ChatContent: Component = () => {
     createEffect(on([latestMessageId, lastMessageReactionCount], async () => {
         if (!stableContextId() || !containerRef || !wasAtBottom()) return;
 
-        await waitForImages(containerRef);
-
-        requestAnimationFrame(() => {
-            if (containerRef) containerRef.scrollTop = containerRef.scrollHeight;
-        });
+        await waitForRender();
+        if (containerRef) containerRef.scrollTop = containerRef.scrollHeight;
     }, { defer: true }));
 
     return (

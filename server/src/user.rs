@@ -13,7 +13,7 @@ use crate::managers::{
     DefaultNotifierManager, FileError, FileManager, LocalFileManager, LogManager, NotifierManager,
     TextLogManager,
 };
-use crate::message::{File, Message};
+use crate::message::{File, FileMetadata, Message};
 use crate::middleware::{AuthorizeService, authorize};
 use crate::model::EventPayload;
 use crate::role::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
@@ -307,7 +307,7 @@ impl UserTransaction for PgUserTransaction {
                USING messages m
                WHERE files.message_id = m.id
                AND m.sender_id = $1
-               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.file_type, files.file_size, files.file_hash, files.created_at"#,
+               RETURNING files.file_id, files.file_uuid, files.message_id, files.file_name, files.metadata as "metadata: sqlx::types::Json<FileMetadata>", files.file_size, files.file_hash, files.created_at"#,
             user_id
         )
         .fetch_all(&mut *self.transaction)

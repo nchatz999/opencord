@@ -18,7 +18,7 @@ const FileItem: Component<FileProps> = (props) => {
 
         if (result.isErr()) return;
 
-        const blob = new Blob([result.value], { type: props.file.fileType });
+        const blob = new Blob([result.value], { type: props.file.metadata.mime });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -31,16 +31,18 @@ const FileItem: Component<FileProps> = (props) => {
 
     return (
         <div>
-            {props.file.fileType.startsWith("image/") ? (
+            {props.file.metadata.type === "image" ? (
                 <ImagePreview
-                    class="rounded-lg max-w-sm max-h-96 object-contain"
+                    class="rounded-lg object-contain"
                     src={`/message/files/${props.file.fileId}`}
                     alt="File preview"
                     expandable
+                    width={props.file.metadata.width}
+                    height={props.file.metadata.height}
                 />
-            ) : props.file.fileType.startsWith("video/") ? (
+            ) : props.file.metadata.type === "video" ? (
                 <VideoPreview src={`/message/files/${props.file.fileId}`} />
-            ) : props.file.fileType.startsWith("audio/") ? (
+            ) : props.file.metadata.type === "audio" ? (
                 <SoundPreview
                     src={`/message/files/${props.file.fileId}`}
                     fileName={props.file.fileName}

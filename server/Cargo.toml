@@ -38,5 +38,6 @@ livekit-api = "0.4.11"
 livekit-protocol = "0.6.0"
 emojis = "0.8.0"
 infer = "0.19"
+imagesize = "0.13"
 
 [dev-dependencies]
