@@ -33,7 +33,7 @@ const FileItem: Component<FileProps> = (props) => {
         <div>
             {props.file.metadata.type === "image" ? (
                 <ImagePreview
-                    class="rounded-lg object-contain"
+                    class="block rounded-lg object-contain max-w-sm max-h-96"
                     src={`/message/files/${props.file.fileId}`}
                     alt="File preview"
                     expandable

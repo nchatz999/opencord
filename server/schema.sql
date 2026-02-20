@@ -118,9 +118,9 @@ CREATE TABLE files (
     file_uuid VARCHAR(255) NOT NULL UNIQUE,
     message_id BIGINT NOT NULL,
     file_name VARCHAR(255) NOT NULL,
-    file_type VARCHAR(255) NOT NULL,
     file_size BIGINT NOT NULL,
     file_hash VARCHAR(255) NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{"type":"file","mime":"application/octet-stream"}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
@@ -171,7 +171,7 @@ CREATE TABLE sessions (
     session_token VARCHAR(255) NOT NULL,
     user_id BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 

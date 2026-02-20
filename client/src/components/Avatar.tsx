@@ -1,4 +1,4 @@
-import { createSignal, Show, type Component } from "solid-js";
+import { Show, type Component } from "solid-js";
 import { User } from "lucide-solid";
 import { cn } from "../utils";
 import ImagePreview from "./ImagePreview";
@@ -30,7 +30,6 @@ const iconSizes: Record<AvatarSize, number> = {
 
 const Avatar: Component<AvatarProps> = (props) => {
   const size = () => props.size ?? "sm";
-  const [loaded, setLoaded] = createSignal(false);
 
   return (
     <Show
@@ -47,22 +46,16 @@ const Avatar: Component<AvatarProps> = (props) => {
         </div>
       }
     >
-      <div class={cn("relative flex-shrink-0", sizeClasses[size()])}>
-        <Show when={!loaded()}>
-          <div class={cn("absolute inset-0 rounded-full bg-bg-overlay animate-pulse")} />
-        </Show>
-        <ImagePreview
-          src={`/user/${props.avatarFileId}/avatar`}
-          alt={props.alt ?? "Avatar"}
-          onLoad={() => setLoaded(true)}
-          class={cn(
-            "rounded-full object-cover",
-            sizeClasses[size()],
-            !loaded() && "opacity-0",
-            props.class
-          )}
-        />
-      </div>
+      <ImagePreview
+        src={`/user/${props.avatarFileId}/avatar`}
+        alt={props.alt ?? "Avatar"}
+        placeholderClass="bg-bg-overlay"
+        class={cn(
+          "rounded-full object-cover flex-shrink-0",
+          sizeClasses[size()],
+          props.class
+        )}
+      />
     </Show>
   );
 };

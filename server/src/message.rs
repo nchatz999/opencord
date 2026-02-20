@@ -109,8 +109,8 @@ pub struct NewFileAttachment {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum FileMetadata {
-    Image { mime: String, width: i32, height: i32 },
-    Video { mime: String, width: i32, height: i32 },
+    Image { mime: String, width: u32, height: u32 },
+    Video { mime: String, width: u32, height: u32 },
     Audio { mime: String },
     File { mime: String },
 }
@@ -1271,8 +1271,8 @@ impl<R: MessageRepository, F: FileManager + Clone + Send, N: NotifierManager, G:
                 match imagesize::blob_size(&f.data) {
                     Ok(dims) => FileMetadata::Image {
                         mime: f.content_type.clone(),
-                        width: dims.width as i32,
-                        height: dims.height as i32,
+                        width: dims.width as u32,
+                        height: dims.height as u32,
                     },
                     Err(_) => FileMetadata::File { mime: f.content_type.clone() },
                 }
