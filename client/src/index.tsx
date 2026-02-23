@@ -10,7 +10,6 @@ import { DevicePickerProvider } from "./components/DevicePicker";
 import { ContextMenuProvider } from "./components/ContentMenu";
 import LoginPage from "./pages/LoginPage";
 import LoadingPage from "./pages/LoadingPage";
-import ErrorPage from "./pages/ErrorPage";
 import App from "./App";
 import { useApp } from "./store/app";
 import { useAuth } from "./store/auth";
@@ -32,9 +31,6 @@ const Root = () => {
               </Match>
               <Match when={app.view.type === "unauthenticated"}>
                 <LoginPage />
-              </Match>
-              <Match when={app.view.type === "error" ? app.view : false}>
-                {(view) => <ErrorPage error={view().error} />}
               </Match>
               <Match when={app.view.type === "app"}>
                 <Show when={auth.session}>

@@ -37,11 +37,11 @@ const clearSession = () => {
 
 export interface AuthState {
     session: AuthSession | null;
-    isLoading: boolean;
 }
 
 export interface AuthActions {
     getUser: () => User;
+    getUserId: () => number | null;
     getSession: () => AuthSession;
     clearLocal: () => void;
     login: (username: string, password: string, domain?: string) => Promise<Result<void, string>>;
@@ -60,7 +60,6 @@ function createAuthStore(): AuthStore {
 
     const [state, setState] = createStore<AuthState>({
         session: initialSession,
-        isLoading: false,
     });
 
     const actions: AuthActions = {
@@ -69,6 +68,10 @@ function createAuthStore(): AuthStore {
             const user = userActions.findById(state.session.userId);
             if (!user) throw new Error("User not found");
             return user;
+        },
+
+        getUserId() {
+            return state.session?.userId ?? null;
         },
 
         getSession() {
@@ -83,8 +86,6 @@ function createAuthStore(): AuthStore {
         },
 
         async login(username, password, domain) {
-            setState("isLoading", true);
-
             if (domain) {
                 setDomain(domain);
             }
@@ -99,25 +100,19 @@ function createAuthStore(): AuthStore {
             });
 
             if (result.isErr()) {
-                setState("isLoading", false);
                 return err(result.error.reason || "Login failed");
             }
 
             saveSession(result.value.session_token, result.value.user_id);
-            setState({
-                session: {
-                    userId: result.value.user_id,
-                    sessionToken: result.value.session_token,
-                },
-                isLoading: false,
+            setState("session", {
+                userId: result.value.user_id,
+                sessionToken: result.value.session_token,
             });
 
             return ok(undefined);
         },
 
         async register(username, password, inviteCode, domain) {
-            setState("isLoading", true);
-
             if (domain) {
                 setDomain(domain);
             }
@@ -130,8 +125,6 @@ function createAuthStore(): AuthStore {
                     invite_code: inviteCode,
                 },
             });
-
-            setState("isLoading", false);
 
             if (result.isErr()) {
                 return err(result.error.reason || "Registration failed");

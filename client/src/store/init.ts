@@ -23,7 +23,8 @@ const [, livekitActions] = useLiveKit();
 
 connection.onConnectionLost(async () => {
     await livekitActions.disconnect();
-    const voipSession = voipActions.findById(authActions.getUser().userId);
+    const userId = authActions.getUserId();
+    const voipSession = userId != null ? voipActions.findById(userId) : undefined;
     appActions.setView({ type: "loading", channelId: voipSession?.channelId });
 });
 

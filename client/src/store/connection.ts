@@ -82,6 +82,9 @@ export type ConnectionError =
 export interface ConnectionActions {
     connect: (token: string) => Promise<Result<void, ConnectionError>>;
     disconnect: () => void;
+    isConnected: () => boolean;
+    pauseEvents: () => void;
+    resumeEvents: () => void;
     onServerEvent: (callback: (event: EventPayload) => void) => () => void;
     onConnectionClosed: (callback: () => void) => () => void;
     onConnectionLost: (callback: () => void) => () => void;
@@ -106,8 +109,13 @@ function createConnectionStore(): ConnectionActions {
     let pendingPings: PendingPing[] = [];
     let missedPongs = 0;
     let connectResolve: ((result: Result<void, ConnectionError>) => void) | null = null;
+    let eventQueue: EventPayload[] | null = null;
 
     function disconnect() {
+        if (connectResolve) {
+            connectResolve(err({ type: "networkError" }));
+            connectResolve = null;
+        }
         if (pingIntervalId !== null) {
             clearInterval(pingIntervalId);
             pingIntervalId = null;
@@ -115,6 +123,8 @@ function createConnectionStore(): ConnectionActions {
         pendingPings.forEach(p => clearTimeout(p.timeoutId));
         pendingPings = [];
         missedPongs = 0;
+        serverEventCallbacks.clear();
+        eventQueue = null;
         if (socket) {
             socket.onmessage = null;
             socket.onclose = null;
@@ -180,7 +190,11 @@ function createConnectionStore(): ConnectionActions {
             }
 
             case "event":
-                notifyServerEvent(message.payload);
+                if (eventQueue) {
+                    eventQueue.push(message.payload);
+                } else {
+                    notifyServerEvent(message.payload);
+                }
                 break;
         }
     }
@@ -239,6 +253,20 @@ function createConnectionStore(): ConnectionActions {
         },
 
         disconnect,
+
+        pauseEvents() {
+            eventQueue = [];
+        },
+
+        resumeEvents() {
+            const queued = eventQueue;
+            eventQueue = null;
+            queued?.forEach(e => notifyServerEvent(e));
+        },
+
+        isConnected() {
+            return socket !== null && socket.readyState === WebSocket.OPEN;
+        },
 
         onServerEvent(callback: (event: EventPayload) => void): () => void {
             serverEventCallbacks.add(callback);

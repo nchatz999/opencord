@@ -20,6 +20,7 @@ interface SelectProps {
   onChange: (value: string | number) => void;
   placeholder?: string;
   label?: string;
+  disabled?: boolean;
   class?: string;
   dropdownClass?: string;
   zIndex?: number;
@@ -29,6 +30,7 @@ interface SelectProps {
 
 export default function Select(props: SelectProps) {
   const [isOpen, setIsOpen] = createSignal(false);
+  const [isLoading, setIsLoading] = createSignal(false);
   const [dropdownPosition, setDropdownPosition] = createSignal({
     top: 0,
     left: 0,
@@ -45,9 +47,18 @@ export default function Select(props: SelectProps) {
     return option?.label || props.placeholder || "Select an option";
   });
 
-  const handleSelect = (value: string | number) => {
-    props.onChange(value);
+  const handleSelect = async (value: string | number) => {
     setIsOpen(false);
+    const result = (props.onChange as any)(value);
+
+    if (result instanceof Promise) {
+      setIsLoading(true);
+      try {
+        await result;
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const updateDropdownPosition = () => {
@@ -121,11 +132,16 @@ export default function Select(props: SelectProps) {
         </Show>
         <div
           class={cn(
-            "flex items-center justify-between px-2 gap-2 py-2 bg-input text-fg-base cursor-pointer",
+            "flex items-center justify-between px-2 gap-2 py-2 bg-input text-fg-base",
+            isLoading()
+              ? "opacity-70 cursor-wait"
+              : props.disabled
+                ? "opacity-50 cursor-not-allowed"
+                : "cursor-pointer",
             isOpen() ? "ring-2 ring-focus-ring focus:border-transparent" : ""
           )}
           onClick={() => {
-            if (props.options.length > 0) {
+            if (!props.disabled && !isLoading() && props.options.length > 0) {
               setIsOpen(!isOpen());
             }
           }}

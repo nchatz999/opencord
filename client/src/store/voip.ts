@@ -175,7 +175,10 @@ function createVoipStore(): VoipStore {
             const { token, serverUrl } = result.value;
             setState("currentCallType", "channel");
 
-            await livekit.connect(serverUrl, token);
+            const connectResult = await livekit.connect(serverUrl, token);
+            if (connectResult.isErr()) {
+                return err(connectResult.error);
+            }
 
             soundActions.play("/sounds/enter_call_me.ogg");
             return ok(undefined);
@@ -199,7 +202,10 @@ function createVoipStore(): VoipStore {
             const { token, serverUrl } = result.value;
             setState("currentCallType", "private");
 
-            await livekit.connect(serverUrl, token);
+            const connectResult = await livekit.connect(serverUrl, token);
+            if (connectResult.isErr()) {
+                return err(connectResult.error);
+            }
 
             soundActions.play("/sounds/enter_call_me.ogg");
             return ok(undefined);

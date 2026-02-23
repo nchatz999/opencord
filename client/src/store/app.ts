@@ -8,9 +8,6 @@ export type AppView = {
     type: "unauthenticated"
 } | {
     type: "app"
-} | {
-    type: "error",
-    error: string
 }
 
 

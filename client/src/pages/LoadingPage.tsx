@@ -2,9 +2,9 @@ import { type Component, onMount, onCleanup } from "solid-js";
 import { useAuth, useConnection, initializeStores, useVoip } from "../store/index";
 import { useApp } from "../store/app";
 import { useLiveKit } from "../lib/livekit";
+import Button from "../components/Button";
 import logo from "../assets/opencord.webp";
 
-const MAX_RETRIES = 20;
 const RETRY_DELAY = 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -24,14 +24,20 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
     onMount(() => connectWithRetry());
     onCleanup(() => { cancelled = true; });
 
+    const handleCancel = () => {
+        cancelled = true;
+        connection.disconnect();
+        authActions.clearLocal();
+        appActions.setView({ type: "unauthenticated" });
+    };
+
     const connectWithRetry = async () => {
         if (!auth.session) {
             appActions.setView({ type: "unauthenticated" });
             return;
         }
 
-        let retries = 0;
-        while (retries < MAX_RETRIES) {
+        while (true) {
             if (cancelled) return;
 
             const connectResult = await connection.connect(auth.session.sessionToken);
@@ -39,32 +45,37 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
 
             if (connectResult.isErr()) {
                 if (connectResult.error.type === "authFailed") {
-                    await authActions.logout();
+                    authActions.clearLocal();
                     appActions.setView({ type: "unauthenticated" });
                     return;
                 }
-                retries++;
                 await sleep(RETRY_DELAY);
                 continue;
             }
 
+            connection.pauseEvents();
             const initResult = await initializeStores();
             if (cancelled) return;
+            if (!connection.isConnected()) continue;
 
             if (initResult.isErr()) {
-                retries++;
                 await sleep(RETRY_DELAY);
                 continue;
             }
+            connection.resumeEvents();
 
             if (props.channelId) {
                 await voipActions.joinChannel(props.channelId, livekitActions.getMuted(), livekitActions.getDeafened());
             }
+            if (cancelled) {
+                await livekitActions.disconnect();
+                return;
+            }
+            if (!connection.isConnected()) continue;
+
             appActions.setView({ type: "app" });
             return;
         }
-
-        appActions.setView({ type: "error", error: "Connection failed" });
     };
 
     return (
@@ -81,6 +92,9 @@ const LoadingPage: Component<LoadingPageProps> = (props) => {
                     }}
                 />
                 <div class="text-fg-muted text-sm font-medium">Connecting...</div>
+                <Button onClick={handleCancel} variant="primary" size="sm">
+                    Sign in to a different account
+                </Button>
             </div>
         </div>
     );

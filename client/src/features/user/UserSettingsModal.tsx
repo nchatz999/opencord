@@ -491,8 +491,8 @@ const UserSettingsModal: Component = () => {
                 <Tabs items={tabItems()} value={activeTab()} onChange={setActiveTab} />
                 <div class="mt-6 flex justify-end gap-2">
                     <Button onClick={async () => {
+                        connection.disconnect();
                         await authActions.logout();
-                        await connection.disconnect();
                         modalActions.close();
                         appActions.setView({ type: "unauthenticated" });
                     }}

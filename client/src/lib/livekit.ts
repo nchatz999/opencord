@@ -13,6 +13,8 @@ import {
     type LocalTrackPublication,
 } from "livekit-client";
 import { createRoot, batch } from "solid-js";
+import type { Result } from "opencord-utils";
+import { ok, err } from "opencord-utils";
 import { createStore } from "solid-js/store";
 import { usePreference } from "../store/preference";
 import { NoiseSuppressorProcessor } from "rnnoise-wasm";
@@ -128,7 +130,7 @@ interface LiveKitState {
 
 interface LiveKitActions {
     prepareConnection: (serverUrl: string, token: string) => Promise<void>;
-    connect: (serverUrl: string, token: string) => Promise<void>;
+    connect: (serverUrl: string, token: string) => Promise<Result<void, string>>;
     disconnect: () => Promise<void>;
     getConnectionState: () => ConnectionState | null;
     isConnected: () => boolean;
@@ -421,11 +423,17 @@ function createLiveKitStore(): LiveKitStore {
         async connect(serverUrl, token) {
             await actions.disconnect();
             setState("connectionState", "connecting");
-            await room.connect(serverUrl, token, { autoSubscribe: false });
+            try {
+                await room.connect(serverUrl, token, { autoSubscribe: false });
+            } catch (e) {
+                setState("connectionState", undefined);
+                return err("Connection failed");
+            }
             syncRemotePublications();
             setState("connectionState", "connected");
             await restoreDevicePreferences();
-            await actions.setMicEnabled(true);
+            await actions.setMicEnabled(true).catch(() => { });
+            return ok(undefined);
         },
 
         async disconnect() {

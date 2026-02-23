@@ -23,8 +23,7 @@ const LoginPage: Component = () => {
     const [activeForm, setActiveForm] = createSignal<FormType>("login");
     const [serverDomain, setServerDomain] = createSignal(getDomain());
 
-    const handleLogin = async (e: Event) => {
-        e.preventDefault();
+    const handleLogin = async () => {
         if (!username() || !password() || !serverDomain()) {
             addToast("Please fill in all fields", "error");
             return;
@@ -40,8 +39,7 @@ const LoginPage: Component = () => {
         appActions.setView({ type: "loading" });
     };
 
-    const handleRegister = async (e: Event) => {
-        e.preventDefault();
+    const handleRegister = async () => {
         if (!password() || !username() || !repeatPassword() || !inviteCode() || !serverDomain()) {
             addToast("Please fill in all fields", "error");
             return;
@@ -65,7 +63,7 @@ const LoginPage: Component = () => {
 
     const loginForm = () => (
         <>
-            <form onSubmit={handleLogin} class="space-y-4">
+            <div class="space-y-4">
                 <Input
                     value={serverDomain()}
                     onChange={setServerDomain}
@@ -90,10 +88,10 @@ const LoginPage: Component = () => {
                     checked={rememberMe()}
                     onChange={setRememberMe}
                 />
-                <Button type="submit" class="w-full">
+                <Button onClick={handleLogin} class="w-full">
                     Log In
                 </Button>
-            </form>
+            </div>
             <p class="mt-4 text-sm text-center text-fg-subtle">
                 Need an account?{" "}
                 <button
@@ -108,7 +106,7 @@ const LoginPage: Component = () => {
 
     const registerForm = () => (
         <>
-            <form onSubmit={handleRegister} class="space-y-4">
+            <div class="space-y-4">
                 <Input
                     value={serverDomain()}
                     onChange={setServerDomain}
@@ -141,10 +139,10 @@ const LoginPage: Component = () => {
                     placeholder="Invite Code"
                     icon={<Ticket class="w-5 h-5 text-fg-subtle" />}
                 />
-                <Button type="submit" class="w-full">
+                <Button onClick={handleRegister} class="w-full">
                     Register
                 </Button>
-            </form>
+            </div>
             <p class="mt-4 text-sm text-center text-fg-subtle">
                 Already have an account?{" "}
                 <button
