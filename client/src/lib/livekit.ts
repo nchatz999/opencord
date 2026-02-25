@@ -403,6 +403,13 @@ function createLiveKitStore(): LiveKitStore {
         }
     };
 
+    const handleDisconnected = async (): Promise<void> => {
+        if (state.connectionState === undefined) return;
+        await actions.disconnect();
+        const [, voipActions] = useVoip();
+        voipActions.leave();
+    };
+
     const setupEventListeners = (): void => {
         room
             .on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
@@ -410,7 +417,8 @@ function createLiveKitStore(): LiveKitStore {
             .on(RoomEvent.TrackPublished, handleTrackPublished)
             .on(RoomEvent.TrackUnpublished, handleTrackUnpublished)
             .on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished)
-            .on(RoomEvent.ParticipantPermissionsChanged, handlePermissionsChanged);
+            .on(RoomEvent.ParticipantPermissionsChanged, handlePermissionsChanged)
+            .on(RoomEvent.Disconnected, handleDisconnected);
     };
 
     setupEventListeners();
@@ -448,8 +456,8 @@ function createLiveKitStore(): LiveKitStore {
             }
             setPlayback({ tracks: {}, audio: {}, speaking: {} });
             publications.clear();
-            await room.disconnect();
             setState("connectionState", undefined);
+            await room.disconnect();
         },
 
         getConnectionState() {

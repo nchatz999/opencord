@@ -112,7 +112,7 @@ const StreamsContent: Component = () => {
                                 {(participant) => (
                                     <>
                                         <Show when={participant.publishCamera}>
-                                            <div class="relative group">
+                                            <div class="relative group aspect-video">
                                                 <VideoStream
                                                     publisherId={participant.userId}
                                                     mediaType={Track.Source.Camera}
@@ -130,7 +130,7 @@ const StreamsContent: Component = () => {
                                             </div>
                                         </Show>
                                         <Show when={participant.publishScreen}>
-                                            <div class="relative group">
+                                            <div class="relative group aspect-video">
                                                 <VideoStream
                                                     publisherId={participant.userId}
                                                     mediaType={Track.Source.ScreenShare}
