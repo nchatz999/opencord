@@ -208,7 +208,7 @@ function createLiveKitStore(): LiveKitStore {
         muted: false,
         deafened: false,
         noiseCancellation: prefActions.get<NoiseCancellationType>("noiseCancellation") ?? "rnnoise",
-        noisePower: prefActions.get<number>("noisePower") ?? 75,
+        noisePower: prefActions.get<number>("noisePower") ?? 100,
     });
 
     const [playback, setPlayback] = createStore<PlaybackState>({
