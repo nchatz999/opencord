@@ -4,10 +4,13 @@ const workletCode = `class EnergyVadWorklet extends AudioWorkletProcessor {
   #speaking = false;
   #lastSpeechTime = 0;
   #smoothedRms = 0;
+  #noiseFloor = 0;
 
-  static ALPHA = 0.3;
-  static THRESHOLD_ON = 0.012;
-  static THRESHOLD_OFF = 0.007;
+  static RMS_ALPHA = 0.3;
+  static NOISE_ALPHA = 0.01;
+  static SPEECH_RATIO_ON = 3.0;
+  static SPEECH_RATIO_OFF = 2.0;
+  static MIN_FLOOR = 0.0001;
   static SILENCE_GRACE = 0.15;
 
   process(inputs) {
@@ -18,13 +21,18 @@ const workletCode = `class EnergyVadWorklet extends AudioWorkletProcessor {
     for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
     const rms = Math.sqrt(sum / input.length);
 
-    this.#smoothedRms += EnergyVadWorklet.ALPHA * (rms - this.#smoothedRms);
+    this.#smoothedRms += EnergyVadWorklet.RMS_ALPHA * (rms - this.#smoothedRms);
 
-    const threshold = this.#speaking
-      ? EnergyVadWorklet.THRESHOLD_OFF
-      : EnergyVadWorklet.THRESHOLD_ON;
+    if (!this.#speaking) {
+      this.#noiseFloor += EnergyVadWorklet.NOISE_ALPHA * (this.#smoothedRms - this.#noiseFloor);
+    }
+    const floor = Math.max(this.#noiseFloor, EnergyVadWorklet.MIN_FLOOR);
 
-    if (this.#smoothedRms > threshold) this.#lastSpeechTime = currentTime;
+    const ratio = this.#speaking
+      ? EnergyVadWorklet.SPEECH_RATIO_OFF
+      : EnergyVadWorklet.SPEECH_RATIO_ON;
+
+    if (this.#smoothedRms > floor * ratio) this.#lastSpeechTime = currentTime;
 
     const speaking = currentTime - this.#lastSpeechTime < EnergyVadWorklet.SILENCE_GRACE;
 
