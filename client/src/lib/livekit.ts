@@ -257,7 +257,7 @@ function createLiveKitStore(): LiveKitStore {
         prefActions.get<number>(prefKey(userId, source)) ?? DEFAULT_VOLUME;
 
     const applyTrackVolume = (entry: AudioEntry): void => {
-        entry.track.setVolume(state.deafened ? 0 : entry.volume / 50);
+        entry.track.setVolume(state.deafened ? 0 : (entry.volume / 100) ** 2);
     };
 
     const attachTrack = (userId: number, source: Track.Source, track: RemoteTrack): void => {
