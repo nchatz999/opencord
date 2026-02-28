@@ -236,7 +236,7 @@ function createLiveKitStore(): LiveKitStore {
             audioCaptureDefaults: {
                 noiseSuppression: false,
                 echoCancellation: true,
-                autoGainControl: true,
+                autoGainControl: false,
             },
             publishDefaults: {
                 videoCodec: "h264",
