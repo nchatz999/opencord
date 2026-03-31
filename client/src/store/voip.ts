@@ -223,6 +223,8 @@ function createVoipStore(): VoipStore {
         },
 
         async setMuted(muted) {
+
+            await livekit.setMuted(muted);
             let inVoip = actions.findById(authActions.getUser().userId)
             if (inVoip) {
                 const result = await request("/voip/mute", {
@@ -234,7 +236,6 @@ function createVoipStore(): VoipStore {
                 }
             }
 
-            await livekit.setMuted(muted);
             return ok(undefined);
         },
 

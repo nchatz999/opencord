@@ -24,7 +24,7 @@ import {
 import { connection, useAuth, useModal, useUser, useSound, useTheme } from "../../store/index";
 import { selectFile } from "../../utils";
 import { useApp } from "../../store/app";
-import { useLiveKit, type CameraResolution, type ScreenResolution, type FrameRate, type ScreenCodec, type ScreenContentHint, type NoiseCancellationType } from "../../lib/livekit";
+import { useLiveKit, type CameraResolution, type ScreenResolution, type FrameRate, type ScreenCodec, type ScreenContentHint } from "../../lib/livekit";
 import { Input } from "../../components/Input";
 import Button from "../../components/Button";
 import Select from "../../components/Select";
@@ -228,23 +228,14 @@ const UserSettingsModal: Component = () => {
                             onChange={async (id) => await livekitActions.setAudioInputDevice(id as string)}
                             class="w-full"
                         />
-                        <Select
-                            label="Noise Cancellation"
-                            options={livekitActions.getNoiseCancellationOptions()}
-                            value={livekitActions.getNoiseCancellation()}
-                            onChange={(value) => livekitActions.setNoiseCancellation(value as NoiseCancellationType)}
+                        <Slider
+                            title="Noise Suppression"
+                            min={0}
+                            max={100}
+                            value={livekitActions.getNoisePower()}
+                            onChange={(value) => livekitActions.setNoisePower(value)}
                             class="mt-3 w-full"
                         />
-                        <Show when={livekitActions.getNoiseCancellation() !== "off"}>
-                            <Slider
-                                title="Suppression Strength"
-                                min={0}
-                                max={100}
-                                value={livekitActions.getNoisePower()}
-                                onChange={(value) => livekitActions.setNoisePower(value)}
-                                class="mt-3 w-full"
-                            />
-                        </Show>
                     </Card>
 
                     <Card title="Output" icon={<Headphones class="w-4 h-4" />}>

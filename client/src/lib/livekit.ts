@@ -19,8 +19,6 @@ import { createStore } from "solid-js/store";
 import { usePreference } from "../store/preference";
 import { NoiseSuppressorProcessor } from "rnnoise-wasm";
 import workletUrl from "rnnoise-wasm/worklet-bundle?url";
-import { DeepFilterNoiseFilterProcessor } from "deepfilternet3-noise-filter";
-import { EnergyVad } from "./vad";
 import { useVoip, useAuth, useConnection } from "../store";
 
 export { Track, VideoQuality } from "livekit-client";
@@ -80,12 +78,6 @@ const SCREEN_CONTENT_HINT_OPTIONS: Option<ScreenContentHint>[] = [
     { value: "detail", label: "Detail (Text)" },
 ];
 
-const NOISE_CANCELLATION_OPTIONS: Option<NoiseCancellationType>[] = [
-    { value: "rnnoise", label: "RNNoise" },
-    { value: "deepfilter", label: "DeepFilter" },
-    { value: "off", label: "Off" },
-];
-
 const ALL_SOURCES = [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare, Track.Source.ScreenShareAudio];
 const DEFAULT_VOLUME = 100;
 
@@ -108,7 +100,6 @@ type PublicationKey = `${number}-${Track.Source}`;
 export type LiveKitConnectionState = "connecting" | "connected" | undefined;
 export type ScreenCodec = "h264" | "vp9";
 export type ScreenContentHint = "motion" | "detail";
-export type NoiseCancellationType = "rnnoise" | "deepfilter" | "off";
 
 interface LiveKitState {
     connectionState: LiveKitConnectionState;
@@ -124,7 +115,6 @@ interface LiveKitState {
     screenContentHint: ScreenContentHint;
     muted: boolean;
     deafened: boolean;
-    noiseCancellation: NoiseCancellationType;
     noisePower: number;
 }
 
@@ -172,9 +162,6 @@ interface LiveKitActions {
     setMuted: (muted: boolean) => Promise<void>;
     getDeafened: () => boolean;
     setDeafened: (deafened: boolean) => void;
-    getNoiseCancellation: () => NoiseCancellationType;
-    setNoiseCancellation: (type: NoiseCancellationType) => Promise<void>;
-    getNoiseCancellationOptions: () => Option<NoiseCancellationType>[];
     getNoisePower: () => number;
     setNoisePower: (power: number) => void;
     refreshDevices: () => Promise<void>;
@@ -207,7 +194,6 @@ function createLiveKitStore(): LiveKitStore {
         screenContentHint: prefActions.get<ScreenContentHint>("screenContentHint") ?? "motion",
         muted: false,
         deafened: false,
-        noiseCancellation: prefActions.get<NoiseCancellationType>("noiseCancellation") ?? "rnnoise",
         noisePower: prefActions.get<number>("noisePower") ?? 100,
     });
 
@@ -219,13 +205,10 @@ function createLiveKitStore(): LiveKitStore {
 
     const publications = new Map<PublicationKey, RemoteTrackPublication>();
     const rnnoiseProcessor = new NoiseSuppressorProcessor(workletUrl);
-    const deepFilterProcessor = new DeepFilterNoiseFilterProcessor({
-        sampleRate: 48000,
-        noiseReductionLevel: 80,
-        enabled: true,
-        assetConfig: { cdnUrl: "https://nchatz999.github.io/opencord-cdn/deepfilter" },
+    rnnoiseProcessor.power = state.noisePower;
+    rnnoiseProcessor.setVad((speaking: boolean) => {
+        connection.sendSpeakStatus(authActions.getUser().userId, speaking);
     });
-    const energyVad = new EnergyVad();
 
     const createRoom = (): Room => {
         return new Room({
@@ -308,36 +291,17 @@ function createLiveKitStore(): LiveKitStore {
     const getMicrophoneTrack = (): LocalTrack | undefined =>
         room?.localParticipant?.getTrackPublication(Track.Source.Microphone)?.track as LocalTrack | undefined;
 
-    const applyNoiseProcessor = async (track: LocalTrack): Promise<void> => {
-        const type = state.noiseCancellation;
-        if (type === "off") return;
-
-        if (type === "rnnoise") {
-            await track.setProcessor(rnnoiseProcessor);
-            rnnoiseProcessor.enabled = true;
-            rnnoiseProcessor.power = state.noisePower;
-        } else {
-            await track.setProcessor(deepFilterProcessor);
-            deepFilterProcessor.setSuppressionLevel(state.noisePower);
-        }
-    };
-
     const syncMicrophoneState = async (): Promise<void> => {
         const track = getMicrophoneTrack();
         if (!track) return;
-
-        await track.stopProcessor();
-        await energyVad.stop();
-
+        if (!track.getProcessor()) {
+            await track.setProcessor(rnnoiseProcessor);
+        }
         if (state.muted) {
             await track.mute();
             connection.sendSpeakStatus(authActions.getUser().userId, false);
         } else {
             await track.unmute();
-            await applyNoiseProcessor(track);
-            await energyVad.start(track.mediaStreamTrack, (speaking) => {
-                connection.sendSpeakStatus(authActions.getUser().userId, speaking);
-            });
         }
     };
 
@@ -399,15 +363,8 @@ function createLiveKitStore(): LiveKitStore {
 
     const handlePermissionsChanged = async (_: unknown, participant: Participant): Promise<void> => {
         if (participant === room.localParticipant && participant.permissions?.canPublish) {
-            await actions.setMicEnabled(true);
+            await actions.setMicEnabled(true).catch(() => { });
         }
-    };
-
-    const handleDisconnected = async (): Promise<void> => {
-        if (state.connectionState === undefined) return;
-        await actions.disconnect();
-        const [, voipActions] = useVoip();
-        voipActions.leave();
     };
 
     const setupEventListeners = (): void => {
@@ -417,8 +374,7 @@ function createLiveKitStore(): LiveKitStore {
             .on(RoomEvent.TrackPublished, handleTrackPublished)
             .on(RoomEvent.TrackUnpublished, handleTrackUnpublished)
             .on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished)
-            .on(RoomEvent.ParticipantPermissionsChanged, handlePermissionsChanged)
-            .on(RoomEvent.Disconnected, handleDisconnected);
+            .on(RoomEvent.ParticipantPermissionsChanged, handlePermissionsChanged);
     };
 
     setupEventListeners();
@@ -445,7 +401,6 @@ function createLiveKitStore(): LiveKitStore {
         },
 
         async disconnect() {
-            await energyVad.stop();
             for (const key of Object.keys(playback.audio) as TrackKey[]) {
                 playback.audio[key]?.track.stop();
                 playback.audio[key]?.track.detach();
@@ -616,7 +571,10 @@ function createLiveKitStore(): LiveKitStore {
         getScreenContentHintOptions: () => SCREEN_CONTENT_HINT_OPTIONS,
 
         getMuted: () => state.muted,
-        async setMuted(muted) { setState("muted", muted); await syncMicrophoneState(); },
+        async setMuted(muted) {
+            setState("muted", muted);
+            await syncMicrophoneState();
+        },
 
         getDeafened: () => state.deafened,
         setDeafened(deafened) {
@@ -626,20 +584,11 @@ function createLiveKitStore(): LiveKitStore {
             }
         },
 
-        getNoiseCancellation: () => state.noiseCancellation,
-        async setNoiseCancellation(type) {
-            setState("noiseCancellation", type);
-            prefActions.set("noiseCancellation", type);
-            await syncMicrophoneState();
-        },
-        getNoiseCancellationOptions: () => NOISE_CANCELLATION_OPTIONS,
-
         getNoisePower: () => state.noisePower,
         setNoisePower(power) {
             setState("noisePower", power);
             prefActions.set("noisePower", power);
             rnnoiseProcessor.power = power;
-            deepFilterProcessor.setSuppressionLevel(power);
         },
 
         async refreshDevices() {
@@ -672,7 +621,6 @@ function createLiveKitStore(): LiveKitStore {
         async setAudioInputDevice(deviceId) {
             setState("activeInput", deviceId);
             await room?.switchActiveDevice("audioinput", deviceId);
-            await syncMicrophoneState();
         },
 
         async setAudioOutputDevice(deviceId) {

@@ -5,7 +5,7 @@ const STORAGE_PREFIX = "opencord:";
 type Serializable = string | number | boolean | null | Serializable[] | { [key: string]: Serializable };
 
 interface PreferenceActions {
-    get: <T extends Serializable>(key: string) => T | null;
+    get: <T extends Serializable>(key: string, validValues?: readonly T[]) => T | null;
     set: <T extends Serializable>(key: string, value: T) => void;
     remove: (key: string) => void;
     clear: () => void;
@@ -19,12 +19,14 @@ function createPreferenceStore(): PreferenceStore {
     const fullKey = (key: string) => `${STORAGE_PREFIX}${key}`;
 
     const actions: PreferenceActions = {
-        get<T extends Serializable>(key: string): T | null {
+        get<T extends Serializable>(key: string, validValues?: readonly T[]): T | null {
             version();
             try {
                 const stored = localStorage.getItem(fullKey(key));
                 if (stored === null) return null;
-                return JSON.parse(stored) as T;
+                const parsed = JSON.parse(stored) as T;
+                if (validValues && !validValues.includes(parsed)) return null;
+                return parsed;
             } catch {
                 return null;
             }
